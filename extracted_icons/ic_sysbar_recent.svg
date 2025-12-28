@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+  <!-- Android 12 SystemUI Recent Apps Button -->
+  <!-- Original: ic_sysbar_recent.xml -->
+  <path fill="#FFFFFF" d="M19.9,21.5H8.1c-0.88,0-1.6-0.72-1.6-1.6V8.1c0-0.88,0.72-1.6,1.6-1.6h11.8c0.88,0,1.6,0.72,1.6,1.6v11.8 C21.5,20.78,20.78,21.5,19.9,21.5z"/>
+</svg>
