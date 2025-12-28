@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">UltraNavbar</string>
+    <string name="accessibility_service_description">화면 하단에 커스텀 네비게이션 바를 표시합니다. 뒤로가기, 홈, 최근 앱 버튼과 추가 기능 버튼을 제공합니다.</string>
+
+    <!-- 설정 화면 -->
+    <string name="settings_title">UltraNavbar 설정</string>
+    <string name="enable_service">접근성 서비스 활성화</string>
+    <string name="service_status">서비스 상태</string>
+    <string name="service_enabled">활성화됨</string>
+    <string name="service_disabled">비활성화됨</string>
+    <string name="open_accessibility_settings">접근성 설정 열기</string>
+
+    <!-- 오버레이 설정 -->
+    <string name="overlay_settings">오버레이 설정</string>
+    <string name="bar_height">바 높이</string>
+    <string name="button_size">버튼 크기</string>
+    <string name="button_spacing">버튼 간격</string>
+    <string name="bar_opacity">바 투명도</string>
+    <string name="bar_color">바 배경 색상</string>
+
+    <!-- 자동 숨김 설정 -->
+    <string name="auto_hide_settings">자동 숨김 설정</string>
+    <string name="auto_hide_video">영상 재생 시 자동 숨김</string>
+    <string name="auto_hide_video_summary">유튜브, 넷플릭스 등 전체화면 영상 재생 시 바를 숨깁니다</string>
+    <string name="hide_mode">숨김 모드</string>
+    <string name="hide_mode_blacklist">블랙리스트 (선택한 앱에서만 숨김)</string>
+    <string name="hide_mode_whitelist">화이트리스트 (선택한 앱에서만 표시)</string>
+    <string name="manage_app_list">앱 목록 관리</string>
+
+    <!-- 앱 목록 -->
+    <string name="app_list_title">앱 목록</string>
+    <string name="select_apps">앱 선택</string>
+    <string name="no_apps">설치된 앱이 없습니다</string>
+    <string name="loading_apps">앱 목록 불러오는 중...</string>
+    <string name="save">저장</string>
+    <string name="cancel">취소</string>
+
+    <!-- 재호출 -->
+    <string name="recall_settings">재호출 설정</string>
+    <string name="recall_hotspot">재호출 핫스팟</string>
+    <string name="recall_hotspot_summary">바가 숨겨졌을 때 화면 하단 가장자리를 터치하면 다시 표시됩니다</string>
+
+    <!-- 온보딩 -->
+    <string name="onboarding_title">UltraNavbar 시작하기</string>
+    <string name="onboarding_step1">1. 아래 버튼을 눌러 접근성 설정으로 이동하세요</string>
+    <string name="onboarding_step2">2. \'설치된 앱\' 또는 \'다운로드한 앱\'에서 UltraNavbar를 찾으세요</string>
+    <string name="onboarding_step3">3. UltraNavbar를 켜고 확인을 누르세요</string>
+    <string name="onboarding_note">접근성 권한은 네비게이션 버튼 기능 수행과 현재 앱 감지에만 사용됩니다.</string>
+
+    <!-- 홈 화면 배경 -->
+    <string name="home_bg_settings">홈 화면 배경 이미지</string>
+    <string name="home_bg_enable">투명 배경 효과</string>
+    <string name="home_bg_enable_summary">홈 화면에서 스크린샷 하단을 배경으로 사용</string>
+    <string name="home_bg_landscape">가로 모드 스크린샷</string>
+    <string name="home_bg_portrait">세로 모드 스크린샷</string>
+    <string name="home_bg_not_set">설정되지 않음</string>
+    <string name="home_bg_set">설정됨</string>
+    <string name="select_image">이미지 선택</string>
+    <string name="home_bg_note">홈 화면 스크린샷을 선택하면 하단 72px가 잘려서 네비바 배경으로 사용됩니다. 홈 화면이 아닌 곳에서는 검정색 배경이 표시됩니다.</string>
+    <string name="image_crop_success">배경 이미지가 설정되었습니다</string>
+    <string name="image_crop_failed">이미지 처리에 실패했습니다</string>
+</resources>
