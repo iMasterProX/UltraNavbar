@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
-  <!-- Android 12 SystemUI Home Button -->
-  <!-- Original: ic_sysbar_home.xml -->
-  <path fill="#FFFFFF" d="M 14 7 C 17.8659932488 7 21 10.1340067512 21 14 C 21 17.8659932488 17.8659932488 21 14 21 C 10.1340067512 21 7 17.8659932488 7 14 C 7 10.1340067512 10.1340067512 7 14 7 Z"/>
-</svg>
