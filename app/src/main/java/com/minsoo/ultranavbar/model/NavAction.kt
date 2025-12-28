@@ -17,6 +17,7 @@ enum class NavAction(
     POWER_DIALOG("전원 메뉴", AccessibilityService.GLOBAL_ACTION_POWER_DIALOG),
     LOCK_SCREEN("화면 잠금", AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN),
     TAKE_SCREENSHOT("스크린샷", AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT),
+    ASSIST("어시스턴트", null),
     NONE("없음", null);
 
     companion object {

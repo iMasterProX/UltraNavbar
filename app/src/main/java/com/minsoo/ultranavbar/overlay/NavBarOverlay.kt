@@ -7,9 +7,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.StateListDrawable
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.TransitionDrawable
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -17,10 +16,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.AlphaAnimation
+import android.view.animation.TranslateAnimation
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
-import androidx.core.content.ContextCompat
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.model.NavAction
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
@@ -45,7 +44,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private val settings: SettingsManager = SettingsManager.getInstance(context)
 
     private var rootView: FrameLayout? = null
-    private var navBarView: LinearLayout? = null
+    private var navBarView: ViewGroup? = null
     private var hotspotView: View? = null
 
     private var isShowing = true
@@ -56,6 +55,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     // 홈 화면 상태
     private var isOnHomeScreen = false
+
+    // 최근 앱 화면 상태
+    private var isRecentsVisible = false
 
     // 캐시된 배경 비트맵
     private var landscapeBgBitmap: Bitmap? = null
@@ -118,88 +120,62 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun createNavBar() {
-        val barHeightPx = dpToPx(settings.barHeight)
         val buttonSizePx = dpToPx(settings.buttonSize)
-        val buttonSpacingPx = dpToPx(settings.buttonSpacing)
+        val barHeightPx = buttonSizePx + dpToPx(16) // 바 높이를 버튼 크기에 따라 유동적으로 조절
+        val buttonSpacingPx = dpToPx(8)
 
-        navBarView = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        // Use RelativeLayout for flexible alignment
+        navBarView = android.widget.RelativeLayout(context).apply {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 barHeightPx
             ).apply {
                 gravity = Gravity.BOTTOM
             }
-            // 기본 배경색 (홈 화면이 아닐 때)
-            setBackgroundColor(applyOpacity(settings.barColor, settings.barOpacity))
+            setBackgroundColor(Color.BLACK) // As per after.png
             setPadding(dpToPx(16), 0, dpToPx(16), 0)
         }
 
-        // 홈 화면이면 배경 이미지 적용
-        updateNavBarBackground()
+        // Set initial background color
+        navBarView?.setBackgroundColor(Color.BLACK)
 
         // 왼쪽 버튼 그룹 (Back, Home, Recents)
         val leftGroup = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                1f
-            )
         }
 
-        // Back 버튼
-        leftGroup.addView(createNavButton(
-            NavAction.BACK,
-            R.drawable.ic_sysbar_back_default,
-            R.drawable.ic_sysbar_back_pressed,
-            buttonSizePx
-        ))
-
+        leftGroup.addView(createNavButton(NavAction.BACK, R.drawable.ic_sysbar_back, buttonSizePx))
         addSpacer(leftGroup, buttonSpacingPx)
-
-        // Home 버튼
-        leftGroup.addView(createNavButton(
-            NavAction.HOME,
-            R.drawable.ic_sysbar_home_default,
-            R.drawable.ic_sysbar_home_pressed,
-            buttonSizePx
-        ))
-
+        leftGroup.addView(createNavButton(NavAction.HOME, R.drawable.ic_sysbar_home, buttonSizePx))
         addSpacer(leftGroup, buttonSpacingPx)
+        leftGroup.addView(createNavButton(NavAction.RECENTS, R.drawable.ic_sysbar_recent, buttonSizePx))
 
-        // Recents 버튼
-        leftGroup.addView(createNavButton(
-            NavAction.RECENTS,
-            R.drawable.ic_sysbar_recent_default,
-            R.drawable.ic_sysbar_recent_pressed,
-            buttonSizePx
-        ))
+        val leftLayoutParams = android.widget.RelativeLayout.LayoutParams(
+            android.widget.RelativeLayout.LayoutParams.WRAP_CONTENT,
+            android.widget.RelativeLayout.LayoutParams.MATCH_PARENT
+        ).apply {
+            addRule(android.widget.RelativeLayout.ALIGN_PARENT_START)
+        }
+        (navBarView as android.widget.RelativeLayout).addView(leftGroup, leftLayoutParams)
 
-        navBarView?.addView(leftGroup)
-
-        // 오른쪽 버튼 그룹 (Notifications)
+        // 오른쪽 버튼 그룹 (Capture, Panel)
         val rightGroup = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL or Gravity.END
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                1f
-            )
+            gravity = Gravity.CENTER_VERTICAL
         }
 
-        // Notifications 버튼
-        rightGroup.addView(createNavButton(
-            NavAction.NOTIFICATIONS,
-            R.drawable.ic_sysbar_menu_default,
-            R.drawable.ic_sysbar_menu_pressed,
-            buttonSizePx
-        ))
+        rightGroup.addView(createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx))
+        addSpacer(rightGroup, buttonSpacingPx)
+        rightGroup.addView(createNavButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel, buttonSizePx))
 
-        navBarView?.addView(rightGroup)
+        val rightLayoutParams = android.widget.RelativeLayout.LayoutParams(
+            android.widget.RelativeLayout.LayoutParams.WRAP_CONTENT,
+            android.widget.RelativeLayout.LayoutParams.MATCH_PARENT
+        ).apply {
+            addRule(android.widget.RelativeLayout.ALIGN_PARENT_END)
+        }
+        (navBarView as android.widget.RelativeLayout).addView(rightGroup, rightLayoutParams)
 
         rootView?.addView(navBarView)
     }
@@ -236,59 +212,38 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 네비게이션 버튼 생성
+     * 네비게이션 버튼 생성 (리플 효과 적용)
      */
-    @SuppressLint("ClickableViewAccessibility")
     private fun createNavButton(
         action: NavAction,
-        normalResId: Int,
-        pressedResId: Int,
+        iconResId: Int,
         size: Int
     ): ImageButton {
         return ImageButton(context).apply {
             layoutParams = LinearLayout.LayoutParams(size, size)
-            background = null
+
+            // Add ripple effect for feedback
+            val outValue = android.util.TypedValue()
+            context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true)
+            setBackgroundResource(outValue.resourceId)
+
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+            setImageResource(iconResId)
             contentDescription = action.displayName
 
-            // 상태별 드로어블 설정
-            val stateDrawable = createStateListDrawable(normalResId, pressedResId)
-            setImageDrawable(stateDrawable)
+            setOnClickListener {
+                service.executeAction(action)
+            }
 
-            setOnTouchListener { view, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        view.isPressed = true
-                        true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        view.isPressed = false
-                        service.executeAction(action)
-                        true
-                    }
-                    MotionEvent.ACTION_CANCEL -> {
-                        view.isPressed = false
-                        true
-                    }
-                    else -> false
+            setOnLongClickListener {
+                if (action == NavAction.HOME) {
+                    service.executeAction(NavAction.ASSIST)
+                    true // 이벤트 소비됨
+                } else {
+                    false
                 }
             }
         }
-    }
-
-    /**
-     * 상태별 드로어블 생성
-     */
-    private fun createStateListDrawable(normalResId: Int, pressedResId: Int): StateListDrawable {
-        val stateList = StateListDrawable()
-
-        val pressedDrawable = ContextCompat.getDrawable(context, pressedResId)
-        val normalDrawable = ContextCompat.getDrawable(context, normalResId)
-
-        stateList.addState(intArrayOf(android.R.attr.state_pressed), pressedDrawable)
-        stateList.addState(intArrayOf(), normalDrawable)
-
-        return stateList
     }
 
     /**
@@ -305,7 +260,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      * WindowManager LayoutParams 생성
      */
     private fun createLayoutParams(): WindowManager.LayoutParams {
-        val barHeightPx = dpToPx(settings.barHeight)
+        val barHeightPx = dpToPx(settings.buttonSize + 16) // 버튼 크기 + 상하패딩
 
         return WindowManager.LayoutParams().apply {
             type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
@@ -330,9 +285,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         navBarView?.let { bar ->
             bar.visibility = View.VISIBLE
-            bar.startAnimation(AlphaAnimation(0f, 1f).apply {
+            val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                 duration = ANIMATION_DURATION
-            })
+            }
+            bar.startAnimation(slideUp)
         }
 
         hotspotView?.visibility = View.GONE
@@ -347,12 +303,17 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (!isShowing) return
 
         navBarView?.let { bar ->
-            bar.startAnimation(AlphaAnimation(1f, 0f).apply {
+            val slideDown = TranslateAnimation(0f, 0f, 0f, bar.height.toFloat()).apply {
                 duration = ANIMATION_DURATION
-            })
-            bar.postDelayed({
-                bar.visibility = View.GONE
-            }, ANIMATION_DURATION)
+                setAnimationListener(object : android.view.animation.Animation.AnimationListener {
+                    override fun onAnimationStart(animation: android.view.animation.Animation?) {}
+                    override fun onAnimationEnd(animation: android.view.animation.Animation?) {
+                        bar.visibility = View.GONE
+                    }
+                    override fun onAnimationRepeat(animation: android.view.animation.Animation?) {}
+                })
+            }
+            bar.startAnimation(slideDown)
         }
 
         // 핫스팟 활성화
@@ -370,16 +331,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun refreshSettings() {
         if (!isCreated) return
 
-        // 배경 이미지 캐시 다시 로드
         loadBackgroundBitmaps()
 
-        // 기존 뷰 제거 후 재생성
         rootView?.let { root ->
             root.removeAllViews()
             createNavBar()
             createHotspot()
 
-            // 레이아웃 파라미터 업데이트
             val params = createLayoutParams()
             windowManager.updateViewLayout(root, params)
         }
@@ -425,16 +383,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     /**
      * 색상에 투명도 적용
      */
-    private fun applyOpacity(color: Int, opacity: Float): Int {
-        val alpha = (opacity * 255).toInt()
-        return Color.argb(
-            alpha,
-            Color.red(color),
-            Color.green(color),
-            Color.blue(color)
-        )
-    }
-
     /**
      * 홈 화면 상태 설정
      */
@@ -447,32 +395,41 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
+     * 최근 앱 화면 상태 설정
+     */
+    fun setRecentsState(isRecents: Boolean) {
+        if (isRecentsVisible == isRecents) return
+        isRecentsVisible = isRecents
+        updateNavBarBackground()
+    }
+
+    /**
      * 네비바 배경 업데이트
-     * - 홈 화면이고 배경 이미지가 있으면 이미지 사용
-     * - 그 외에는 검정색 배경
      */
     private fun updateNavBarBackground() {
         navBarView?.let { bar ->
-            if (isOnHomeScreen && settings.homeBgEnabled) {
-                // 홈 화면: 배경 이미지 적용
+            val oldBg = bar.background ?: ColorDrawable(Color.BLACK)
+            val newBg = if (isRecentsVisible) {
+                Log.d(TAG, "On Recents screen, preparing black background")
+                ColorDrawable(Color.BLACK)
+            } else if (isOnHomeScreen && settings.homeBgEnabled) {
                 val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
                 val bitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
-
                 if (bitmap != null) {
-                    val drawable = BitmapDrawable(context.resources, bitmap)
-                    drawable.alpha = (settings.barOpacity * 255).toInt()
-                    bar.background = drawable
-                    Log.d(TAG, "Applied home screen background image (landscape=$isLandscape)")
+                    Log.d(TAG, "Preparing home screen background image (landscape=$isLandscape)")
+                    BitmapDrawable(context.resources, bitmap)
                 } else {
-                    // 이미지가 없으면 기본 색상
-                    bar.setBackgroundColor(applyOpacity(settings.barColor, settings.barOpacity))
-                    Log.d(TAG, "No background image, using default color")
+                    Log.d(TAG, "No background image, preparing default color")
+                    ColorDrawable(Color.BLACK)
                 }
             } else {
-                // 홈 화면이 아님: 검정색 배경
-                bar.setBackgroundColor(applyOpacity(settings.barColor, settings.barOpacity))
-                Log.d(TAG, "Not on home screen, using default color")
+                Log.d(TAG, "Not on home screen, preparing default color")
+                ColorDrawable(Color.BLACK)
             }
+
+            val transition = TransitionDrawable(arrayOf(oldBg, newBg))
+            bar.background = transition
+            transition.startTransition(300) // 300ms fade duration
         }
     }
 

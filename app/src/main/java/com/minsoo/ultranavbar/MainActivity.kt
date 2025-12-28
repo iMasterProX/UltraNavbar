@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
 import android.widget.RadioButton
@@ -32,10 +33,8 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var seekBarHeight: SeekBar
     private lateinit var seekButtonSize: SeekBar
-    private lateinit var seekOpacity: SeekBar
     private lateinit var txtBarHeight: TextView
     private lateinit var txtButtonSize: TextView
-    private lateinit var txtOpacity: TextView
 
     private lateinit var switchAutoHideVideo: SwitchMaterial
     private lateinit var radioBlacklist: RadioButton
@@ -88,10 +87,8 @@ class MainActivity : AppCompatActivity() {
         // 오버레이 설정
         seekBarHeight = findViewById(R.id.seekBarHeight)
         seekButtonSize = findViewById(R.id.seekButtonSize)
-        seekOpacity = findViewById(R.id.seekOpacity)
         txtBarHeight = findViewById(R.id.txtBarHeight)
         txtButtonSize = findViewById(R.id.txtButtonSize)
-        txtOpacity = findViewById(R.id.txtOpacity)
 
         // 자동 숨김 설정
         switchAutoHideVideo = findViewById(R.id.switchAutoHideVideo)
@@ -122,17 +119,20 @@ class MainActivity : AppCompatActivity() {
             selectingLandscape = false
             imagePickerLauncher.launch("image/*")
         }
+
+        // 배터리 최적화 버튼
+        findViewById<MaterialButton>(R.id.btnBatteryOptimization).setOnClickListener {
+            requestIgnoreBatteryOptimizations()
+        }
     }
 
     private fun loadSettings() {
         // 오버레이 설정 로드
         seekBarHeight.progress = settings.barHeight
         seekButtonSize.progress = settings.buttonSize
-        seekOpacity.progress = (settings.barOpacity * 100).toInt()
 
         txtBarHeight.text = "${settings.barHeight} dp"
         txtButtonSize.text = "${settings.buttonSize} dp"
-        txtOpacity.text = "${(settings.barOpacity * 100).toInt()}%"
 
         // 자동 숨김 설정 로드
         switchAutoHideVideo.isChecked = settings.autoHideOnVideo
@@ -148,55 +148,73 @@ class MainActivity : AppCompatActivity() {
         switchHomeBg.isChecked = settings.homeBgEnabled
     }
 
-    private fun setupListeners() {
-        // 바 높이
-        seekBarHeight.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                val height = progress.coerceAtLeast(24)  // 최소 24dp
-                txtBarHeight.text = "$height dp"
-            }
+            private fun setupListeners() {
 
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                // 바 높이
 
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                val height = (seekBar?.progress ?: 48).coerceAtLeast(24)
-                settings.barHeight = height
-                notifySettingsChanged()
-            }
-        })
+                seekBarHeight.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
 
-        // 버튼 크기
-        seekButtonSize.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                val size = progress.coerceAtLeast(20)  // 최소 20dp
-                txtButtonSize.text = "$size dp"
-            }
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
 
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                        val height = progress.coerceAtLeast(24)  // 최소 24dp
 
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                val size = (seekBar?.progress ?: 40).coerceAtLeast(20)
-                settings.buttonSize = size
-                notifySettingsChanged()
-            }
-        })
+                        txtBarHeight.text = "$height dp"
 
-        // 투명도
-        seekOpacity.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                txtOpacity.text = "$progress%"
-            }
+                    }
 
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+        
 
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                val opacity = (seekBar?.progress ?: 85) / 100f
-                settings.barOpacity = opacity
-                notifySettingsChanged()
-            }
-        })
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
 
-        // 영상 자동 숨김
+        
+
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+
+                        val height = (seekBar?.progress ?: 48).coerceAtLeast(24)
+
+                        settings.barHeight = height
+
+                        notifySettingsChanged()
+
+                    }
+
+                })
+
+        
+
+                // 버튼 크기
+
+                seekButtonSize.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+
+                        val size = progress.coerceAtLeast(20)  // 최소 20dp
+
+                        txtButtonSize.text = "$size dp"
+
+                    }
+
+        
+
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+
+        
+
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+
+                        val size = (seekBar?.progress ?: 80).coerceAtLeast(20)
+
+                        settings.buttonSize = size
+
+                        notifySettingsChanged()
+
+                    }
+
+                })
+
+        
+
+                // 영상 자동 숨김
         switchAutoHideVideo.setOnCheckedChangeListener { _, isChecked ->
             settings.autoHideOnVideo = isChecked
         }
@@ -277,6 +295,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun notifySettingsChanged() {
         sendBroadcast(Intent("com.minsoo.ultranavbar.SETTINGS_CHANGED"))
+    }
+
+    private fun requestIgnoreBatteryOptimizations() {
+        try {
+            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            } else {
+                Toast.makeText(this, "이미 배터리 최적화에서 제외되었습니다.", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "배터리 최적화 설정 화면을 열 수 없습니다.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     companion object {

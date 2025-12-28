@@ -60,4 +60,8 @@
     <string name="home_bg_note">홈 화면 스크린샷을 선택하면 하단 72px가 잘려서 네비바 배경으로 사용됩니다. 홈 화면이 아닌 곳에서는 검정색 배경이 표시됩니다.</string>
     <string name="image_crop_success">배경 이미지가 설정되었습니다</string>
     <string name="image_crop_failed">이미지 처리에 실패했습니다</string>
+    <string name="service_running_notification">내비게이션 바가 실행 중입니다.</string>
+    <string name="stability_settings">안정성 설정</string>
+    <string name="battery_optimization">배터리 최적화 제외</string>
+    <string name="battery_optimization_summary">앱이 강제로 종료되는 것을 방지합니다. UltraNavbar를 \'최적화하지 않음\'으로 설정해주세요.</string>
 </resources>
