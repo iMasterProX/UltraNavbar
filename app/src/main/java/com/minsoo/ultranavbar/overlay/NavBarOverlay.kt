@@ -15,7 +15,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.view.animation.AlphaAnimation
 import android.view.animation.TranslateAnimation
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -37,10 +36,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     companion object {
         private const val TAG = "NavBarOverlay"
         private const val ANIMATION_DURATION = 200L
+
+        // 버튼(터치 영역)은 기본 48dp로 고정
+        private const val DEFAULT_NAV_BUTTON_DP = 48
     }
 
     private val context: Context = service
-    private val windowManager: WindowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val windowManager: WindowManager =
+        context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val settings: SettingsManager = SettingsManager.getInstance(context)
 
     private var rootView: FrameLayout? = null
@@ -98,7 +101,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             loadBackgroundBitmaps()
 
             Log.i(TAG, "Overlay created successfully")
-
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create overlay", e)
         }
@@ -111,8 +113,27 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (settings.homeBgEnabled) {
             landscapeBgBitmap = ImageCropUtil.loadBackgroundBitmap(context, true)
             portraitBgBitmap = ImageCropUtil.loadBackgroundBitmap(context, false)
-            Log.d(TAG, "Background bitmaps loaded: landscape=${landscapeBgBitmap != null}, portrait=${portraitBgBitmap != null}")
+            Log.d(
+                TAG,
+                "Background bitmaps loaded: landscape=${landscapeBgBitmap != null}, portrait=${portraitBgBitmap != null}"
+            )
         }
+    }
+
+    /**
+     * 시스템 기본 네비게이션바 높이(px) 가져오기
+     * - portrait: navigation_bar_height
+     * - landscape: navigation_bar_height_landscape
+     */
+    private fun getSystemNavigationBarHeightPx(): Int {
+        val res = context.resources
+        val isPortrait = currentOrientation == Configuration.ORIENTATION_PORTRAIT
+
+        val resName = if (isPortrait) "navigation_bar_height" else "navigation_bar_height_landscape"
+        val id = res.getIdentifier(resName, "dimen", "android")
+
+        val h = if (id > 0) res.getDimensionPixelSize(id) else 0
+        return if (h > 0) h else dpToPx(DEFAULT_NAV_BUTTON_DP)
     }
 
     /**
@@ -120,11 +141,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun createNavBar() {
-        val buttonSizePx = dpToPx(settings.buttonSize)
-        val barHeightPx = buttonSizePx + dpToPx(16) // 바 높이를 버튼 크기에 따라 유동적으로 조절
+        val barHeightPx = getSystemNavigationBarHeightPx()
+        val buttonSizePx = dpToPx(DEFAULT_NAV_BUTTON_DP)
         val buttonSpacingPx = dpToPx(8)
 
-        // Use RelativeLayout for flexible alignment
         navBarView = android.widget.RelativeLayout(context).apply {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -132,12 +152,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             ).apply {
                 gravity = Gravity.BOTTOM
             }
-            setBackgroundColor(Color.BLACK) // As per after.png
+            setBackgroundColor(Color.BLACK)
             setPadding(dpToPx(16), 0, dpToPx(16), 0)
         }
-
-        // Set initial background color
-        navBarView?.setBackgroundColor(Color.BLACK)
 
         // 왼쪽 버튼 그룹 (Back, Home, Recents)
         val leftGroup = LinearLayout(context).apply {
@@ -213,32 +230,39 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     /**
      * 네비게이션 버튼 생성 (리플 효과 적용)
+     *
+     * - 버튼(터치영역)은 48dp 고정
+     * - 아이콘은 "원본이 작으면 확대하지 않음" + "너무 크면 버튼 안으로만 축소" 되도록 CENTER_INSIDE
      */
     private fun createNavButton(
         action: NavAction,
         iconResId: Int,
-        size: Int
+        sizePx: Int
     ): ImageButton {
         return ImageButton(context).apply {
-            layoutParams = LinearLayout.LayoutParams(size, size)
+            layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
 
-            // Add ripple effect for feedback
             val outValue = android.util.TypedValue()
-            context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true)
+            context.theme.resolveAttribute(
+                android.R.attr.selectableItemBackgroundBorderless,
+                outValue,
+                true
+            )
             setBackgroundResource(outValue.resourceId)
 
+            // 확대(MATRIX/FIT_CENTER) 제거: 흐릿/과확대 방지
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+            setPadding(0, 0, 0, 0)
+
             setImageResource(iconResId)
             contentDescription = action.displayName
 
-            setOnClickListener {
-                service.executeAction(action)
-            }
+            setOnClickListener { service.executeAction(action) }
 
             setOnLongClickListener {
                 if (action == NavAction.HOME) {
                     service.executeAction(NavAction.ASSIST)
-                    true // 이벤트 소비됨
+                    true
                 } else {
                     false
                 }
@@ -260,7 +284,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      * WindowManager LayoutParams 생성
      */
     private fun createLayoutParams(): WindowManager.LayoutParams {
-        val barHeightPx = dpToPx(settings.buttonSize + 16) // 버튼 크기 + 상하패딩
+        val barHeightPx = getSystemNavigationBarHeightPx()
 
         return WindowManager.LayoutParams().apply {
             type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
@@ -350,7 +374,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (currentOrientation == newOrientation) return
 
         currentOrientation = newOrientation
-        Log.d(TAG, "Orientation changed to: ${if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"}")
+        Log.d(
+            TAG,
+            "Orientation changed to: ${if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"}"
+        )
 
         refreshSettings()
     }
@@ -380,9 +407,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         return (dp * context.resources.displayMetrics.density).toInt()
     }
 
-    /**
-     * 색상에 투명도 적용
-     */
     /**
      * 홈 화면 상태 설정
      */
@@ -429,7 +453,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             val transition = TransitionDrawable(arrayOf(oldBg, newBg))
             bar.background = transition
-            transition.startTransition(300) // 300ms fade duration
+            transition.startTransition(300)
         }
     }
 
