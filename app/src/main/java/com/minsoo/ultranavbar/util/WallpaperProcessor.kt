@@ -19,15 +19,26 @@ object WallpaperProcessor {
             val wallpaperManager = WallpaperManager.getInstance(context)
             val wallpaperDrawable = wallpaperManager.drawable
 
-            val displayMetrics = context.resources.displayMetrics
-            val screenWidth = displayMetrics.widthPixels
-            val screenHeight = displayMetrics.heightPixels
+            if (wallpaperDrawable == null) {
+                Log.w(TAG, "Wallpaper drawable is null, cannot generate background.")
+                return@withContext false
+            }
 
-            // 1. Drawable을 화면 크기의 Bitmap으로 변환
-            val wallpaperBitmap = wallpaperDrawable.toBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888)
+            // 실제 디스플레이 크기를 가져와서 방향에 맞게 계산
+            val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+            val metrics = windowManager.currentWindowMetrics
+            val bounds = metrics.bounds
+            val realScreenWidth = bounds.width()
+            val realScreenHeight = bounds.height()
+
+            val targetWidth = if (isLandscape) realScreenWidth else realScreenHeight
+            val targetHeight = if (isLandscape) realScreenHeight else realScreenWidth
+            
+            // 1. Drawable을 목표 크기의 Bitmap으로 변환
+            val wallpaperBitmap = wallpaperDrawable.toBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
 
             // 2. Scrim 그라데이션 적용
-            val resultBitmap = applyScrim(wallpaperBitmap, screenHeight)
+            val resultBitmap = applyScrim(wallpaperBitmap, targetHeight)
             
             // 3. 크롭 및 저장
             val success = ImageCropUtil.cropAndSave(context, resultBitmap, isLandscape)

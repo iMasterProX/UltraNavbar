@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.UltraNavbar" parent="Theme.Material3.DayNight.DynamicColors">
-        <!-- DynamicColors를 사용하므로 기존 색상 정의를 제거 -->
+    <style name="Theme.UltraNavbar" parent="@style/Theme.Material3.DayNight">
+        <!-- Manually enable dynamic color since the DynamicColors parent theme is failing to resolve -->
+    </style>
+
+    <style name="Theme.UltraNavbar.Fullscreen" parent="@style/Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
     </style>
 </resources>

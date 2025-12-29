@@ -13,6 +13,9 @@ import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.TransitionDrawable
 import android.graphics.drawable.shapes.RectShape
 import android.content.res.ColorStateList
+import android.app.WallpaperManager
+import android.graphics.drawable.LayerDrawable
+import androidx.core.content.ContextCompat
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -40,13 +43,6 @@ import com.minsoo.ultranavbar.util.ImageCropUtil
  * TYPE_ACCESSIBILITY_OVERLAY를 사용하여 일관된 표시
  */
 class NavBarOverlay(private val service: NavBarAccessibilityService) {
-
-    /**
-     * 전체화면 상태 변경을 알리기 위한 리스너 인터페이스
-     */
-    fun interface OnFullscreenListener {
-        fun onFullscreenChanged(isFullscreen: Boolean)
-    }
 
     companion object {
         private const val TAG = "NavBarOverlay"
@@ -82,11 +78,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var landscapeBgBitmap: Bitmap? = null
     private var portraitBgBitmap: Bitmap? = null
 
-    private var fullscreenListener: OnFullscreenListener? = null
 
-    fun setOnFullscreenListener(listener: OnFullscreenListener) {
-        this.fullscreenListener = listener
-    }
 
     /**
      * 오버레이 생성
@@ -105,21 +97,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     FrameLayout.LayoutParams.WRAP_CONTENT
                 )
             }
-
-            // 전체화면 감지 리스너 설정
-            ViewCompat.setOnApplyWindowInsetsListener(rootView!!) { _, insets ->
-                val statusBarVisible = insets.isVisible(WindowInsetsCompat.Type.statusBars())
-                val navBarVisible = insets.isVisible(WindowInsetsCompat.Type.navigationBars())
-                val isFullscreen = !statusBarVisible && !navBarVisible
-
-                Log.d(TAG, "Insets changed: statusBar=$statusBarVisible, navBar=$navBarVisible, fullscreen=$isFullscreen")
-                
-                // 리스너를 통해 서비스에 상태 전달
-                fullscreenListener?.onFullscreenChanged(isFullscreen)
-                
-                insets
-            }
-
 
             // 네비게이션 바 생성
             createNavBar()
@@ -524,27 +501,30 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val shouldUseImageBackground = isOnHomeScreen && settings.homeBgEnabled && !isRecentsVisible
 
         if (shouldUseImageBackground) {
-            // 2. 이미지 배경 적용
+            // 2. 방향에 맞는, 미리 크롭된 비트맵 배경 적용
             val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
             val targetBitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
 
             if (targetBitmap != null) {
-                // 현재 배경이 타겟 비트맵과 다른 경우에만 변경
+                // 현재 배경이 적용하려는 비트맵과 다른 경우에만 새로 설정
                 val currentBitmap = (currentBg as? BitmapDrawable)?.bitmap
                 if (currentBitmap !== targetBitmap) {
-                    Log.d(TAG, "Applying new background image. Landscape: $isLandscape")
-                    bar.background = BitmapDrawable(context.resources, targetBitmap)
+                    Log.d(TAG, "Applying new pre-cropped background image. Landscape: $isLandscape")
+                    // 찌그러짐을 방지하기 위해 gravity 설정
+                    val bgDrawable = BitmapDrawable(context.resources, targetBitmap).apply {
+                        gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
+                    }
+                    bar.background = bgDrawable
                 }
             } else {
                 // 적용할 이미지가 없으면 검은색 배경으로 (Fallback)
                 if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
-                    Log.d(TAG, "Fallback to black background (image not loaded).")
+                    Log.d(TAG, "Fallback to black background (pre-cropped image not loaded).")
                     bar.background = ColorDrawable(Color.BLACK)
                 }
             }
         } else {
             // 3. 그 외의 모든 경우 (앱, 최근 앱 화면 등)는 검은색 배경 적용
-            // 현재 배경이 이미 검은색이 아닌 경우에만 변경
             if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
                 Log.d(TAG, "Applying black background for app/recents view.")
                 bar.background = ColorDrawable(Color.BLACK)

@@ -142,11 +142,20 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun loadLauncherPackages() {
         try {
             val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
-            val resolveInfos = packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            launcherPackages = resolveInfos.map { it.activityInfo.packageName }.toSet()
+            // resolveActivity는 주어진 인텐트를 처리할 최적의 액티비티 하나를 찾아줌 (기본 런처)
+            val resolveInfo = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            if (resolveInfo?.activityInfo?.packageName != null) {
+                launcherPackages = setOf(resolveInfo.activityInfo.packageName)
+            } else {
+                // resolveActivity가 실패할 경우, 이전 방식으로 모든 런처를 찾되, 알려진 오류(설정 앱)는 제외
+                val resolveInfos = packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                launcherPackages = resolveInfos.map { it.activityInfo.packageName }
+                                               .filter { it != "com.android.settings" }
+                                               .toSet()
+            }
             Log.d(TAG, "Detected launcher packages: $launcherPackages")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load launcher packages", e)
+            Log.e(TAG, "Failed to load launcher packages, using hardcoded fallback", e)
             launcherPackages = setOf(
                 "com.android.launcher", "com.android.launcher3", "com.google.android.apps.nexuslauncher",
                 "com.sec.android.app.launcher", "com.lge.launcher3", "com.huawei.android.launcher"
@@ -177,9 +186,18 @@ class NavBarAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
 
+        // WallpaperPreviewActivity가 전면에 나타나면, 다른 로직을 모두 무시하고 네비바를 즉시 숨김
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            event.className == "com.minsoo.ultranavbar.ui.WallpaperPreviewActivity"
+        ) {
+            overlay?.hide(animate = false)
+            return
+        }
+
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 handleWindowStateChanged(event)
+                checkFullscreenState()
                 checkNotificationPanelState()
             }
         }
@@ -199,24 +217,38 @@ class NavBarAccessibilityService : AccessibilityService() {
                 Log.d(TAG, "Home screen state changed: $isOnHomeScreen")
                 overlay?.setHomeScreenState(isOnHomeScreen)
             }
+            // handleWindowStateChanged에서는 isFullscreen 상태를 직접 바꾸지 않으므로,
+            // 여기서는 updateOverlayVisibility()를 호출할 필요가 없음. checkFullscreenState()에서 처리.
+        }
+    }
+
+    /**
+     * 접근성 창 목록을 분석하여 실제 전체화면 상태를 유추
+     */
+    private fun checkFullscreenState() {
+        // 시스템 네비게이션 바 창('탐색 메뉴')이 보이는지 확인
+        val systemNavBarWindow = windows.find {
+            it.type == AccessibilityWindowInfo.TYPE_SYSTEM && it.title?.contains("탐색") == true
+        }
+        
+        // 네비게이션 바 창이 보이지 않으면 전체화면으로 간주
+        val newFullscreenState = systemNavBarWindow == null
+
+        if (isFullscreen != newFullscreenState) {
+            isFullscreen = newFullscreenState
+            Log.d(TAG, "Fullscreen state updated by window detection: $isFullscreen")
             updateOverlayVisibility()
         }
     }
 
     private fun checkNotificationPanelState() {
-        // TYPE_SYSTEM 윈도우를 찾아 알림 패널 상태를 유추
-        val systemWindows = windows.filter { it.type == AccessibilityWindowInfo.TYPE_SYSTEM }
-        var panelVisible = false
-        for (window in systemWindows) {
-            // 알림 패널은 보통 화면 전체 너비를 차지
-            val bounds = Rect()
-            window.getBoundsInScreen(bounds)
-            if (bounds.width() >= resources.displayMetrics.widthPixels) {
-                 panelVisible = true
-                 Log.d(TAG, "Potential Notification Panel Window: bounds=$bounds")
-                 break // 하나라도 찾으면 중단
-            }
+        // TYPE_SYSTEM 윈도우 중, 'com.android.systemui' 패키지에 속하고, 포커스를 받을 수 있는 창을 알림 패널로 간주
+        val panelWindow = windows.find {
+            it.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
+                    it.root?.packageName == "com.android.systemui" &&
+                    it.root?.isFocusable == true
         }
+        val panelVisible = panelWindow != null
 
         if (isNotificationPanelOpen != panelVisible) {
             isNotificationPanelOpen = panelVisible
@@ -240,7 +272,8 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun shouldHideOverlay(): Boolean {
         // 1. 전체화면 모드면 숨김 (유튜브 영상, 게임, 사진 등)
         // 단, 런처(홈화면)는 전체화면으로 인식되더라도(일부 런처 특성) 숨기지 않음
-        if (settings.autoHideOnVideo && isFullscreen && !isOnHomeScreen) return true
+        // ** 추가: currentPackage가 파악되기 전(앱 시작 직후)에는 성급하게 숨기지 않도록 함
+        if (settings.autoHideOnVideo && isFullscreen && !isOnHomeScreen && currentPackage.isNotEmpty()) return true
 
         // 2. 앱별 설정에 따라 숨김
         if (currentPackage.isNotEmpty() && settings.shouldHideForPackage(currentPackage)) return true
@@ -250,17 +283,10 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     private fun createOverlay() {
         if (overlay == null) {
-            overlay = NavBarOverlay(this).apply {
-                setOnFullscreenListener { fullscreenEnabled ->
-                    if (isFullscreen != fullscreenEnabled) {
-                        isFullscreen = fullscreenEnabled
-                        Log.d(TAG, "Fullscreen state changed via listener: $isFullscreen")
-                        // UI 업데이트는 메인 스레드에서 수행
-                        handler.post { updateOverlayVisibility() }
-                    }
-                }
-            }
+            overlay = NavBarOverlay(this)
             overlay?.create()
+            // 버튼 초기 상태를 '패널 내리기' (0도)로 강제 설정
+            overlay?.updatePanelButtonState(isOpen = false)
         }
     }
 

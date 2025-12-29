@@ -1,18 +1,23 @@
 package com.minsoo.ultranavbar
 
+import android.app.Activity
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import android.view.View
 import android.widget.RadioButton
-import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.switchmaterial.SwitchMaterial
@@ -20,7 +25,10 @@ import com.minsoo.ultranavbar.model.HideMode
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.ui.AppListActivity
+import com.minsoo.ultranavbar.ui.WallpaperPreviewActivity
 import com.minsoo.ultranavbar.util.ImageCropUtil
+import com.minsoo.ultranavbar.util.WallpaperProcessor
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -40,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var radioWhitelist: RadioButton
     private lateinit var switchHotspot: SwitchMaterial
     private lateinit var switchIgnoreStylus: SwitchMaterial
+    private lateinit var switchAutoHideVideo: SwitchMaterial
 
     // 홈 배경 관련
     private lateinit var switchHomeBg: SwitchMaterial
@@ -69,6 +78,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // 배경화면 미리보기 및 생성 런처
+    private val wallpaperPreviewLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            Toast.makeText(this, "배경화면이 성공적으로 생성되었습니다.", Toast.LENGTH_SHORT).show()
+            updateBgImageStatus()
+            sendBroadcast(Intent("com.minsoo.ultranavbar.RELOAD_BACKGROUND"))
+        }
+    }
+
+    // 저장소 읽기 권한 요청 런처
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Toast.makeText(this, "권한이 승인되었습니다. 자동 배경 생성 기능을 사용할 수 있습니다.", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "권한이 거부되었습니다. 저장소 접근 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -78,6 +109,7 @@ class MainActivity : AppCompatActivity() {
         initViews()
         loadSettings()
         setupListeners()
+        checkAndRequestStoragePermission()
     }
 
     override fun onResume() {
@@ -234,25 +266,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun generateBackground(isLandscape: Boolean) {
-        lifecycleScope.launch {
-            Toast.makeText(this@MainActivity, "Generating background...", Toast.LENGTH_SHORT).show()
-            val success = try {
-                WallpaperProcessor.generate(this@MainActivity, isLandscape)
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Error generating background", e)
-                false
-            }
-            
-            if (success) {
-                Toast.makeText(this@MainActivity, "Background generated successfully", Toast.LENGTH_SHORT).show()
-                updateBgImageStatus()
-                // 오버레이에 즉시 반영되도록 서비스에 알림
-                val intent = Intent("com.minsoo.ultranavbar.RELOAD_BACKGROUND")
-                sendBroadcast(intent)
-            } else {
-                Toast.makeText(this@MainActivity, "Failed to generate background. Wallpaper access may be restricted.", Toast.LENGTH_LONG).show()
-            }
+        val intent = Intent(this, WallpaperPreviewActivity::class.java).apply {
+            putExtra("is_landscape", isLandscape)
         }
+        wallpaperPreviewLauncher.launch(intent)
     }
 
     private fun handleImageSelected(uri: Uri) {
@@ -305,6 +322,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun notifySettingsChanged() {
         sendBroadcast(Intent("com.minsoo.ultranavbar.SETTINGS_CHANGED"))
+    }
+
+    private fun checkAndRequestStoragePermission() {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.READ_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissionLauncher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
     }
 
     private fun requestIgnoreBatteryOptimizations(isTriggeredByUser: Boolean = false) {
