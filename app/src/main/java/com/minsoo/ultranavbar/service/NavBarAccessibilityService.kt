@@ -1,7 +1,6 @@
 package com.minsoo.ultranavbar.service
 
 import android.accessibilityservice.AccessibilityService
-import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -13,6 +12,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.util.Log
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import androidx.core.app.NotificationCompat
@@ -28,14 +28,6 @@ class NavBarAccessibilityService : AccessibilityService() {
         private const val NOTIFICATION_ID = 1
         private const val NOTIFICATION_CHANNEL_ID = "UltraNavBarServiceChannel"
 
-        private val VIDEO_APP_PACKAGES = setOf(
-            "com.google.android.youtube", "com.google.android.apps.youtube.music", "com.netflix.mediaclient",
-            "com.amazon.avod.thirdpartyclient", "com.disney.disneyplus", "tv.twitch.android.app", "com.naver.vapp",
-            "com.wavve.android", "com.coupang.play", "com.google.android.videos", "com.mxtech.videoplayer.ad",
-            "com.mxtech.videoplayer.pro", "org.videolan.vlc", "com.brouken.player", "com.kiwibrowser.browser",
-            "com.android.chrome"
-        )
-
         @Volatile
         var instance: NavBarAccessibilityService? = null
             private set
@@ -47,7 +39,6 @@ class NavBarAccessibilityService : AccessibilityService() {
     private lateinit var settings: SettingsManager
     private var currentPackage: String = ""
     private var isFullscreen: Boolean = false
-    private var isVideoPlaying: Boolean = false
     private var isOnHomeScreen: Boolean = false
     private var launcherPackages: Set<String> = emptySet()
 
@@ -63,13 +54,12 @@ class NavBarAccessibilityService : AccessibilityService() {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     Log.d(TAG, "Screen off, hiding overlay.")
-                    overlay?.hide()
+                    overlay?.hide(animate = false)
                 }
                 Intent.ACTION_USER_PRESENT -> {
-                    Log.d(TAG, "User present, updating overlay visibility.")
-                    // A small delay may be necessary for the keyguard to fully dismiss
+                    Log.d(TAG, "User present, showing with fade animation.")
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        updateOverlayVisibility()
+                        updateOverlayVisibility(forceFade = true)
                     }, 200)
                 }
             }
@@ -83,7 +73,6 @@ class NavBarAccessibilityService : AccessibilityService() {
         settings = SettingsManager.getInstance(this)
 
         startForegroundService()
-
         loadLauncherPackages()
         createOverlay()
 
@@ -112,9 +101,9 @@ class NavBarAccessibilityService : AccessibilityService() {
         manager.createNotificationChannel(channel)
 
         val notification: Notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText(getString(R.string.service_running_notification))
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Replace with a real icon
+            .setContentTitle("LG UltraTab Extension")
+            .setContentText("Custom Navigation Bar Running")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
 
@@ -135,11 +124,6 @@ class NavBarAccessibilityService : AccessibilityService() {
                 "com.sec.android.app.launcher", "com.lge.launcher3", "com.huawei.android.launcher"
             )
         }
-    }
-
-    override fun onUnbind(intent: Intent?): Boolean {
-        Log.i(TAG, "Service unbind")
-        return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
@@ -165,11 +149,9 @@ class NavBarAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
 
-        checkRecentsScreen(event)
-
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> handleWindowStateChanged(event)
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> handleWindowContentChanged(event)
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> checkFullscreenState()
         }
     }
 
@@ -181,10 +163,6 @@ class NavBarAccessibilityService : AccessibilityService() {
             currentPackage = packageName
             Log.d(TAG, "Foreground app changed: $packageName")
 
-            // Reset video state when app changes
-            isVideoPlaying = false
-
-            // 홈 화면 감지
             val wasOnHomeScreen = isOnHomeScreen
             isOnHomeScreen = launcherPackages.contains(packageName)
             if (wasOnHomeScreen != isOnHomeScreen) {
@@ -196,41 +174,21 @@ class NavBarAccessibilityService : AccessibilityService() {
         checkFullscreenState()
     }
 
-    private fun handleWindowContentChanged(event: AccessibilityEvent) {
-        if (settings.autoHideOnVideo && isVideoApp(currentPackage)) {
-            checkVideoPlayingState()
-        }
-    }
-
-    /**
-     * 최근 앱 화면인지 확인 (휴리스틱)
-     */
-    private fun checkRecentsScreen(event: AccessibilityEvent) {
-        val source = event.source ?: return
-        try {
-            val recentsViews = source.findAccessibilityNodeInfosByViewId("com.android.systemui:id/recents_view")
-            overlay?.setRecentsState(recentsViews.isNotEmpty())
-            recentsViews?.forEach { it.recycle() }
-        } finally {
-            source.recycle()
-        }
-    }
-
     private fun checkFullscreenState() {
         try {
-            val windowManager = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
-            val screenBounds = windowManager.currentWindowMetrics.bounds
+            val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val metrics = windowManager.currentWindowMetrics
+            val screenBounds = metrics.bounds
             var foundFullscreen = false
             val windowBounds = Rect()
 
             for (window in windows) {
                 if (window.isActive && window.type == AccessibilityWindowInfo.TYPE_APPLICATION) {
                     window.getBoundsInScreen(windowBounds)
-                    // If the app window's bounds are nearly the same as the screen's, it's fullscreen.
-                    // A direct equality check can fail due to screen cutouts or small system bars.
-                    val widthMatches = windowBounds.width() >= screenBounds.width() * 0.99
-                    val heightMatches = windowBounds.height() >= screenBounds.height() * 0.99
-                    if (widthMatches && heightMatches) {
+                    // 화면의 98% 이상을 차지하면 전체화면으로 간주
+                    val widthMatch = windowBounds.width() >= screenBounds.width() * 0.98f
+                    val heightMatch = windowBounds.height() >= screenBounds.height() * 0.98f
+                    if (widthMatch && heightMatch) {
                         foundFullscreen = true
                         break
                     }
@@ -239,7 +197,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
             if (isFullscreen != foundFullscreen) {
                 isFullscreen = foundFullscreen
-                Log.d(TAG, "Fullscreen state changed: $isFullscreen")
+                Log.d(TAG, "Fullscreen state changed: $isFullscreen (app: $currentPackage)")
                 updateOverlayVisibility()
             }
         } catch (e: Exception) {
@@ -247,39 +205,19 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun checkVideoPlayingState() {
-        val playing = isVideoApp(currentPackage) && isFullscreen
-        if (isVideoPlaying != playing) {
-            isVideoPlaying = playing
-            Log.d(TAG, "Video playing state changed: $isVideoPlaying (app: $currentPackage)")
-            updateOverlayVisibility()
-        }
-    }
-
-    private fun isVideoApp(packageName: String): Boolean {
-        return VIDEO_APP_PACKAGES.contains(packageName)
-    }
-
-    private fun updateOverlayVisibility() {
+    private fun updateOverlayVisibility(forceFade: Boolean = false) {
         val shouldHide = shouldHideOverlay()
-        Log.d(TAG, "Update visibility: shouldHide=$shouldHide, package=$currentPackage, fullscreen=$isFullscreen, video=$isVideoPlaying")
+        Log.d(TAG, "Update visibility: shouldHide=$shouldHide, package=$currentPackage, fullscreen=$isFullscreen")
         if (shouldHide) {
             overlay?.hide()
         } else {
-            overlay?.show()
+            overlay?.show(fade = forceFade)
         }
     }
 
     private fun shouldHideOverlay(): Boolean {
-        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-        val isLocked = keyguardManager.isKeyguardLocked
-        Log.d(TAG, "Keyguard check: isKeyguardLocked = $isLocked")
-        if (isLocked) {
-            return true
-        }
-
-        // 1. 영상 재생 중이면 숨김
-        if (settings.autoHideOnVideo && isVideoPlaying) return true
+        // 1. 전체화면 모드면 숨김 (유튜브, 게임, 사진 등)
+        if (settings.autoHideOnVideo && isFullscreen) return true
 
         // 2. 앱별 설정에 따라 숨김
         if (currentPackage.isNotEmpty() && settings.shouldHideForPackage(currentPackage)) return true
@@ -302,7 +240,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     fun executeAction(action: NavAction): Boolean {
         if (action == NavAction.ASSIST) {
             try {
-                val intent = Intent(Intent.ACTION_ASSIST)
+                val intent = Intent(Intent.ACTION_VOICE_COMMAND)
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 startActivity(intent)
                 Log.d(TAG, "Executing action: ASSIST")
