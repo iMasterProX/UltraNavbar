@@ -60,6 +60,7 @@ object ImageCropUtil {
             val height = bitmap.height
 
             // 하단에서 72px 크롭
+            // Int - Int 연산 명시
             val y = (height - cropHeight).coerceAtLeast(0)
             val actualCropHeight = minOf(cropHeight, height)
 
@@ -68,9 +69,9 @@ object ImageCropUtil {
             val croppedBitmap = Bitmap.createBitmap(
                 bitmap,
                 0,                  // x
-                y,                  // y (하단에서 72px 위치)
-                width,              // width (전체 너비)
-                actualCropHeight    // height (72px)
+                y,                  // y
+                width,              // width
+                actualCropHeight    // height
             )
 
             // 내부 저장소에 저장
