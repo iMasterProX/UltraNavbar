@@ -303,41 +303,63 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     /**
      * 오버레이 표시
+     *
+     * @param fade true면 잠금해제 등에서 페이드 인 효과를 추가로 적용
      */
-    fun show() {
+    fun show(fade: Boolean = false) {
         if (isShowing) return
 
         navBarView?.let { bar ->
+            bar.clearAnimation()
             bar.visibility = View.VISIBLE
+
+            // 기본: 슬라이드 업
             val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                 duration = ANIMATION_DURATION
             }
             bar.startAnimation(slideUp)
+
+            // 옵션: 페이드 인(슬라이드와 병행)
+            if (fade) {
+                bar.alpha = 0f
+                bar.animate().alpha(1f).setDuration(ANIMATION_DURATION).start()
+            } else {
+                bar.alpha = 1f
+            }
         }
 
         hotspotView?.visibility = View.GONE
         isShowing = true
-        Log.d(TAG, "Overlay shown")
+        Log.d(TAG, "Overlay shown (fade=$fade)")
     }
 
     /**
      * 오버레이 숨김
+     *
+     * @param animate false면 즉시 숨김(화면 OFF 등에서 깜빡임/애니메이션 방지)
      */
-    fun hide() {
+    fun hide(animate: Boolean = true) {
         if (!isShowing) return
 
         navBarView?.let { bar ->
-            val slideDown = TranslateAnimation(0f, 0f, 0f, bar.height.toFloat()).apply {
-                duration = ANIMATION_DURATION
-                setAnimationListener(object : android.view.animation.Animation.AnimationListener {
-                    override fun onAnimationStart(animation: android.view.animation.Animation?) {}
-                    override fun onAnimationEnd(animation: android.view.animation.Animation?) {
-                        bar.visibility = View.GONE
-                    }
-                    override fun onAnimationRepeat(animation: android.view.animation.Animation?) {}
-                })
+            bar.clearAnimation()
+            bar.animate().cancel()
+
+            if (!animate) {
+                bar.visibility = View.GONE
+            } else {
+                val slideDown = TranslateAnimation(0f, 0f, 0f, bar.height.toFloat()).apply {
+                    duration = ANIMATION_DURATION
+                    setAnimationListener(object : android.view.animation.Animation.AnimationListener {
+                        override fun onAnimationStart(animation: android.view.animation.Animation?) {}
+                        override fun onAnimationEnd(animation: android.view.animation.Animation?) {
+                            bar.visibility = View.GONE
+                        }
+                        override fun onAnimationRepeat(animation: android.view.animation.Animation?) {}
+                    })
+                }
+                bar.startAnimation(slideDown)
             }
-            bar.startAnimation(slideDown)
         }
 
         // 핫스팟 활성화
@@ -346,7 +368,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         isShowing = false
-        Log.d(TAG, "Overlay hidden")
+        Log.d(TAG, "Overlay hidden (animate=$animate)")
     }
 
     /**
