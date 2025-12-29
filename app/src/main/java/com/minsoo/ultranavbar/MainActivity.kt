@@ -31,18 +31,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var onboardingCard: MaterialCardView
 
-    private lateinit var seekBarHeight: SeekBar
-    private lateinit var seekButtonSize: SeekBar
-    private lateinit var txtBarHeight: TextView
-    private lateinit var txtButtonSize: TextView
+    // 롱프레스 설정
+    private lateinit var txtLongPressAction: TextView
+    private lateinit var btnChangeLongPressAction: MaterialButton
+    private lateinit var btnResetLongPressAction: MaterialButton
 
-    private lateinit var switchAutoHideVideo: SwitchMaterial
     private lateinit var radioBlacklist: RadioButton
     private lateinit var radioWhitelist: RadioButton
     private lateinit var switchHotspot: SwitchMaterial
+    private lateinit var switchIgnoreStylus: SwitchMaterial
 
     // 홈 배경 관련
     private lateinit var switchHomeBg: SwitchMaterial
+    private lateinit var btnGenerateLandscape: MaterialButton
+    private lateinit var btnGeneratePortrait: MaterialButton
     private lateinit var txtLandscapeStatus: TextView
     private lateinit var txtPortraitStatus: TextView
 
@@ -54,6 +56,17 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { handleImageSelected(it) }
+    }
+
+    // 롱프레스 앱 선택 런처
+    private val longPressActionPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val packageName = result.data?.getStringExtra(AppListActivity.EXTRA_SELECTED_PACKAGE)
+            settings.longPressAction = packageName
+            updateLongPressActionUI()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,6 +84,26 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         updateServiceStatus()
         updateBgImageStatus()
+        // 자동으로 배터리 최적화 상태 확인 및 요청
+        requestIgnoreBatteryOptimizations(isTriggeredByUser = false)
+        updateLongPressActionUI()
+    }
+
+    private fun updateLongPressActionUI() {
+        val packageName = settings.longPressAction
+        if (packageName == null) {
+            txtLongPressAction.text = "Default (Google Assistant)"
+        } else {
+            try {
+                val appInfo = packageManager.getApplicationInfo(packageName, 0)
+                val appLabel = packageManager.getApplicationLabel(appInfo)
+                txtLongPressAction.text = appLabel
+            } catch (e: PackageManager.NameNotFoundException) {
+                txtLongPressAction.text = "App not found"
+                // 앱이 제거된 경우, 설정을 기본값으로 리셋
+                settings.longPressAction = null
+            }
+        }
     }
 
     private fun initViews() {
@@ -79,16 +112,28 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         onboardingCard = findViewById(R.id.onboardingCard)
 
+        // 롱프레스 설정
+        txtLongPressAction = findViewById(R.id.txtLongPressAction)
+        btnChangeLongPressAction = findViewById<MaterialButton>(R.id.btnChangeLongPressAction).apply {
+            setOnClickListener {
+                val intent = Intent(this@MainActivity, AppListActivity::class.java).apply {
+                    putExtra(AppListActivity.EXTRA_SELECTION_MODE, AppListActivity.MODE_SINGLE)
+                }
+                longPressActionPickerLauncher.launch(intent)
+            }
+        }
+        btnResetLongPressAction = findViewById<MaterialButton>(R.id.btnResetLongPressAction).apply {
+            setOnClickListener {
+                settings.longPressAction = null
+                updateLongPressActionUI()
+                Toast.makeText(this@MainActivity, "Default action set", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         // 접근성 설정 버튼
         findViewById<MaterialButton>(R.id.btnOpenAccessibility).setOnClickListener {
             openAccessibilitySettings()
         }
-
-        // 오버레이 설정
-        seekBarHeight = findViewById(R.id.seekBarHeight)
-        seekButtonSize = findViewById(R.id.seekButtonSize)
-        txtBarHeight = findViewById(R.id.txtBarHeight)
-        txtButtonSize = findViewById(R.id.txtButtonSize)
 
         // 자동 숨김 설정
         switchAutoHideVideo = findViewById(R.id.switchAutoHideVideo)
@@ -103,8 +148,13 @@ class MainActivity : AppCompatActivity() {
         // 재호출 설정
         switchHotspot = findViewById(R.id.switchHotspot)
 
+        // 스타일러스 설정
+        switchIgnoreStylus = findViewById(R.id.switchIgnoreStylus)
+
         // 홈 배경 설정
         switchHomeBg = findViewById(R.id.switchHomeBg)
+        btnGenerateLandscape = findViewById(R.id.btnGenerateLandscape)
+        btnGeneratePortrait = findViewById(R.id.btnGeneratePortrait)
         txtLandscapeStatus = findViewById(R.id.txtLandscapeStatus)
         txtPortraitStatus = findViewById(R.id.txtPortraitStatus)
 
@@ -122,18 +172,12 @@ class MainActivity : AppCompatActivity() {
 
         // 배터리 최적화 버튼
         findViewById<MaterialButton>(R.id.btnBatteryOptimization).setOnClickListener {
-            requestIgnoreBatteryOptimizations()
+            // 사용자가 직접 눌렀음을 명시
+            requestIgnoreBatteryOptimizations(isTriggeredByUser = true)
         }
     }
 
     private fun loadSettings() {
-        // 오버레이 설정 로드
-        seekBarHeight.progress = settings.barHeight
-        seekButtonSize.progress = settings.buttonSize
-
-        txtBarHeight.text = "${settings.barHeight} dp"
-        txtButtonSize.text = "${settings.buttonSize} dp"
-
         // 자동 숨김 설정 로드
         switchAutoHideVideo.isChecked = settings.autoHideOnVideo
         when (settings.hideMode) {
@@ -143,78 +187,14 @@ class MainActivity : AppCompatActivity() {
 
         // 재호출 설정 로드
         switchHotspot.isChecked = settings.hotspotEnabled
+        switchIgnoreStylus.isChecked = settings.ignoreStylus
 
         // 홈 배경 설정 로드
         switchHomeBg.isChecked = settings.homeBgEnabled
     }
 
             private fun setupListeners() {
-
-                // 바 높이
-
-                seekBarHeight.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-
-                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-
-                        val height = progress.coerceAtLeast(24)  // 최소 24dp
-
-                        txtBarHeight.text = "$height dp"
-
-                    }
-
-        
-
-                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-
-        
-
-                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
-
-                        val height = (seekBar?.progress ?: 48).coerceAtLeast(24)
-
-                        settings.barHeight = height
-
-                        notifySettingsChanged()
-
-                    }
-
-                })
-
-        
-
-                // 버튼 크기
-
-                seekButtonSize.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-
-                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-
-                        val size = progress.coerceAtLeast(20)  // 최소 20dp
-
-                        txtButtonSize.text = "$size dp"
-
-                    }
-
-        
-
-                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-
-        
-
-                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
-
-                        val size = (seekBar?.progress ?: 80).coerceAtLeast(20)
-
-                        settings.buttonSize = size
-
-                        notifySettingsChanged()
-
-                    }
-
-                })
-
-        
-
-                // 영상 자동 숨김
+        // 영상 자동 숨김
         switchAutoHideVideo.setOnCheckedChangeListener { _, isChecked ->
             settings.autoHideOnVideo = isChecked
         }
@@ -238,10 +218,40 @@ class MainActivity : AppCompatActivity() {
             notifySettingsChanged()
         }
 
+        // 스타일러스 입력 무시
+        switchIgnoreStylus.setOnCheckedChangeListener { _, isChecked ->
+            settings.ignoreStylus = isChecked
+        }
+
         // 홈 배경 활성화
         switchHomeBg.setOnCheckedChangeListener { _, isChecked ->
             settings.homeBgEnabled = isChecked
             notifySettingsChanged()
+        }
+
+        btnGenerateLandscape.setOnClickListener { generateBackground(isLandscape = true) }
+        btnGeneratePortrait.setOnClickListener { generateBackground(isLandscape = false) }
+    }
+
+    private fun generateBackground(isLandscape: Boolean) {
+        lifecycleScope.launch {
+            Toast.makeText(this@MainActivity, "Generating background...", Toast.LENGTH_SHORT).show()
+            val success = try {
+                WallpaperProcessor.generate(this@MainActivity, isLandscape)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error generating background", e)
+                false
+            }
+            
+            if (success) {
+                Toast.makeText(this@MainActivity, "Background generated successfully", Toast.LENGTH_SHORT).show()
+                updateBgImageStatus()
+                // 오버레이에 즉시 반영되도록 서비스에 알림
+                val intent = Intent("com.minsoo.ultranavbar.RELOAD_BACKGROUND")
+                sendBroadcast(intent)
+            } else {
+                Toast.makeText(this@MainActivity, "Failed to generate background. Wallpaper access may be restricted.", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -251,7 +261,7 @@ class MainActivity : AppCompatActivity() {
         if (success) {
             Toast.makeText(this, R.string.image_crop_success, Toast.LENGTH_SHORT).show()
             updateBgImageStatus()
-            notifySettingsChanged()
+            sendBroadcast(Intent("com.minsoo.ultranavbar.RELOAD_BACKGROUND"))
         } else {
             Toast.makeText(this, R.string.image_crop_failed, Toast.LENGTH_SHORT).show()
         }
@@ -297,7 +307,7 @@ class MainActivity : AppCompatActivity() {
         sendBroadcast(Intent("com.minsoo.ultranavbar.SETTINGS_CHANGED"))
     }
 
-    private fun requestIgnoreBatteryOptimizations() {
+    private fun requestIgnoreBatteryOptimizations(isTriggeredByUser: Boolean = false) {
         try {
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
@@ -306,10 +316,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 startActivity(intent)
             } else {
-                Toast.makeText(this, "이미 배터리 최적화에서 제외되었습니다.", Toast.LENGTH_SHORT).show()
+                if (isTriggeredByUser) {
+                    Toast.makeText(this, "이미 배터리 최적화에서 제외되었습니다.", Toast.LENGTH_SHORT).show()
+                }
             }
         } catch (e: Exception) {
-            Toast.makeText(this, "배터리 최적화 설정 화면을 열 수 없습니다.", Toast.LENGTH_SHORT).show()
+            if (isTriggeredByUser) {
+                Toast.makeText(this, "배터리 최적화 설정 화면을 열 수 없습니다.", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

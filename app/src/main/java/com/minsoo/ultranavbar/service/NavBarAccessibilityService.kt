@@ -40,15 +40,26 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var currentPackage: String = ""
     private var isFullscreen: Boolean = false
     private var isOnHomeScreen: Boolean = false
+    private var isNotificationPanelOpen: Boolean = false
     private var launcherPackages: Set<String> = emptySet()
+    
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     
     // Status/Navigation bars height to verify actual fullscreen
     private var systemBarsHeight = 0
 
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            Log.d(TAG, "Settings changed, refreshing overlay")
-            overlay?.refreshSettings()
+            when (intent?.action) {
+                "com.minsoo.ultranavbar.SETTINGS_CHANGED" -> {
+                    Log.d(TAG, "Settings changed, refreshing overlay")
+                    overlay?.refreshSettings()
+                }
+                "com.minsoo.ultranavbar.RELOAD_BACKGROUND" -> {
+                    Log.d(TAG, "Reloading background images")
+                    overlay?.reloadBackgroundImages()
+                }
+            }
         }
     }
 
@@ -62,7 +73,7 @@ class NavBarAccessibilityService : AccessibilityService() {
                 Intent.ACTION_USER_PRESENT -> {
                     Log.d(TAG, "User present, showing with fade animation.")
                     // 약간의 딜레이를 주어 화면이 완전히 켜진 후 표시
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    handler.postDelayed({
                         updateOverlayVisibility(forceFade = true)
                     }, 200)
                 }
@@ -80,11 +91,11 @@ class NavBarAccessibilityService : AccessibilityService() {
         loadLauncherPackages()
         createOverlay()
 
-        registerReceiver(
-            settingsReceiver,
-            IntentFilter("com.minsoo.ultranavbar.SETTINGS_CHANGED"),
-            RECEIVER_NOT_EXPORTED
-        )
+        val settingsFilter = IntentFilter().apply {
+            addAction("com.minsoo.ultranavbar.SETTINGS_CHANGED")
+            addAction("com.minsoo.ultranavbar.RELOAD_BACKGROUND")
+        }
+        registerReceiver(settingsReceiver, settingsFilter, RECEIVER_NOT_EXPORTED)
 
         val screenStateFilter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -161,16 +172,16 @@ class NavBarAccessibilityService : AccessibilityService() {
         super.onConfigurationChanged(newConfig)
         Log.d(TAG, "Configuration changed: orientation=${newConfig.orientation}")
         overlay?.handleOrientationChange(newConfig.orientation)
-        // Orientation change affects screen bounds, recheck fullscreen
-        checkFullscreenState()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
 
         when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> handleWindowStateChanged(event)
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> checkFullscreenState()
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                handleWindowStateChanged(event)
+                checkNotificationPanelState()
+            }
         }
     }
 
@@ -188,48 +199,31 @@ class NavBarAccessibilityService : AccessibilityService() {
                 Log.d(TAG, "Home screen state changed: $isOnHomeScreen")
                 overlay?.setHomeScreenState(isOnHomeScreen)
             }
-            // 앱이 변경되면 일단 표시 (fullscreen 체크 전) - 유튜브 등 진입 시 숨겨짐 방지
-            // 단, 이미 풀스크린이 확실하면 숨김 유지
             updateOverlayVisibility()
         }
-        checkFullscreenState()
     }
 
-    private fun checkFullscreenState() {
-        try {
-            val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val metrics = windowManager.currentWindowMetrics
-            val screenBounds = metrics.bounds
-            
-            var foundFullscreen = false
-            val windowBounds = Rect()
-
-            // 윈도우 목록 순회 (Z-order 상위부터)
-            for (window in windows) {
-                // Application 타입 윈도우만 체크
-                if (window.type == AccessibilityWindowInfo.TYPE_APPLICATION) {
-                    window.getBoundsInScreen(windowBounds)
-                    
-                    // 화면 전체를 덮는지 확인
-                    // 오차 범위(tolerance)를 아주 작게 설정 (10px 미만) - 상태바가 조금이라도 보이면 풀스크린 아님
-                    // 이전 98%는 너무 관대해서 유튜브 일반 모드(상태바 있음)도 풀스크린으로 오인 가능성 있음
-                    val widthFull = windowBounds.width() >= screenBounds.width()
-                    val heightFull = windowBounds.height() >= screenBounds.height()
-                    
-                    if (widthFull && heightFull) {
-                        foundFullscreen = true
-                        break
-                    }
-                }
+    private fun checkNotificationPanelState() {
+        // TYPE_SYSTEM 윈도우를 찾아 알림 패널 상태를 유추
+        val systemWindows = windows.filter { it.type == AccessibilityWindowInfo.TYPE_SYSTEM }
+        var panelVisible = false
+        for (window in systemWindows) {
+            // 알림 패널은 보통 화면 전체 너비를 차지
+            val bounds = Rect()
+            window.getBoundsInScreen(bounds)
+            if (bounds.width() >= resources.displayMetrics.widthPixels) {
+                 panelVisible = true
+                 Log.d(TAG, "Potential Notification Panel Window: bounds=$bounds")
+                 break // 하나라도 찾으면 중단
             }
+        }
 
-            if (isFullscreen != foundFullscreen) {
-                isFullscreen = foundFullscreen
-                Log.d(TAG, "Fullscreen state changed: $isFullscreen (app: $currentPackage)")
-                updateOverlayVisibility()
+        if (isNotificationPanelOpen != panelVisible) {
+            isNotificationPanelOpen = panelVisible
+            Log.d(TAG, "Notification panel state changed: $isNotificationPanelOpen")
+            handler.post {
+                overlay?.updatePanelButtonState(isNotificationPanelOpen)
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error checking fullscreen state", e)
         }
     }
 
@@ -256,7 +250,16 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     private fun createOverlay() {
         if (overlay == null) {
-            overlay = NavBarOverlay(this)
+            overlay = NavBarOverlay(this).apply {
+                setOnFullscreenListener { fullscreenEnabled ->
+                    if (isFullscreen != fullscreenEnabled) {
+                        isFullscreen = fullscreenEnabled
+                        Log.d(TAG, "Fullscreen state changed via listener: $isFullscreen")
+                        // UI 업데이트는 메인 스레드에서 수행
+                        handler.post { updateOverlayVisibility() }
+                    }
+                }
+            }
             overlay?.create()
         }
     }
@@ -267,26 +270,39 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     fun executeAction(action: NavAction): Boolean {
+        if (action == NavAction.NOTIFICATIONS) {
+            return if (isNotificationPanelOpen) {
+                Log.d(TAG, "Closing notification panel")
+                performGlobalAction(GLOBAL_ACTION_BACK)
+            } else {
+                Log.d(TAG, "Opening notification panel")
+                performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+            }
+        }
+
         if (action == NavAction.ASSIST) {
             try {
-                // SettingsManager에서 설정된 롱프레스 액션 확인
-                // 0: Assistant (Default), 1: Google App
-                if (settings.longPressAction == 1) {
-                    // 구글 앱 실행
-                    val intent = packageManager.getLaunchIntentForPackage("com.google.android.googlequicksearchbox")
+                val customActionPackage = settings.longPressAction
+                if (customActionPackage == null) {
+                    // 기본 동작: Google Assistant 실행
+                    val intent = Intent(Intent.ACTION_ASSIST).apply {
+                        setPackage("com.google.android.googlequicksearchbox")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                    Log.d(TAG, "Executing default long-press action: Google Assistant")
+                } else {
+                    // 커스텀 앱 실행
+                    val intent = packageManager.getLaunchIntentForPackage(customActionPackage)
                     if (intent != null) {
-                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                         startActivity(intent)
-                         Log.d(TAG, "Executing action: Google App")
-                         return true
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        Log.d(TAG, "Executing custom long-press action: $customActionPackage")
+                    } else {
+                        Log.w(TAG, "Could not launch custom app: $customActionPackage. Intent is null.")
+                        return false
                     }
                 }
-                
-                // 기본 어시스턴트
-                val intent = Intent(Intent.ACTION_VOICE_COMMAND)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
-                Log.d(TAG, "Executing action: ASSIST")
                 return true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to execute ASSIST action", e)

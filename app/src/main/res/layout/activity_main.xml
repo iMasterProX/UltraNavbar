@@ -160,7 +160,7 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 오버레이 설정 -->
+        <!-- 홈 길게 누름 동작 설정 -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -177,54 +177,41 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/overlay_settings"
+                    android:text="Home Long-Press Action"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
                 <TextView
+                    android:id="@+id/txtLongPressAction"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:text="@string/bar_height"
-                    android:textSize="14sp" />
-
-                <SeekBar
-                    android:id="@+id/seekBarHeight"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:max="80"
-                    android:progress="48" />
-
-                <TextView
-                    android:id="@+id/txtBarHeight"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="48 dp"
-                    android:textSize="12sp"
+                    android:layout_marginTop="8dp"
+                    android:text="Default (Google Assistant)"
+                    android:textSize="14sp"
                     android:textColor="?android:textColorSecondary" />
 
-                <!-- 버튼 크기 -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="@string/button_size"
-                    android:textSize="14sp" />
-
-                <SeekBar
-                    android:id="@+id/seekButtonSize"
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:max="120"
-                    android:progress="80" />
+                    android:orientation="horizontal"
+                    android:layout_marginTop="12dp">
 
-                <TextView
-                    android:id="@+id/txtButtonSize"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="80 dp"
-                    android:textSize="12sp"
-                    android:textColor="?android:textColorSecondary" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnChangeLongPressAction"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Change" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnResetLongPressAction"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="Reset" />
+                </LinearLayout>
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -377,6 +364,40 @@
                         android:layout_height="wrap_content" />
                 </LinearLayout>
 
+                <!-- 스타일러스 입력 무시 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Ignore Stylus Input"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Prevents pen input from triggering navigation bar actions"
+                            android:textSize="12sp"
+                            android:textColor="?android:textColorSecondary" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchIgnoreStylus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -465,6 +486,14 @@
                     </LinearLayout>
 
                     <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGenerateLandscape"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:text="Auto" />
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnSelectLandscape"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -500,6 +529,14 @@
                             android:textSize="12sp"
                             android:textColor="?android:textColorSecondary" />
                     </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGeneratePortrait"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:text="Auto" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnSelectPortrait"

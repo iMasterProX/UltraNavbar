@@ -21,23 +21,59 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import android.app.Activity
+import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
+import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.View
+import android.widget.ProgressBar
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.textfield.TextInputEditText
+import com.minsoo.ultranavbar.R
+import com.minsoo.ultranavbar.settings.SettingsManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
 class AppListActivity : AppCompatActivity() {
+
+    companion object {
+        const val EXTRA_SELECTION_MODE = "selection_mode"
+        const val EXTRA_SELECTED_PACKAGE = "selected_package"
+        const val MODE_SINGLE = "single"
+        const val MODE_MULTIPLE = "multiple"
+    }
 
     private lateinit var settings: SettingsManager
     private lateinit var recyclerApps: RecyclerView
     private lateinit var progressBar: ProgressBar
     private lateinit var editSearch: TextInputEditText
     private lateinit var adapter: AppListAdapter
+    private lateinit var btnSave: MaterialButton
 
     private var allApps: List<AppInfo> = emptyList()
     private var selectedPackages: MutableSet<String> = mutableSetOf()
+    private var selectionMode: String = MODE_MULTIPLE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_list)
 
         settings = SettingsManager.getInstance(this)
-        selectedPackages = settings.appList.toMutableSet()
+        selectionMode = intent.getStringExtra(EXTRA_SELECTION_MODE) ?: MODE_MULTIPLE
+        
+        if (selectionMode == MODE_MULTIPLE) {
+            selectedPackages = settings.appList.toMutableSet()
+        }
 
         initViews()
         loadApps()
@@ -66,7 +102,15 @@ class AppListActivity : AppCompatActivity() {
         recyclerApps = findViewById(R.id.recyclerApps)
         recyclerApps.layoutManager = LinearLayoutManager(this)
         adapter = AppListAdapter(
-            onItemChecked = { packageName, isChecked ->
+            selectionMode = selectionMode,
+            onItemClick = { packageName -> // Single-selection
+                val resultIntent = Intent().apply {
+                    putExtra(EXTRA_SELECTED_PACKAGE, packageName)
+                }
+                setResult(Activity.RESULT_OK, resultIntent)
+                finish()
+            },
+            onItemChecked = { packageName, isChecked -> // Multi-selection
                 if (isChecked) {
                     selectedPackages.add(packageName)
                 } else {
@@ -77,8 +121,13 @@ class AppListActivity : AppCompatActivity() {
         recyclerApps.adapter = adapter
 
         // 저장 버튼
-        findViewById<MaterialButton>(R.id.btnSave).setOnClickListener {
+        btnSave = findViewById(R.id.btnSave)
+        btnSave.setOnClickListener {
             saveAndFinish()
+        }
+        
+        if (selectionMode == MODE_SINGLE) {
+            btnSave.visibility = View.GONE
         }
     }
 

@@ -10,6 +10,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.minsoo.ultranavbar.R
 
 class AppListAdapter(
+    private val selectionMode: String,
+    private val onItemClick: (packageName: String) -> Unit,
     private val onItemChecked: (packageName: String, isChecked: Boolean) -> Unit
 ) : RecyclerView.Adapter<AppListAdapter.ViewHolder>() {
 
@@ -47,15 +49,22 @@ class AppListAdapter(
 
             appName.text = app.name
             appPackage.text = app.packageName
-            checkBox.isChecked = isSelected
-
-            // 클릭 리스너
-            itemView.setOnClickListener {
-                checkBox.toggle()
-            }
-
-            checkBox.setOnCheckedChangeListener { _, isChecked ->
-                onItemChecked(app.packageName, isChecked)
+            
+            if (selectionMode == AppListActivity.MODE_SINGLE) {
+                checkBox.visibility = View.GONE
+                itemView.setOnClickListener {
+                    onItemClick(app.packageName)
+                }
+                checkBox.setOnCheckedChangeListener(null)
+            } else {
+                checkBox.visibility = View.VISIBLE
+                checkBox.isChecked = isSelected
+                itemView.setOnClickListener {
+                    checkBox.toggle()
+                }
+                checkBox.setOnCheckedChangeListener { _, isChecked ->
+                    onItemChecked(app.packageName, isChecked)
+                }
             }
         }
     }

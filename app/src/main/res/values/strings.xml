@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">UltraNavbar</string>
+    <string name="app_name">LG UltraTab Extension</string>
     <string name="accessibility_service_description">화면 하단에 커스텀 네비게이션 바를 표시합니다. 뒤로가기, 홈, 최근 앱 버튼과 추가 기능 버튼을 제공합니다.</string>
 
     <!-- 설정 화면 -->

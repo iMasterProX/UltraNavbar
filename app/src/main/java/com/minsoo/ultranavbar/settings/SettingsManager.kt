@@ -11,8 +11,6 @@ class SettingsManager private constructor(context: Context) {
         const val CROP_HEIGHT_PX = 72 // 배경 크롭 높이 (px)
 
         // Keys
-        private const val KEY_BAR_HEIGHT = "bar_height"
-        private const val KEY_BUTTON_SIZE = "button_size"
         private const val KEY_AUTO_HIDE_VIDEO = "auto_hide_video"
         private const val KEY_HIDE_MODE = "hide_mode"
         private const val KEY_HOTSPOT_ENABLED = "hotspot_enabled"
@@ -37,14 +35,6 @@ class SettingsManager private constructor(context: Context) {
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-
-    var barHeight: Int
-        get() = prefs.getInt(KEY_BAR_HEIGHT, 48)
-        set(value) = prefs.edit().putInt(KEY_BAR_HEIGHT, value).apply()
-
-    var buttonSize: Int
-        get() = prefs.getInt(KEY_BUTTON_SIZE, 48)
-        set(value) = prefs.edit().putInt(KEY_BUTTON_SIZE, value).apply()
 
     var autoHideOnVideo: Boolean
         get() = prefs.getBoolean(KEY_AUTO_HIDE_VIDEO, true)
@@ -77,9 +67,9 @@ class SettingsManager private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_IGNORE_STYLUS, false)
         set(value) = prefs.edit().putBoolean(KEY_IGNORE_STYLUS, value).apply()
 
-    var longPressAction: Int
-        get() = prefs.getInt(KEY_LONG_PRESS_ACTION, 0) 
-        set(value) = prefs.edit().putInt(KEY_LONG_PRESS_ACTION, value).apply()
+    var longPressAction: String?
+        get() = prefs.getString(KEY_LONG_PRESS_ACTION, null)
+        set(value) = prefs.edit().putString(KEY_LONG_PRESS_ACTION, value).apply()
         
     // 앱 목록 (블랙리스트/화이트리스트용)
     var appList: Set<String>

@@ -25,6 +25,8 @@ import android.view.animation.TranslateAnimation
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.model.NavAction
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
@@ -38,6 +40,13 @@ import com.minsoo.ultranavbar.util.ImageCropUtil
  * TYPE_ACCESSIBILITY_OVERLAY를 사용하여 일관된 표시
  */
 class NavBarOverlay(private val service: NavBarAccessibilityService) {
+
+    /**
+     * 전체화면 상태 변경을 알리기 위한 리스너 인터페이스
+     */
+    fun interface OnFullscreenListener {
+        fun onFullscreenChanged(isFullscreen: Boolean)
+    }
 
     companion object {
         private const val TAG = "NavBarOverlay"
@@ -55,6 +64,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var rootView: FrameLayout? = null
     private var navBarView: ViewGroup? = null
     private var hotspotView: View? = null
+    private var panelButton: ImageButton? = null
 
     private var isShowing = true
     private var isCreated = false
@@ -71,6 +81,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     // 캐시된 배경 비트맵
     private var landscapeBgBitmap: Bitmap? = null
     private var portraitBgBitmap: Bitmap? = null
+
+    private var fullscreenListener: OnFullscreenListener? = null
+
+    fun setOnFullscreenListener(listener: OnFullscreenListener) {
+        this.fullscreenListener = listener
+    }
 
     /**
      * 오버레이 생성
@@ -89,6 +105,21 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     FrameLayout.LayoutParams.WRAP_CONTENT
                 )
             }
+
+            // 전체화면 감지 리스너 설정
+            ViewCompat.setOnApplyWindowInsetsListener(rootView!!) { _, insets ->
+                val statusBarVisible = insets.isVisible(WindowInsetsCompat.Type.statusBars())
+                val navBarVisible = insets.isVisible(WindowInsetsCompat.Type.navigationBars())
+                val isFullscreen = !statusBarVisible && !navBarVisible
+
+                Log.d(TAG, "Insets changed: statusBar=$statusBarVisible, navBar=$navBarVisible, fullscreen=$isFullscreen")
+                
+                // 리스너를 통해 서비스에 상태 전달
+                fullscreenListener?.onFullscreenChanged(isFullscreen)
+                
+                insets
+            }
+
 
             // 네비게이션 바 생성
             createNavBar()
@@ -160,6 +191,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             }
             setBackgroundColor(Color.BLACK)
             setPadding(dpToPx(16), 0, dpToPx(16), 0)
+            // 자식 뷰의 그림자가 잘리지 않도록 설정
+            clipChildren = false
         }
 
         // 왼쪽 버튼 그룹 (Back, Home, Recents)
@@ -190,7 +223,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         rightGroup.addView(createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx))
         addSpacer(rightGroup, buttonSpacingPx)
-        rightGroup.addView(createNavButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel, buttonSizePx))
+        panelButton = createNavButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel, buttonSizePx)
+        rightGroup.addView(panelButton)
 
         val rightLayoutParams = android.widget.RelativeLayout.LayoutParams(
             android.widget.RelativeLayout.LayoutParams.WRAP_CONTENT,
@@ -228,7 +262,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
                 if (event.action == MotionEvent.ACTION_DOWN) {
                     Log.d(TAG, "Hotspot touched, showing overlay")
-                    show(fade = true) // 핫스팟으로 호출 시 페이드
+                    show(fade = false) // 핫스팟으로 호출 시 슬라이드 업
                     true
                 } else {
                     false
@@ -251,19 +285,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         return ImageButton(context).apply {
             layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
 
-            // 흰색 리플 효과 적용
-            val rippleColor = ColorStateList.valueOf(Color.WHITE)
-            val contentDrawable = ShapeDrawable(RectShape()).apply {
-                paint.color = Color.TRANSPARENT
-            }
-            val maskDrawable = ShapeDrawable(RectShape()) // 리플 범위 마스크
-
-            background = RippleDrawable(rippleColor, contentDrawable, maskDrawable)
-
-            // 그림자 효과 (Android 12+ 얕은 그림자 시뮬레이션: elevation 사용)
-            elevation = dpToPx(2).toFloat()
-            stateListAnimator = null // 기본 누름 효과 제거하고 리플만 사용
-
+                    // 흰색 리플 효과 적용 (content를 null로 하여 테마 영향 최소화)
+                    val rippleColor = ColorStateList.valueOf(Color.WHITE)
+                    val maskDrawable = ShapeDrawable(RectShape()) // 리플 범위 마스크
+                    background = RippleDrawable(rippleColor, null, maskDrawable)
+            
+                    // 그림자 효과 (Android 12+ 얕은 그림자 시뮬레이션: elevation 사용)
+                    elevation = dpToPx(4).toFloat()
+                    stateListAnimator = null // 기본 누름 효과 제거하고 리플만 사용
             // 확대(MATRIX/FIT_CENTER) 제거: 흐릿/과확대 방지
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             setPadding(0, 0, 0, 0)
@@ -272,11 +301,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             contentDescription = action.displayName
 
             // 터치 리스너에 스타일러스 필터링 추가
-            setOnTouchListener { v, event ->
+            setOnTouchListener { _, event ->
                 if (settings.ignoreStylus && event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS) {
-                    return@setOnTouchListener false
+                    return@setOnTouchListener true // 이벤트를 소비하여 클릭 리스너 방지
                 }
-                // 기본 클릭 처리를 위해 false 반환 (ACTION_UP에서 performClick 호출됨)
+                // 기본 클릭 처리를 위해 false 반환
                 false
             }
 
@@ -476,38 +505,49 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
+     * 알림 패널 버튼 상태 업데이트 (회전 애니메이션)
+     */
+    fun updatePanelButtonState(isOpen: Boolean) {
+        val rotation = if (isOpen) 180f else 0f
+        panelButton?.animate()?.rotation(rotation)?.setDuration(ANIMATION_DURATION)?.start()
+    }
+
+    /**
      * 네비바 배경 업데이트
      */
     private fun updateNavBarBackground() {
-        navBarView?.let { bar ->
-            val oldBg = bar.background ?: ColorDrawable(Color.BLACK)
-            
-            // 1. 최근 앱 화면이면 무조건 검정
-            if (isRecentsVisible) {
-                if (oldBg !is ColorDrawable || oldBg.color != Color.BLACK) {
-                     bar.background = ColorDrawable(Color.BLACK)
-                }
-                return
-            }
+        val bar = navBarView ?: return
+        val currentBg = bar.background
 
-            // 2. 홈 화면이고 커스텀 배경 켜져있으면 이미지 적용
-            if (isOnHomeScreen && settings.homeBgEnabled) {
-                val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
-                // 가로/세로 비트맵 구분 적용
-                val bitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
-                
-                if (bitmap != null) {
-                    Log.d(TAG, "Applying home screen background image (landscape=$isLandscape)")
-                    // 이미지 적용 (Transition 없이 즉시 적용하여 깜빡임 방지)
-                     bar.background = BitmapDrawable(context.resources, bitmap)
-                } else {
-                    bar.background = ColorDrawable(Color.BLACK)
+        // 1. 목표 배경 상태 결정
+        // 홈 화면이고, 커스텀 배경이 켜져 있고, 최근 앱 화면이 아닐 때만 이미지 배경
+        val shouldUseImageBackground = isOnHomeScreen && settings.homeBgEnabled && !isRecentsVisible
+
+        if (shouldUseImageBackground) {
+            // 2. 이미지 배경 적용
+            val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
+            val targetBitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
+
+            if (targetBitmap != null) {
+                // 현재 배경이 타겟 비트맵과 다른 경우에만 변경
+                val currentBitmap = (currentBg as? BitmapDrawable)?.bitmap
+                if (currentBitmap !== targetBitmap) {
+                    Log.d(TAG, "Applying new background image. Landscape: $isLandscape")
+                    bar.background = BitmapDrawable(context.resources, targetBitmap)
                 }
             } else {
-                // 3. 그 외 앱 실행 중이면 무조건 검정
-                if (oldBg !is ColorDrawable || oldBg.color != Color.BLACK) {
-                     bar.background = ColorDrawable(Color.BLACK)
+                // 적용할 이미지가 없으면 검은색 배경으로 (Fallback)
+                if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
+                    Log.d(TAG, "Fallback to black background (image not loaded).")
+                    bar.background = ColorDrawable(Color.BLACK)
                 }
+            }
+        } else {
+            // 3. 그 외의 모든 경우 (앱, 최근 앱 화면 등)는 검은색 배경 적용
+            // 현재 배경이 이미 검은색이 아닌 경우에만 변경
+            if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
+                Log.d(TAG, "Applying black background for app/recents view.")
+                bar.background = ColorDrawable(Color.BLACK)
             }
         }
     }
