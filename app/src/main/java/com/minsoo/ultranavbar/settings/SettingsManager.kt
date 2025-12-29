@@ -8,7 +8,8 @@ class SettingsManager private constructor(context: Context) {
 
     companion object {
         private const val PREF_NAME = "UltraNavbarSettings"
-        
+        const val CROP_HEIGHT_PX = 72 // 배경 크롭 높이 (px)
+
         // Keys
         private const val KEY_BAR_HEIGHT = "bar_height"
         private const val KEY_BUTTON_SIZE = "button_size"
@@ -17,8 +18,13 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_HOTSPOT_ENABLED = "hotspot_enabled"
         private const val KEY_HOTSPOT_HEIGHT = "hotspot_height"
         private const val KEY_HOME_BG_ENABLED = "home_bg_enabled"
-        private const val KEY_IGNORE_STYLUS = "ignore_stylus" // 와콤 스타일러스 무시
-        private const val KEY_LONG_PRESS_ACTION = "long_press_action" // 홈버튼 길게 누르기
+        private const val KEY_IGNORE_STYLUS = "ignore_stylus"
+        private const val KEY_LONG_PRESS_ACTION = "long_press_action"
+        private const val KEY_APP_LIST = "app_list" // 저장된 앱 목록 (패키지명 set)
+        
+        // Background Image Filenames (Stored in prefs to track validity, though file existence is primary check)
+        private const val KEY_HOME_BG_LANDSCAPE = "home_bg_landscape"
+        private const val KEY_HOME_BG_PORTRAIT = "home_bg_portrait"
 
         @Volatile
         private var instance: SettingsManager? = null
@@ -71,16 +77,30 @@ class SettingsManager private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_IGNORE_STYLUS, false)
         set(value) = prefs.edit().putBoolean(KEY_IGNORE_STYLUS, value).apply()
 
-    // 0: Assistant (Default), 1: Google App, etc.
     var longPressAction: Int
         get() = prefs.getInt(KEY_LONG_PRESS_ACTION, 0) 
         set(value) = prefs.edit().putInt(KEY_LONG_PRESS_ACTION, value).apply()
+        
+    // 앱 목록 (블랙리스트/화이트리스트용)
+    var appList: Set<String>
+        get() = prefs.getStringSet(KEY_APP_LIST, emptySet()) ?: emptySet()
+        set(value) = prefs.edit().putStringSet(KEY_APP_LIST, value).apply()
 
-    // 패키지별 숨김 설정 (블랙리스트/화이트리스트용)
-    private fun getPackageKey(packageName: String) = "pkg_$packageName"
+    // 배경 이미지 설정 여부/경로 (실제 로딩은 ImageCropUtil에서 파일 유무로 판단하지만 설정값 유지용)
+    var homeBgLandscape: String?
+        get() = prefs.getString(KEY_HOME_BG_LANDSCAPE, null)
+        set(value) = prefs.edit().putString(KEY_HOME_BG_LANDSCAPE, value).apply()
+
+    var homeBgPortrait: String?
+        get() = prefs.getString(KEY_HOME_BG_PORTRAIT, null)
+        set(value) = prefs.edit().putString(KEY_HOME_BG_PORTRAIT, value).apply()
 
     fun shouldHideForPackage(packageName: String): Boolean {
-        // 간단한 예시 구현
-        return false 
+        // HideMode에 따라 appList에 포함되었는지 확인
+        val inList = appList.contains(packageName)
+        return when (hideMode) {
+            HideMode.BLACKLIST -> inList // 블랙리스트 모드면 리스트에 있을 때 숨김
+            HideMode.WHITELIST -> !inList // 화이트리스트 모드면 리스트에 없을 때 숨김
+        }
     }
 }
