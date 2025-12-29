@@ -8,13 +8,19 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.TransitionDrawable
+import android.graphics.drawable.shapes.RectShape
+import android.content.res.ColorStateList
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.animation.AlphaAnimation
+import android.view.animation.Animation
 import android.view.animation.TranslateAnimation
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -215,9 +221,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             visibility = View.GONE
 
             setOnTouchListener { _, event ->
+                // 와콤 스타일러스 필터링
+                if (settings.ignoreStylus && event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS) {
+                    return@setOnTouchListener false
+                }
+
                 if (event.action == MotionEvent.ACTION_DOWN) {
                     Log.d(TAG, "Hotspot touched, showing overlay")
-                    show()
+                    show(fade = true) // 핫스팟으로 호출 시 페이드
                     true
                 } else {
                     false
@@ -230,10 +241,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     /**
      * 네비게이션 버튼 생성 (리플 효과 적용)
-     *
-     * - 버튼(터치영역)은 48dp 고정
-     * - 아이콘은 "원본이 작으면 확대하지 않음" + "너무 크면 버튼 안으로만 축소" 되도록 CENTER_INSIDE
      */
+    @SuppressLint("ClickableViewAccessibility")
     private fun createNavButton(
         action: NavAction,
         iconResId: Int,
@@ -242,13 +251,18 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         return ImageButton(context).apply {
             layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
 
-            val outValue = android.util.TypedValue()
-            context.theme.resolveAttribute(
-                android.R.attr.selectableItemBackgroundBorderless,
-                outValue,
-                true
-            )
-            setBackgroundResource(outValue.resourceId)
+            // 흰색 리플 효과 적용
+            val rippleColor = ColorStateList.valueOf(Color.WHITE)
+            val contentDrawable = ShapeDrawable(RectShape()).apply {
+                paint.color = Color.TRANSPARENT
+            }
+            val maskDrawable = ShapeDrawable(RectShape()) // 리플 범위 마스크
+
+            background = RippleDrawable(rippleColor, contentDrawable, maskDrawable)
+
+            // 그림자 효과 (Android 12+ 얕은 그림자 시뮬레이션: elevation 사용)
+            elevation = dpToPx(2).toFloat()
+            stateListAnimator = null // 기본 누름 효과 제거하고 리플만 사용
 
             // 확대(MATRIX/FIT_CENTER) 제거: 흐릿/과확대 방지
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
@@ -257,10 +271,20 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             setImageResource(iconResId)
             contentDescription = action.displayName
 
+            // 터치 리스너에 스타일러스 필터링 추가
+            setOnTouchListener { v, event ->
+                if (settings.ignoreStylus && event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS) {
+                    return@setOnTouchListener false
+                }
+                // 기본 클릭 처리를 위해 false 반환 (ACTION_UP에서 performClick 호출됨)
+                false
+            }
+
             setOnClickListener { service.executeAction(action) }
 
             setOnLongClickListener {
                 if (action == NavAction.HOME) {
+                    // 구글 어시스턴트 호출
                     service.executeAction(NavAction.ASSIST)
                     true
                 } else {
@@ -313,18 +337,18 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             bar.clearAnimation()
             bar.visibility = View.VISIBLE
 
-            // 기본: 슬라이드 업
-            val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
-                duration = ANIMATION_DURATION
-            }
-            bar.startAnimation(slideUp)
-
-            // 옵션: 페이드 인(슬라이드와 병행)
             if (fade) {
-                bar.alpha = 0f
-                bar.animate().alpha(1f).setDuration(ANIMATION_DURATION).start()
+                // 페이드 인 등장
+                val alphaAnim = AlphaAnimation(0f, 1f).apply {
+                    duration = ANIMATION_DURATION
+                }
+                bar.startAnimation(alphaAnim)
             } else {
-                bar.alpha = 1f
+                // 기본 슬라이드 업
+                val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
+                    duration = ANIMATION_DURATION
+                }
+                bar.startAnimation(slideUp)
             }
         }
 
@@ -351,11 +375,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 val slideDown = TranslateAnimation(0f, 0f, 0f, bar.height.toFloat()).apply {
                     duration = ANIMATION_DURATION
                     setAnimationListener(object : android.view.animation.Animation.AnimationListener {
-                        override fun onAnimationStart(animation: android.view.animation.Animation?) {}
-                        override fun onAnimationEnd(animation: android.view.animation.Animation?) {
+                        override fun onAnimationStart(animation: Animation?) {}
+                        override fun onAnimationEnd(animation: Animation?) {
                             bar.visibility = View.GONE
                         }
-                        override fun onAnimationRepeat(animation: android.view.animation.Animation?) {}
+                        override fun onAnimationRepeat(animation: Animation?) {}
                     })
                 }
                 bar.startAnimation(slideDown)
@@ -400,8 +424,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             TAG,
             "Orientation changed to: ${if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"}"
         )
-
-        refreshSettings()
+        
+        // 방향 전환 시 배경 업데이트를 위해 refreshSettings 호출 대신 배경만 업데이트 시도
+        // 뷰 재생성을 최소화
+        updateNavBarBackground()
     }
 
     /**
@@ -455,27 +481,34 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun updateNavBarBackground() {
         navBarView?.let { bar ->
             val oldBg = bar.background ?: ColorDrawable(Color.BLACK)
-            val newBg = if (isRecentsVisible) {
-                Log.d(TAG, "On Recents screen, preparing black background")
-                ColorDrawable(Color.BLACK)
-            } else if (isOnHomeScreen && settings.homeBgEnabled) {
-                val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
-                val bitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
-                if (bitmap != null) {
-                    Log.d(TAG, "Preparing home screen background image (landscape=$isLandscape)")
-                    BitmapDrawable(context.resources, bitmap)
-                } else {
-                    Log.d(TAG, "No background image, preparing default color")
-                    ColorDrawable(Color.BLACK)
+            
+            // 1. 최근 앱 화면이면 무조건 검정
+            if (isRecentsVisible) {
+                if (oldBg !is ColorDrawable || oldBg.color != Color.BLACK) {
+                     bar.background = ColorDrawable(Color.BLACK)
                 }
-            } else {
-                Log.d(TAG, "Not on home screen, preparing default color")
-                ColorDrawable(Color.BLACK)
+                return
             }
 
-            val transition = TransitionDrawable(arrayOf(oldBg, newBg))
-            bar.background = transition
-            transition.startTransition(300)
+            // 2. 홈 화면이고 커스텀 배경 켜져있으면 이미지 적용
+            if (isOnHomeScreen && settings.homeBgEnabled) {
+                val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
+                // 가로/세로 비트맵 구분 적용
+                val bitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
+                
+                if (bitmap != null) {
+                    Log.d(TAG, "Applying home screen background image (landscape=$isLandscape)")
+                    // 이미지 적용 (Transition 없이 즉시 적용하여 깜빡임 방지)
+                     bar.background = BitmapDrawable(context.resources, bitmap)
+                } else {
+                    bar.background = ColorDrawable(Color.BLACK)
+                }
+            } else {
+                // 3. 그 외 앱 실행 중이면 무조건 검정
+                if (oldBg !is ColorDrawable || oldBg.color != Color.BLACK) {
+                     bar.background = ColorDrawable(Color.BLACK)
+                }
+            }
         }
     }
 
