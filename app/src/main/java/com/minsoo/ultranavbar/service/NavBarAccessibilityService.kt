@@ -1,6 +1,7 @@
 package com.minsoo.ultranavbar.service
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,6 +12,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.os.Build
 import android.util.Log
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -37,16 +39,24 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     private var overlay: NavBarOverlay? = null
     private lateinit var settings: SettingsManager
+
     private var currentPackage: String = ""
     private var isFullscreen: Boolean = false
     private var isOnHomeScreen: Boolean = false
     private var isNotificationPanelOpen: Boolean = false
+
     private var launcherPackages: Set<String> = emptySet()
-    
+
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    
-    // Status/Navigation bars height to verify actual fullscreen
-    private var systemBarsHeight = 0
+
+    // approximate navigation bar height (px)
+    private var navBarHeightPx = 0
+
+    // debounce
+    private var pendingStateCheck: Runnable? = null
+
+    // fullscreen polling
+    private var fullscreenPoll: Runnable? = null
 
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -54,6 +64,7 @@ class NavBarAccessibilityService : AccessibilityService() {
                 "com.minsoo.ultranavbar.SETTINGS_CHANGED" -> {
                     Log.d(TAG, "Settings changed, refreshing overlay")
                     overlay?.refreshSettings()
+                    updateOverlayVisibility(forceFade = true)
                 }
                 "com.minsoo.ultranavbar.RELOAD_BACKGROUND" -> {
                     Log.d(TAG, "Reloading background images")
@@ -72,7 +83,6 @@ class NavBarAccessibilityService : AccessibilityService() {
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     Log.d(TAG, "User present, showing with fade animation.")
-                    // 약간의 딜레이를 주어 화면이 완전히 켜진 후 표시
                     handler.postDelayed({
                         updateOverlayVisibility(forceFade = true)
                     }, 200)
@@ -86,6 +96,15 @@ class NavBarAccessibilityService : AccessibilityService() {
         Log.i(TAG, "Service connected")
         instance = this
         settings = SettingsManager.getInstance(this)
+
+        // (선택이지만 권장) 여러 윈도우 정보를 안정적으로 받기 위한 플래그
+        try {
+            val info = serviceInfo
+            info.flags = info.flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            serviceInfo = info
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not update serviceInfo flags", e)
+        }
 
         startForegroundService()
         loadLauncherPackages()
@@ -102,21 +121,18 @@ class NavBarAccessibilityService : AccessibilityService() {
             addAction(Intent.ACTION_USER_PRESENT)
         }
         registerReceiver(screenStateReceiver, screenStateFilter)
-        
-        // Calculate approximate system bars height for basic validation
-        calculateSystemBarsHeight()
 
+        calculateNavBarHeight()
         Log.i(TAG, "Overlay created and service fully initialized")
     }
-    
-    private fun calculateSystemBarsHeight() {
-        val resources = resources
-        val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
-        val statusBarHeight = if (resourceId > 0) resources.getDimensionPixelSize(resourceId) else 0
-        // Approx navigation bar
-        val navResourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
-        val navBarHeight = if (navResourceId > 0) resources.getDimensionPixelSize(navResourceId) else 0
-        systemBarsHeight = statusBarHeight + navBarHeight
+
+    private fun calculateNavBarHeight() {
+        val resId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        navBarHeightPx = if (resId > 0) resources.getDimensionPixelSize(resId) else dpToPx(48f)
+    }
+
+    private fun dpToPx(dp: Float): Int {
+        return (dp * resources.displayMetrics.density).toInt()
     }
 
     private fun startForegroundService() {
@@ -142,16 +158,14 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun loadLauncherPackages() {
         try {
             val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
-            // resolveActivity는 주어진 인텐트를 처리할 최적의 액티비티 하나를 찾아줌 (기본 런처)
             val resolveInfo = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
             if (resolveInfo?.activityInfo?.packageName != null) {
                 launcherPackages = setOf(resolveInfo.activityInfo.packageName)
             } else {
-                // resolveActivity가 실패할 경우, 이전 방식으로 모든 런처를 찾되, 알려진 오류(설정 앱)는 제외
                 val resolveInfos = packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
                 launcherPackages = resolveInfos.map { it.activityInfo.packageName }
-                                               .filter { it != "com.android.settings" }
-                                               .toSet()
+                    .filter { it != "com.android.settings" }
+                    .toSet()
             }
             Log.d(TAG, "Detected launcher packages: $launcherPackages")
         } catch (e: Exception) {
@@ -166,12 +180,18 @@ class NavBarAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         Log.i(TAG, "Service destroyed")
         instance = null
+
+        pendingStateCheck?.let { handler.removeCallbacks(it) }
+        pendingStateCheck = null
+        stopFullscreenPolling()
+
         try {
             unregisterReceiver(settingsReceiver)
             unregisterReceiver(screenStateReceiver)
         } catch (e: Exception) {
             Log.w(TAG, "Receiver not registered", e)
         }
+
         destroyOverlay()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
@@ -181,12 +201,16 @@ class NavBarAccessibilityService : AccessibilityService() {
         super.onConfigurationChanged(newConfig)
         Log.d(TAG, "Configuration changed: orientation=${newConfig.orientation}")
         overlay?.handleOrientationChange(newConfig.orientation)
+
+        // 회전 시 기준값 재계산
+        calculateNavBarHeight()
+        scheduleStateCheck()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
 
-        // WallpaperPreviewActivity가 전면에 나타나면, 다른 로직을 모두 무시하고 네비바를 즉시 숨김
+        // WallpaperPreviewActivity가 전면에 나타나면 네비바를 즉시 숨김 (기존 로직 유지)
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             event.className == "com.minsoo.ultranavbar.ui.WallpaperPreviewActivity"
         ) {
@@ -197,10 +221,24 @@ class NavBarAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 handleWindowStateChanged(event)
-                checkFullscreenState()
-                checkNotificationPanelState()
+                scheduleStateCheck()
+            }
+
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                // 사진뷰어/일부 앱은 이 이벤트로만 시스템바 변화가 잡히는 경우가 있음
+                scheduleStateCheck()
             }
         }
+    }
+
+    private fun scheduleStateCheck() {
+        pendingStateCheck?.let { handler.removeCallbacks(it) }
+        pendingStateCheck = Runnable {
+            checkFullscreenState()
+            checkNotificationPanelState()
+        }
+        handler.postDelayed(pendingStateCheck!!, 50)
     }
 
     private fun handleWindowStateChanged(event: AccessibilityEvent) {
@@ -217,32 +255,97 @@ class NavBarAccessibilityService : AccessibilityService() {
                 Log.d(TAG, "Home screen state changed: $isOnHomeScreen")
                 overlay?.setHomeScreenState(isOnHomeScreen)
             }
-            // handleWindowStateChanged에서는 isFullscreen 상태를 직접 바꾸지 않으므로,
-            // 여기서는 updateOverlayVisibility()를 호출할 필요가 없음. checkFullscreenState()에서 처리.
         }
     }
 
     /**
-     * 접근성 창 목록을 분석하여 실제 전체화면 상태를 유추
+     * "기본 네비게이션 바가 실제로 화면 하단을 차지하고 있는지"를 bounds 기반으로 판정.
+     * - 네비바 높이(대략) 이상으로 하단을 점유하면: 시스템 네비바가 보이는 상태
+     * - 하단 점유가 매우 작으면(제스처 pill 수준): 사실상 숨김(=fullscreen로 취급)
      */
     private fun checkFullscreenState() {
-        // 시스템 네비게이션 바 창('탐색 메뉴')이 보이는지 확인
-        val systemNavBarWindow = windows.find {
-            it.type == AccessibilityWindowInfo.TYPE_SYSTEM && it.title?.contains("탐색") == true
+        val screen = getScreenBounds()
+
+        var bottomSystemUiHeight = 0
+
+        for (w in windows) {
+            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
+            val rootPkg = w.root?.packageName?.toString()
+            if (rootPkg != "com.android.systemui") continue
+
+            val r = Rect()
+            try {
+                w.getBoundsInScreen(r)
+            } catch (e: Exception) {
+                continue
+            }
+
+            val touchesBottom = (r.bottom >= screen.bottom - 2)
+            val wideEnough = r.width() >= (screen.width() * 0.5f)
+            if (touchesBottom && wideEnough) {
+                bottomSystemUiHeight = maxOf(bottomSystemUiHeight, r.height())
+            }
         }
-        
-        // 네비게이션 바 창이 보이지 않으면 전체화면으로 간주
-        val newFullscreenState = systemNavBarWindow == null
+
+        // "네비바가 보임" 기준: navBarHeight의 70% 이상, 또는 40dp 이상
+        val navVisibleThreshold = maxOf((navBarHeightPx * 0.7f).toInt(), dpToPx(40f))
+        val gestureOnlyThreshold = dpToPx(24f)
+
+        val navBarVisible = bottomSystemUiHeight >= navVisibleThreshold
+        val navBarHiddenOrGestureOnly = bottomSystemUiHeight <= gestureOnlyThreshold
+
+        // 목적: "기본 네비바가 숨겨진 상태"면 커스텀 네비바도 숨김
+        val newFullscreenState = navBarHiddenOrGestureOnly || !navBarVisible
 
         if (isFullscreen != newFullscreenState) {
             isFullscreen = newFullscreenState
-            Log.d(TAG, "Fullscreen state updated by window detection: $isFullscreen")
+            Log.d(
+                TAG,
+                "Fullscreen state updated: fullscreen=$isFullscreen, bottomSystemUiHeight=$bottomSystemUiHeight, pkg=$currentPackage"
+            )
+
+            if (isFullscreen) startFullscreenPolling() else stopFullscreenPolling()
             updateOverlayVisibility()
+        } else {
+            if (isFullscreen) startFullscreenPolling()
         }
     }
 
+    private fun getScreenBounds(): Rect {
+        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            wm.currentWindowMetrics.bounds
+        } else {
+            val dm = resources.displayMetrics
+            Rect(0, 0, dm.widthPixels, dm.heightPixels)
+        }
+    }
+
+    private fun startFullscreenPolling() {
+        if (fullscreenPoll != null) return
+
+        fullscreenPoll = object : Runnable {
+            override fun run() {
+                val before = isFullscreen
+                checkFullscreenState()
+                if (isFullscreen) {
+                    handler.postDelayed(this, 300)
+                } else {
+                    stopFullscreenPolling()
+                    // fullscreen 해제 직후 overlay show가 씹히는 경우 대비
+                    if (before) handler.postDelayed({ updateOverlayVisibility() }, 100)
+                }
+            }
+        }
+        handler.postDelayed(fullscreenPoll!!, 300)
+    }
+
+    private fun stopFullscreenPolling() {
+        fullscreenPoll?.let { handler.removeCallbacks(it) }
+        fullscreenPoll = null
+    }
+
     private fun checkNotificationPanelState() {
-        // TYPE_SYSTEM 윈도우 중, 'com.android.systemui' 패키지에 속하고, 포커스를 받을 수 있는 창을 알림 패널로 간주
         val panelWindow = windows.find {
             it.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
                     it.root?.packageName == "com.android.systemui" &&
@@ -270,14 +373,14 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun shouldHideOverlay(): Boolean {
-        // 1. 전체화면 모드면 숨김 (유튜브 영상, 게임, 사진 등)
-        // 단, 런처(홈화면)는 전체화면으로 인식되더라도(일부 런처 특성) 숨기지 않음
-        // ** 추가: currentPackage가 파악되기 전(앱 시작 직후)에는 성급하게 숨기지 않도록 함
+        // 1) 전체화면이면 숨김 (영상/게임/사진뷰어 등)
+        // 단, 런처는 예외
+        // + currentPackage가 아직 비어있을 때는 성급히 숨기지 않음
         if (settings.autoHideOnVideo && isFullscreen && !isOnHomeScreen && currentPackage.isNotEmpty()) return true
 
-        // 2. 앱별 설정에 따라 숨김
+        // 2) 앱별 숨김 설정
         if (currentPackage.isNotEmpty() && settings.shouldHideForPackage(currentPackage)) return true
-        
+
         return false
     }
 
@@ -285,7 +388,6 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (overlay == null) {
             overlay = NavBarOverlay(this)
             overlay?.create()
-            // 버튼 초기 상태를 '패널 내리기' (0도)로 강제 설정
             overlay?.updatePanelButtonState(isOpen = false)
         }
     }
@@ -310,7 +412,6 @@ class NavBarAccessibilityService : AccessibilityService() {
             try {
                 val customActionPackage = settings.longPressAction
                 if (customActionPackage == null) {
-                    // 기본 동작: Google Assistant 실행
                     val intent = Intent(Intent.ACTION_ASSIST).apply {
                         setPackage("com.google.android.googlequicksearchbox")
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -318,7 +419,6 @@ class NavBarAccessibilityService : AccessibilityService() {
                     startActivity(intent)
                     Log.d(TAG, "Executing default long-press action: Google Assistant")
                 } else {
-                    // 커스텀 앱 실행
                     val intent = packageManager.getLaunchIntentForPackage(customActionPackage)
                     if (intent != null) {
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
