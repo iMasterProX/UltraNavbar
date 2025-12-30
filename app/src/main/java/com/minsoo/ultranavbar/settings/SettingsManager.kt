@@ -18,6 +18,8 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_HOME_BG_ENABLED = "home_bg_enabled"
         private const val KEY_IGNORE_STYLUS = "ignore_stylus"
         private const val KEY_LONG_PRESS_ACTION = "long_press_action"
+        private const val KEY_BATTERY_OPT_REQUESTED = "battery_opt_requested"
+        private const val KEY_PREVIEW_FILTER_OPACITY = "preview_filter_opacity"
         private const val KEY_APP_LIST = "app_list" // 저장된 앱 목록 (패키지명 set)
         
         // Background Image Filenames (Stored in prefs to track validity, though file existence is primary check)
@@ -70,6 +72,14 @@ class SettingsManager private constructor(context: Context) {
     var longPressAction: String?
         get() = prefs.getString(KEY_LONG_PRESS_ACTION, null)
         set(value) = prefs.edit().putString(KEY_LONG_PRESS_ACTION, value).apply()
+
+    var batteryOptRequested: Boolean
+        get() = prefs.getBoolean(KEY_BATTERY_OPT_REQUESTED, false)
+        set(value) = prefs.edit().putBoolean(KEY_BATTERY_OPT_REQUESTED, value).apply()
+
+    var previewFilterOpacity: Int
+        get() = prefs.getInt(KEY_PREVIEW_FILTER_OPACITY, 15)
+        set(value) = prefs.edit().putInt(KEY_PREVIEW_FILTER_OPACITY, value.coerceIn(0, 100)).apply()
         
     // 앱 목록 (블랙리스트/화이트리스트용)
     var appList: Set<String>

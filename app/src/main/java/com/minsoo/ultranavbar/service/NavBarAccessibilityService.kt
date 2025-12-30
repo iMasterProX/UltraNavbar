@@ -43,7 +43,9 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var currentPackage: String = ""
     private var isFullscreen: Boolean = false
     private var isOnHomeScreen: Boolean = false
+    private var isRecentsVisible: Boolean = false
     private var isNotificationPanelOpen: Boolean = false
+    private var isWallpaperPreviewVisible: Boolean = false
 
     private var launcherPackages: Set<String> = emptySet()
 
@@ -114,7 +116,12 @@ class NavBarAccessibilityService : AccessibilityService() {
             addAction("com.minsoo.ultranavbar.SETTINGS_CHANGED")
             addAction("com.minsoo.ultranavbar.RELOAD_BACKGROUND")
         }
-        registerReceiver(settingsReceiver, settingsFilter, RECEIVER_NOT_EXPORTED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(settingsReceiver, settingsFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(settingsReceiver, settingsFilter)
+        }
 
         val screenStateFilter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -210,12 +217,17 @@ class NavBarAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
 
-        // WallpaperPreviewActivity가 전면에 나타나면 네비바를 즉시 숨김 (기존 로직 유지)
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
-            event.className == "com.minsoo.ultranavbar.ui.WallpaperPreviewActivity"
-        ) {
-            overlay?.hide(animate = false)
-            return
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val className = event.className?.toString()
+            val isPreview = className == "com.minsoo.ultranavbar.ui.WallpaperPreviewActivity"
+            if (isPreview) {
+                isWallpaperPreviewVisible = true
+                overlay?.hide(animate = false)
+                return
+            } else if (isWallpaperPreviewVisible) {
+                isWallpaperPreviewVisible = false
+                updateOverlayVisibility(forceFade = true)
+            }
         }
 
         when (event.eventType) {
@@ -237,24 +249,86 @@ class NavBarAccessibilityService : AccessibilityService() {
         pendingStateCheck = Runnable {
             checkFullscreenState()
             checkNotificationPanelState()
+            updateHomeAndRecentsFromWindows()
         }
         handler.postDelayed(pendingStateCheck!!, 50)
     }
 
     private fun handleWindowStateChanged(event: AccessibilityEvent) {
         val packageName = event.packageName?.toString() ?: return
-        if (packageName == this.packageName || packageName == "com.android.systemui") return
+        val className = event.className?.toString() ?: ""
+        val isSystemUi = packageName == "com.android.systemui"
+        val isRecents = isRecentsClassName(className)
+
+        if (isRecentsVisible != isRecents) {
+            isRecentsVisible = isRecents
+            Log.d(TAG, "Recents state changed: $isRecents (class=$className)")
+            overlay?.setRecentsState(isRecents)
+        }
+
+        if (packageName == this.packageName) return
+
+        if (isSystemUi) {
+            if (isRecents && isOnHomeScreen) {
+                isOnHomeScreen = false
+                overlay?.setHomeScreenState(false)
+            }
+            return
+        }
 
         if (currentPackage != packageName) {
             currentPackage = packageName
             Log.d(TAG, "Foreground app changed: $packageName")
+        }
 
-            val wasOnHomeScreen = isOnHomeScreen
-            isOnHomeScreen = launcherPackages.contains(packageName)
-            if (wasOnHomeScreen != isOnHomeScreen) {
-                Log.d(TAG, "Home screen state changed: $isOnHomeScreen")
-                overlay?.setHomeScreenState(isOnHomeScreen)
+        val newOnHomeScreen = launcherPackages.contains(packageName) && !isRecents
+        if (isOnHomeScreen != newOnHomeScreen) {
+            isOnHomeScreen = newOnHomeScreen
+            Log.d(TAG, "Home screen state changed: $isOnHomeScreen")
+            overlay?.setHomeScreenState(isOnHomeScreen)
+        }
+    }
+
+    private fun isRecentsClassName(className: String): Boolean {
+        if (className.isBlank()) return false
+        val simpleName = className.substringAfterLast('.')
+        return simpleName.contains("Recents", ignoreCase = true) ||
+            simpleName.contains("Overview", ignoreCase = true) ||
+            simpleName.contains("TaskSwitcher", ignoreCase = true)
+    }
+
+    private fun updateHomeAndRecentsFromWindows() {
+        val root = rootInActiveWindow ?: return
+        val packageName = root.packageName?.toString() ?: return
+        val className = root.className?.toString() ?: ""
+        val isRecents = isRecentsClassName(className)
+
+        if (isRecentsVisible != isRecents) {
+            isRecentsVisible = isRecents
+            Log.d(TAG, "Recents state (windows) changed: $isRecents (class=$className)")
+            overlay?.setRecentsState(isRecents)
+        }
+
+        if (packageName == this.packageName) return
+
+        if (packageName == "com.android.systemui") {
+            if (isRecents && isOnHomeScreen) {
+                isOnHomeScreen = false
+                overlay?.setHomeScreenState(false)
             }
+            return
+        }
+
+        if (currentPackage != packageName) {
+            currentPackage = packageName
+            Log.d(TAG, "Foreground app (windows) changed: $packageName")
+        }
+
+        val newOnHomeScreen = launcherPackages.contains(packageName) && !isRecents
+        if (isOnHomeScreen != newOnHomeScreen) {
+            isOnHomeScreen = newOnHomeScreen
+            Log.d(TAG, "Home screen state (windows) changed: $isOnHomeScreen")
+            overlay?.setHomeScreenState(isOnHomeScreen)
         }
     }
 
@@ -346,12 +420,31 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun checkNotificationPanelState() {
-        val panelWindow = windows.find {
-            it.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
-                    it.root?.packageName == "com.android.systemui" &&
-                    it.root?.isFocusable == true
+        val screen = getScreenBounds()
+        val minPanelHeight = dpToPx(100f)
+        var panelVisible = false
+
+        for (w in windows) {
+            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
+            val rootPkg = w.root?.packageName?.toString()
+            if (rootPkg != "com.android.systemui") continue
+
+            val r = Rect()
+            try {
+                w.getBoundsInScreen(r)
+            } catch (e: Exception) {
+                continue
+            }
+
+            val wideEnough = r.width() >= (screen.width() * 0.5f)
+            val touchesTop = r.top <= screen.top + 2
+            val tallEnough = r.height() >= minPanelHeight
+
+            if (wideEnough && touchesTop && tallEnough) {
+                panelVisible = true
+                break
+            }
         }
-        val panelVisible = panelWindow != null
 
         if (isNotificationPanelOpen != panelVisible) {
             isNotificationPanelOpen = panelVisible
@@ -373,6 +466,8 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun shouldHideOverlay(): Boolean {
+        if (isWallpaperPreviewVisible) return true
+
         // 1) 전체화면이면 숨김 (영상/게임/사진뷰어 등)
         // 단, 런처는 예외
         // + currentPackage가 아직 비어있을 때는 성급히 숨기지 않음

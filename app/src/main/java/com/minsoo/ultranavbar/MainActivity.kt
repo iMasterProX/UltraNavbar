@@ -338,10 +338,18 @@ class MainActivity : AppCompatActivity() {
         try {
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                if (!isTriggeredByUser && settings.batteryOptRequested) {
+                    return
+                }
                 val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                     data = Uri.parse("package:$packageName")
                 }
-                startActivity(intent)
+                if (intent.resolveActivity(packageManager) != null) {
+                    startActivity(intent)
+                } else if (isTriggeredByUser) {
+                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+                settings.batteryOptRequested = true
             } else {
                 if (isTriggeredByUser) {
                     Toast.makeText(this, "이미 배터리 최적화에서 제외되었습니다.", Toast.LENGTH_SHORT).show()

@@ -469,15 +469,15 @@
                                 android:textColor="?android:textColorSecondary" />
                         </LinearLayout>
 
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/switchHomeBg"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
-                    </LinearLayout>
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchHomeBg"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
 
-                    <!-- 가로 모드 스크린샷 -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
+                <!-- 가로 모드 스크린샷 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:layout_marginTop="16dp"

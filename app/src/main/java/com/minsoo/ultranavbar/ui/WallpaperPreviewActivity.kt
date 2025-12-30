@@ -2,6 +2,7 @@ package com.minsoo.ultranavbar.ui
 
 import android.app.WallpaperManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
@@ -11,6 +12,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -19,7 +21,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.slider.Slider
 import com.minsoo.ultranavbar.R
+import com.minsoo.ultranavbar.settings.SettingsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,6 +32,13 @@ import kotlin.math.max
 class WallpaperPreviewActivity : AppCompatActivity() {
 
     private lateinit var imagePreview: ImageView
+    private lateinit var previewControlsCard: View
+    private lateinit var sliderPreviewFilterOverlay: Slider
+    private lateinit var txtPreviewFilterOverlayValue: TextView
+
+    private var previewFilterDrawable: BitmapDrawable? = null
+
+    private data class PreviewLayer(val layer: LayerDrawable, val filterDrawable: BitmapDrawable?)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +47,28 @@ class WallpaperPreviewActivity : AppCompatActivity() {
         hideBottomNavigationBar()
 
         imagePreview = findViewById(R.id.image_preview)
+        previewControlsCard = findViewById(R.id.previewControlsCard)
+        sliderPreviewFilterOverlay = findViewById(R.id.sliderPreviewFilterOverlay)
+        txtPreviewFilterOverlayValue = findViewById(R.id.txtPreviewFilterOverlayValue)
+
+        sliderPreviewFilterOverlay.valueFrom = 0f
+        sliderPreviewFilterOverlay.valueTo = 100f
+        sliderPreviewFilterOverlay.stepSize = 1f
+
+        val initialOpacity = SettingsManager.getInstance(this).previewFilterOpacity
+        sliderPreviewFilterOverlay.value = initialOpacity.toFloat()
+        updatePreviewFilterOverlayValue(initialOpacity)
+
+        sliderPreviewFilterOverlay.addOnChangeListener { _, value, _ ->
+            val percent = value.toInt()
+            SettingsManager.getInstance(this).previewFilterOpacity = percent
+            updatePreviewFilterOverlayValue(percent)
+            updatePreviewFilterAlpha(percent)
+        }
+
+        imagePreview.setOnClickListener {
+            togglePreviewControls()
+        }
 
         Toast.makeText(
             this,
@@ -63,9 +96,11 @@ class WallpaperPreviewActivity : AppCompatActivity() {
         imagePreview.visibility = View.INVISIBLE
 
         lifecycleScope.launch {
-            val previewDrawable = generatePreviewDrawable()
-            if (previewDrawable != null) {
-                imagePreview.setImageDrawable(previewDrawable)
+            val previewLayer = generatePreviewDrawable()
+            if (previewLayer != null) {
+                previewFilterDrawable = previewLayer.filterDrawable
+                imagePreview.setImageDrawable(previewLayer.layer)
+                updatePreviewFilterAlpha(SettingsManager.getInstance(this@WallpaperPreviewActivity).previewFilterOpacity)
                 imagePreview.visibility = View.VISIBLE
             } else {
                 Toast.makeText(
@@ -78,13 +113,28 @@ class WallpaperPreviewActivity : AppCompatActivity() {
         }
     }
 
+    private fun togglePreviewControls() {
+        previewControlsCard.visibility =
+            if (previewControlsCard.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+    }
+
+    private fun updatePreviewFilterOverlayValue(value: Int) {
+        txtPreviewFilterOverlayValue.text = "${value}%"
+    }
+
+    private fun updatePreviewFilterAlpha(value: Int) {
+        val alpha = (value.coerceIn(0, 100) * 255) / 100
+        previewFilterDrawable?.alpha = alpha
+        imagePreview.invalidate()
+    }
+
     /**
      * 요구사항 반영:
      * 1) centerCrop로 "꽉 차게" (넘치는 부분은 화면 밖으로 잘림)
      * 2) 그 결과를 중앙 기준 10% 추가 확대
      * 3) 스크림(그림자) 오버레이 유지 (단, 위/아래 일부 영역에만 적용 + 알파 조절)
      */
-    private suspend fun generatePreviewDrawable(): LayerDrawable? = withContext(Dispatchers.IO) {
+    private suspend fun generatePreviewDrawable(): PreviewLayer? = withContext(Dispatchers.IO) {
         try {
             val wm = WallpaperManager.getInstance(this@WallpaperPreviewActivity)
             val wallpaperDrawable = wm.drawable ?: return@withContext null
@@ -129,12 +179,32 @@ class WallpaperPreviewActivity : AppCompatActivity() {
                 R.drawable.launcher_scrim_top_down
             )?.mutate()
 
+            val filterOpacityPercent =
+                SettingsManager.getInstance(this@WallpaperPreviewActivity).previewFilterOpacity.coerceIn(0, 100)
+            val filterAlpha = (filterOpacityPercent * 255) / 100
+            val filterDrawable = run {
+                val filterBitmap = BitmapFactory.decodeResource(resources, R.drawable.filter) ?: return@run null
+                val scaledFilter =
+                    if (filterBitmap.width != targetWidth || filterBitmap.height != targetHeight) {
+                        val scaled = Bitmap.createScaledBitmap(filterBitmap, targetWidth, targetHeight, true)
+                        filterBitmap.recycle()
+                        scaled
+                    } else {
+                        filterBitmap
+                    }
+                BitmapDrawable(resources, scaledFilter).apply { alpha = filterAlpha }
+            }
+
             return@withContext if (bottomScrim != null && topScrim != null) {
                 // “검은 필터”처럼 보이지 않도록 스크림 강도(알파) 낮춤
                 bottomScrim.alpha = 120
                 topScrim.alpha = 90
 
-                val layer = LayerDrawable(arrayOf(zoomedDrawable, bottomScrim, topScrim))
+                val layer = if (filterDrawable != null) {
+                    LayerDrawable(arrayOf(zoomedDrawable, bottomScrim, topScrim, filterDrawable))
+                } else {
+                    LayerDrawable(arrayOf(zoomedDrawable, bottomScrim, topScrim))
+                }
 
                 // 스크림을 화면 전체가 아니라 “아래/위 일부”에만 적용 (은은한 그림자 느낌)
                 val bottomH = (targetHeight * 0.35f).toInt().coerceAtLeast(1) // 아래 35%
@@ -143,10 +213,23 @@ class WallpaperPreviewActivity : AppCompatActivity() {
                 // index: 0=wallpaper, 1=bottomScrim, 2=topScrim
                 layer.setLayerInset(1, 0, targetHeight - bottomH, 0, 0) // bottom
                 layer.setLayerInset(2, 0, 0, 0, targetHeight - topH)    // top
+                if (filterDrawable != null) {
+                    layer.setLayerSize(3, targetWidth, targetHeight)
+                    layer.setLayerInset(3, 0, 0, 0, 0)
+                }
 
-                layer
+                PreviewLayer(layer, filterDrawable)
             } else {
-                LayerDrawable(arrayOf(zoomedDrawable))
+                val layer = if (filterDrawable != null) {
+                    LayerDrawable(arrayOf(zoomedDrawable, filterDrawable))
+                } else {
+                    LayerDrawable(arrayOf(zoomedDrawable))
+                }
+                if (filterDrawable != null) {
+                    layer.setLayerSize(1, targetWidth, targetHeight)
+                    layer.setLayerInset(1, 0, 0, 0, 0)
+                }
+                PreviewLayer(layer, filterDrawable)
             }
         } catch (e: Exception) {
             Log.e("WallpaperPreview", "Error generating preview drawable", e)
