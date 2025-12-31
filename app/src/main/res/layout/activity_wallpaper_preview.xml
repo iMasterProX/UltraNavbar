@@ -9,7 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerCrop"
-        android:contentDescription="Wallpaper Preview" />
+        android:contentDescription="@string/preview_title" />
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/previewControlsCard"
@@ -30,7 +30,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Preview Black Filter"
+                android:text="@string/preview_filter_title"
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
@@ -44,7 +44,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Opacity"
+                    android:text="@string/preview_opacity_label"
                     android:textSize="12sp"
                     android:textColor="?android:textColorSecondary" />
 
@@ -53,7 +53,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="100%"
+                    android:text="@string/preview_opacity_default"
                     android:textSize="12sp"
                     android:textColor="?android:textColorSecondary" />
             </LinearLayout>
@@ -63,7 +63,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:contentDescription="Preview filter opacity" />
+                android:contentDescription="@string/preview_filter_opacity_desc" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

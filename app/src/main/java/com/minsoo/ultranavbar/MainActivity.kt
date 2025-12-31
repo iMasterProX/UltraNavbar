@@ -26,6 +26,7 @@ import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.ui.AppListActivity
 import com.minsoo.ultranavbar.ui.WallpaperPreviewActivity
+import com.minsoo.ultranavbar.util.DeviceProfile
 import com.minsoo.ultranavbar.util.ImageCropUtil
 import com.minsoo.ultranavbar.util.WallpaperProcessor
 import kotlinx.coroutines.launch
@@ -83,7 +84,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            Toast.makeText(this, "배경화면이 성공적으로 생성되었습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.wallpaper_generated, Toast.LENGTH_SHORT).show()
             updateBgImageStatus()
             sendBroadcast(Intent("com.minsoo.ultranavbar.RELOAD_BACKGROUND"))
         }
@@ -94,14 +95,19 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            Toast.makeText(this, "권한이 승인되었습니다. 자동 배경 생성 기능을 사용할 수 있습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.permission_granted, Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "권한이 거부되었습니다. 저장소 접근 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_SHORT).show()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!DeviceProfile.isTablet(this)) {
+            Toast.makeText(this, R.string.tablet_only, Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         setContentView(R.layout.activity_main)
 
         settings = SettingsManager.getInstance(this)
@@ -124,14 +130,14 @@ class MainActivity : AppCompatActivity() {
     private fun updateLongPressActionUI() {
         val packageName = settings.longPressAction
         if (packageName == null) {
-            txtLongPressAction.text = "Default (Google Assistant)"
+            txtLongPressAction.text = getString(R.string.long_press_action_default)
         } else {
             try {
                 val appInfo = packageManager.getApplicationInfo(packageName, 0)
                 val appLabel = packageManager.getApplicationLabel(appInfo)
                 txtLongPressAction.text = appLabel
             } catch (e: PackageManager.NameNotFoundException) {
-                txtLongPressAction.text = "App not found"
+                txtLongPressAction.text = getString(R.string.app_not_found)
                 // 앱이 제거된 경우, 설정을 기본값으로 리셋
                 settings.longPressAction = null
             }
@@ -158,7 +164,7 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener {
                 settings.longPressAction = null
                 updateLongPressActionUI()
-                Toast.makeText(this@MainActivity, "Default action set", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, R.string.default_action_set, Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -352,12 +358,12 @@ class MainActivity : AppCompatActivity() {
                 settings.batteryOptRequested = true
             } else {
                 if (isTriggeredByUser) {
-                    Toast.makeText(this, "이미 배터리 최적화에서 제외되었습니다.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.battery_opt_already_ignored, Toast.LENGTH_SHORT).show()
                 }
             }
         } catch (e: Exception) {
             if (isTriggeredByUser) {
-                Toast.makeText(this, "배터리 최적화 설정 화면을 열 수 없습니다.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.battery_opt_open_failed, Toast.LENGTH_SHORT).show()
             }
         }
     }

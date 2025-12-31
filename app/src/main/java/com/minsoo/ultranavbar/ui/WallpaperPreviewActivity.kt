@@ -72,7 +72,7 @@ class WallpaperPreviewActivity : AppCompatActivity() {
 
         Toast.makeText(
             this,
-            "지금 보이는 화면을 캡처하여 '이미지 선택'으로 지정해주세요.",
+            R.string.wallpaper_preview_hint,
             Toast.LENGTH_LONG
         ).show()
 
@@ -105,7 +105,7 @@ class WallpaperPreviewActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(
                     this@WallpaperPreviewActivity,
-                    "배경화면 미리보기를 불러오는데 실패했습니다.",
+                    R.string.wallpaper_preview_failed,
                     Toast.LENGTH_SHORT
                 ).show()
                 finish()

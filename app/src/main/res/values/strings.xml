@@ -1,67 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">LG UltraTab Extension</string>
-    <string name="accessibility_service_description">화면 하단에 커스텀 네비게이션 바를 표시합니다. 뒤로가기, 홈, 최근 앱 버튼과 추가 기능 버튼을 제공합니다.</string>
+    <string name="accessibility_service_description">Shows a custom navigation bar at the bottom of the screen. Provides back, home, recents, and extra action buttons.</string>
 
-    <!-- 설정 화면 -->
-    <string name="settings_title">UltraNavbar 설정</string>
-    <string name="enable_service">접근성 서비스 활성화</string>
-    <string name="service_status">서비스 상태</string>
-    <string name="service_enabled">활성화됨</string>
-    <string name="service_disabled">비활성화됨</string>
-    <string name="open_accessibility_settings">접근성 설정 열기</string>
+    <string name="settings_title">UltraNavbar Settings</string>
+    <string name="enable_service">Enable accessibility service</string>
+    <string name="service_status">Service status</string>
+    <string name="service_enabled">Enabled</string>
+    <string name="service_disabled">Disabled</string>
+    <string name="open_accessibility_settings">Open accessibility settings</string>
 
-    <!-- 오버레이 설정 -->
-    <string name="overlay_settings">오버레이 설정</string>
-    <string name="bar_height">바 높이</string>
-    <string name="button_size">버튼 크기</string>
-    <string name="button_spacing">버튼 간격</string>
-    <string name="bar_opacity">바 투명도</string>
-    <string name="bar_color">바 배경 색상</string>
+    <string name="overlay_settings">Overlay settings</string>
+    <string name="bar_height">Bar height</string>
+    <string name="button_size">Button size</string>
+    <string name="button_spacing">Button spacing</string>
+    <string name="bar_opacity">Bar opacity</string>
+    <string name="bar_color">Bar background color</string>
 
-    <!-- 자동 숨김 설정 -->
-    <string name="auto_hide_settings">자동 숨김 설정</string>
-    <string name="auto_hide_video">영상 재생 시 자동 숨김</string>
-    <string name="auto_hide_video_summary">유튜브, 넷플릭스 등 전체화면 영상 재생 시 바를 숨깁니다</string>
-    <string name="hide_mode">숨김 모드</string>
-    <string name="hide_mode_blacklist">블랙리스트 (선택한 앱에서만 숨김)</string>
-    <string name="hide_mode_whitelist">화이트리스트 (선택한 앱에서만 표시)</string>
-    <string name="manage_app_list">앱 목록 관리</string>
+    <string name="auto_hide_settings">Auto-hide settings</string>
+    <string name="auto_hide_video">Auto-hide in fullscreen</string>
+    <string name="auto_hide_video_summary">Hide the bar automatically in fullscreen video or games.</string>
+    <string name="hide_mode">Hide mode</string>
+    <string name="hide_mode_blacklist">Blacklist (hide in selected apps)</string>
+    <string name="hide_mode_whitelist">Whitelist (show only in selected apps)</string>
+    <string name="manage_app_list">Manage app list</string>
 
-    <!-- 앱 목록 -->
-    <string name="app_list_title">앱 목록</string>
-    <string name="select_apps">앱 선택</string>
-    <string name="no_apps">설치된 앱이 없습니다</string>
-    <string name="loading_apps">앱 목록 불러오는 중...</string>
-    <string name="save">저장</string>
-    <string name="cancel">취소</string>
+    <string name="app_list_title">App list</string>
+    <string name="select_apps">Select apps</string>
+    <string name="no_apps">No apps found</string>
+    <string name="loading_apps">Loading apps...</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="search_hint">Search...</string>
 
-    <!-- 재호출 -->
-    <string name="recall_settings">재호출 설정</string>
-    <string name="recall_hotspot">재호출 핫스팟</string>
-    <string name="recall_hotspot_summary">바가 숨겨졌을 때 화면 하단 가장자리를 터치하면 다시 표시됩니다</string>
+    <string name="recall_settings">Recall settings</string>
+    <string name="recall_hotspot">Recall hotspot</string>
+    <string name="recall_hotspot_summary">Show a small hotspot at the bottom to bring the bar back.</string>
 
-    <!-- 온보딩 -->
-    <string name="onboarding_title">UltraNavbar 시작하기</string>
-    <string name="onboarding_step1">1. 아래 버튼을 눌러 접근성 설정으로 이동하세요</string>
-    <string name="onboarding_step2">2. \'설치된 앱\' 또는 \'다운로드한 앱\'에서 UltraNavbar를 찾으세요</string>
-    <string name="onboarding_step3">3. UltraNavbar를 켜고 확인을 누르세요</string>
-    <string name="onboarding_note">접근성 권한은 네비게이션 버튼 기능 수행과 현재 앱 감지에만 사용됩니다.</string>
+    <string name="onboarding_title">Get started</string>
+    <string name="onboarding_step1">1. Tap the button below to open accessibility settings.</string>
+    <string name="onboarding_step2">2. Find UltraNavbar under Downloaded services.</string>
+    <string name="onboarding_step3">3. Turn on UltraNavbar and confirm.</string>
+    <string name="onboarding_note">Accessibility permission is required to run the navigation buttons.</string>
 
-    <!-- 홈 화면 배경 -->
-    <string name="home_bg_settings">홈 화면 배경 이미지</string>
-    <string name="home_bg_enable">투명 배경 효과</string>
-    <string name="home_bg_enable_summary">홈 화면에서 스크린샷 하단을 배경으로 사용</string>
-    <string name="home_bg_landscape">가로 모드 스크린샷</string>
-    <string name="home_bg_portrait">세로 모드 스크린샷</string>
-    <string name="home_bg_not_set">설정되지 않음</string>
-    <string name="home_bg_set">설정됨</string>
-    <string name="select_image">이미지 선택</string>
-    <string name="home_bg_note">홈 화면 스크린샷을 선택하면 하단 72px가 잘려서 네비바 배경으로 사용됩니다. 홈 화면이 아닌 곳에서는 검정색 배경이 표시됩니다.</string>
-    <string name="image_crop_success">배경 이미지가 설정되었습니다</string>
-    <string name="image_crop_failed">이미지 처리에 실패했습니다</string>
-    <string name="service_running_notification">내비게이션 바가 실행 중입니다.</string>
-    <string name="stability_settings">안정성 설정</string>
-    <string name="battery_optimization">배터리 최적화 제외</string>
-    <string name="battery_optimization_summary">앱이 강제로 종료되는 것을 방지합니다. UltraNavbar를 \'최적화하지 않음\'으로 설정해주세요.</string>
+    <string name="home_bg_settings">Home screen background</string>
+    <string name="home_bg_enable">Enable custom background</string>
+    <string name="home_bg_enable_summary">Use a cropped screenshot as the bar background on the home screen.</string>
+    <string name="home_bg_landscape">Landscape screenshot</string>
+    <string name="home_bg_portrait">Portrait screenshot</string>
+    <string name="home_bg_not_set">Not set</string>
+    <string name="home_bg_set">Set</string>
+    <string name="select_image">Select image</string>
+    <string name="home_bg_note">When a screenshot is selected, the bottom 72px is cropped and used as the bar background. Other screens use a black background.</string>
+
+    <string name="image_crop_success">Background image saved.</string>
+    <string name="image_crop_failed">Failed to process image.</string>
+    <string name="service_running_notification">Navigation bar is running.</string>
+    <string name="stability_settings">Stability settings</string>
+    <string name="battery_optimization">Battery optimization</string>
+    <string name="battery_optimization_summary">Exclude UltraNavbar from battery optimizations to prevent it from being stopped.</string>
+
+    <string name="long_press_action_title">Home long-press action</string>
+    <string name="long_press_action_default">Default (Google Assistant)</string>
+    <string name="long_press_action_change">Change</string>
+    <string name="long_press_action_reset">Reset</string>
+    <string name="ignore_stylus_title">Ignore stylus input</string>
+    <string name="ignore_stylus_summary">Prevents pen input from triggering navigation bar actions.</string>
+    <string name="auto_button_label">Auto</string>
+
+    <string name="app_not_found">App not found</string>
+    <string name="default_action_set">Default action set.</string>
+    <string name="tablet_only">Tablet-only app. This device is not supported.</string>
+    <string name="permission_granted">Permission granted. Auto background generation is available.</string>
+    <string name="permission_denied">Permission denied. Storage access is required.</string>
+    <string name="wallpaper_generated">Wallpaper background created.</string>
+    <string name="battery_opt_already_ignored">Already excluded from battery optimization.</string>
+    <string name="battery_opt_open_failed">Unable to open battery optimization settings.</string>
+    <string name="wallpaper_preview_hint">If the preview looks good, tap Select image to apply.</string>
+    <string name="wallpaper_preview_failed">Failed to load the wallpaper preview.</string>
+
+    <string name="preview_title">Wallpaper preview</string>
+    <string name="preview_filter_title">Preview black filter</string>
+    <string name="preview_opacity_label">Opacity</string>
+    <string name="preview_opacity_default">100%</string>
+    <string name="preview_filter_opacity_desc">Preview filter opacity</string>
+
+    <string name="notification_panel_open">Open notification shade</string>
+    <string name="notification_panel_close">Close notification shade</string>
+
+    <string name="credits_text">Creator: iMasterProX with Vibe Coding (AI used), GitHub: https://github.com/iMasterProX/UltraNavbar</string>
 </resources>

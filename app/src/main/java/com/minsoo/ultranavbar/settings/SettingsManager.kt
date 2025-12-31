@@ -78,7 +78,7 @@ class SettingsManager private constructor(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_BATTERY_OPT_REQUESTED, value).apply()
 
     var previewFilterOpacity: Int
-        get() = prefs.getInt(KEY_PREVIEW_FILTER_OPACITY, 15)
+        get() = prefs.getInt(KEY_PREVIEW_FILTER_OPACITY, 13)
         set(value) = prefs.edit().putInt(KEY_PREVIEW_FILTER_OPACITY, value.coerceIn(0, 100)).apply()
         
     // 앱 목록 (블랙리스트/화이트리스트용)

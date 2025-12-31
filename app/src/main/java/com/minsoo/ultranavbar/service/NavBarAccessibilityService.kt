@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -13,15 +14,19 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.os.Build
+import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
+import android.view.inputmethod.InputMethodManager
 import androidx.core.app.NotificationCompat
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.model.NavAction
 import com.minsoo.ultranavbar.overlay.NavBarOverlay
 import com.minsoo.ultranavbar.settings.SettingsManager
+import com.minsoo.ultranavbar.util.DeviceProfile
 
 class NavBarAccessibilityService : AccessibilityService() {
 
@@ -46,6 +51,9 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isRecentsVisible: Boolean = false
     private var isNotificationPanelOpen: Boolean = false
     private var isWallpaperPreviewVisible: Boolean = false
+    private var isImeVisible: Boolean = false
+    private var lastImeEventAt: Long = 0
+    private var imeFocusActive: Boolean = false
 
     private var launcherPackages: Set<String> = emptySet()
 
@@ -81,7 +89,11 @@ class NavBarAccessibilityService : AccessibilityService() {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     Log.d(TAG, "Screen off, hiding overlay.")
-                    overlay?.hide(animate = false)
+                    overlay?.hide(animate = false, showHotspot = false)
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    Log.d(TAG, "Screen on, updating overlay visibility.")
+                    updateOverlayVisibility(forceFade = false)
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     Log.d(TAG, "User present, showing with fade animation.")
@@ -95,6 +107,11 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        if (!DeviceProfile.isTablet(this)) {
+            Log.w(TAG, "Device is not a tablet. Disabling service.")
+            disableSelf()
+            return
+        }
         Log.i(TAG, "Service connected")
         instance = this
         settings = SettingsManager.getInstance(this)
@@ -111,6 +128,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         startForegroundService()
         loadLauncherPackages()
         createOverlay()
+        updateOverlayVisibility(forceFade = false)
 
         val settingsFilter = IntentFilter().apply {
             addAction("com.minsoo.ultranavbar.SETTINGS_CHANGED")
@@ -125,11 +143,13 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         val screenStateFilter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_USER_PRESENT)
         }
         registerReceiver(screenStateReceiver, screenStateFilter)
 
         calculateNavBarHeight()
+        checkImeVisibility()
         Log.i(TAG, "Overlay created and service fully initialized")
     }
 
@@ -152,8 +172,8 @@ class NavBarAccessibilityService : AccessibilityService() {
         manager.createNotificationChannel(channel)
 
         val notification: Notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("LG UltraTab Extension")
-            .setContentText("Custom Navigation Bar Running")
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.service_running_notification))
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
@@ -216,6 +236,27 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+        val now = SystemClock.elapsedRealtime()
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+            val focusedIsTextInput = isTextInputClass(event.className)
+            if (focusedIsTextInput) {
+                imeFocusActive = true
+                lastImeEventAt = now
+                updateImeVisible(true)
+            } else if (imeFocusActive) {
+                imeFocusActive = false
+                scheduleStateCheck()
+            }
+        }
+
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED ||
+            event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED
+        ) {
+            if (imeFocusActive) {
+                lastImeEventAt = now
+            }
+        }
+
 
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val className = event.className?.toString()
@@ -237,7 +278,10 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
 
             AccessibilityEvent.TYPE_WINDOWS_CHANGED,
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> {
                 // 사진뷰어/일부 앱은 이 이벤트로만 시스템바 변화가 잡히는 경우가 있음
                 scheduleStateCheck()
             }
@@ -249,6 +293,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         pendingStateCheck = Runnable {
             checkFullscreenState()
             checkNotificationPanelState()
+            checkImeVisibility()
             updateHomeAndRecentsFromWindows()
         }
         handler.postDelayed(pendingStateCheck!!, 50)
@@ -456,16 +501,92 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun updateOverlayVisibility(forceFade: Boolean = false) {
-        val shouldHide = shouldHideOverlay()
-        Log.d(TAG, "Update visibility: shouldHide=$shouldHide, package=$currentPackage, fullscreen=$isFullscreen")
+        val lockScreenActive = isLockScreenActive()
+        val shouldHide = shouldHideOverlay(lockScreenActive)
+        Log.d(
+            TAG,
+            "Update visibility: shouldHide=$shouldHide, lockscreen=$lockScreenActive, package=$currentPackage, fullscreen=$isFullscreen"
+        )
         if (shouldHide) {
-            overlay?.hide()
+            overlay?.hide(animate = !lockScreenActive, showHotspot = !lockScreenActive)
         } else {
             overlay?.show(fade = forceFade)
         }
     }
 
-    private fun shouldHideOverlay(): Boolean {
+    private fun checkImeVisibility() {
+        val screen = getScreenBounds()
+        val minImeHeight = dpToPx(80f)
+        val now = SystemClock.elapsedRealtime()
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        var imeVisible = false
+        val imePackage = getCurrentImePackageName()
+
+        for (w in windows) {
+            val rootPackage = w.root?.packageName?.toString()
+            val title = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                w.title?.toString()
+            } else {
+                null
+            }
+            val isImePackageHint =
+                rootPackage?.contains("inputmethod", ignoreCase = true) == true ||
+                    rootPackage?.contains("keyboard", ignoreCase = true) == true
+            val isImeTitleHint =
+                title?.contains("gboard", ignoreCase = true) == true ||
+                    title?.contains("keyboard", ignoreCase = true) == true ||
+                    title?.contains("input", ignoreCase = true) == true
+            val isImeWindow =
+                w.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD ||
+                    (imePackage != null && rootPackage == imePackage) ||
+                    isImePackageHint ||
+                    isImeTitleHint
+            if (!isImeWindow) continue
+            val r = Rect()
+            try {
+                w.getBoundsInScreen(r)
+            } catch (e: Exception) {
+                continue
+            }
+
+            val tallEnough = r.height() >= minImeHeight
+            val bottomThreshold = screen.bottom - maxOf(navBarHeightPx, dpToPx(24f))
+            val touchesBottom = r.bottom >= bottomThreshold
+            if (tallEnough && touchesBottom) {
+                imeVisible = true
+                lastImeEventAt = now
+                break
+            }
+        }
+
+        if (!imeVisible && imm.isAcceptingText && (imeFocusActive || now - lastImeEventAt < 1000)) {
+            imeVisible = true
+        }
+
+        updateImeVisible(imeVisible)
+    }
+
+    private fun updateImeVisible(visible: Boolean) {
+        if (isImeVisible == visible) return
+        isImeVisible = visible
+        Log.d(TAG, "IME visibility changed: $isImeVisible")
+        handler.post {
+            overlay?.setImeVisible(isImeVisible)
+        }
+    }
+
+    private fun isTextInputClass(className: CharSequence?): Boolean {
+        val name = className?.toString() ?: return false
+        return name.endsWith("EditText") || name.contains("TextInput", ignoreCase = true)
+    }
+
+    private fun getCurrentImePackageName(): String? {
+        val imeId = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+        return imeId?.substringBefore('/')
+    }
+
+    private fun shouldHideOverlay(lockScreenActive: Boolean): Boolean {
+        if (lockScreenActive) return true
         if (isWallpaperPreviewVisible) return true
 
         // 1) 전체화면이면 숨김 (영상/게임/사진뷰어 등)
@@ -477,6 +598,15 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (currentPackage.isNotEmpty() && settings.shouldHideForPackage(currentPackage)) return true
 
         return false
+    }
+
+    private fun isLockScreenActive(): Boolean {
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            keyguardManager.isDeviceLocked || keyguardManager.isKeyguardLocked
+        } else {
+            keyguardManager.isKeyguardLocked
+        }
     }
 
     private fun createOverlay() {

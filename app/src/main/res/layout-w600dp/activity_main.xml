@@ -186,7 +186,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Home Long-Press Action"
+                    android:text="@string/long_press_action_title"
                         android:textSize="18sp"
                         android:textStyle="bold" />
 
@@ -195,7 +195,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="Default (Google Assistant)"
+                    android:text="@string/long_press_action_default"
                         android:textSize="14sp"
                         android:textColor="?android:textColorSecondary" />
 
@@ -211,7 +211,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="Change" />
+                            android:text="@string/long_press_action_change" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnResetLongPressAction"
@@ -219,7 +219,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
-                            android:text="Reset" />
+                            android:text="@string/long_press_action_reset" />
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -295,13 +295,13 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Ignore Stylus Input"
+                                android:text="@string/ignore_stylus_title"
                                 android:textSize="14sp" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Prevents pen input from triggering navigation bar actions"
+                                android:text="@string/ignore_stylus_summary"
                                 android:textSize="12sp"
                                 android:textColor="?android:textColorSecondary" />
                         </LinearLayout>
@@ -514,7 +514,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="8dp"
-                            android:text="Auto" />
+                            android:text="@string/auto_button_label" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnSelectLandscape"
@@ -559,7 +559,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="8dp"
-                            android:text="Auto" />
+                            android:text="@string/auto_button_label" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnSelectPortrait"
@@ -579,6 +579,15 @@
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/credits_text"
+                android:textSize="12sp"
+                android:textColor="?android:textColorSecondary"
+                android:textAlignment="center" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

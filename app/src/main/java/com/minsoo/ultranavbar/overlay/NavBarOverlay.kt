@@ -9,9 +9,10 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
-import android.graphics.drawable.ShapeDrawable
-import android.graphics.drawable.shapes.RectShape
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -52,6 +53,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var navBarView: ViewGroup? = null
     private var hotspotView: View? = null
     private var panelButton: ImageButton? = null
+    private var backButton: ImageButton? = null
 
     private var isShowing = true
     private var isCreated = false
@@ -59,12 +61,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private var isOnHomeScreen = false
     private var isRecentsVisible = false
+    private var isImeVisible = false
 
     // “패널이 열림/닫힘” UI 상태(서비스 감지값으로 동기화 + 버튼 클릭 시 낙관 토글)
     private var isPanelOpenUi: Boolean = false
 
     private var landscapeBgBitmap: Bitmap? = null
     private var portraitBgBitmap: Bitmap? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var pendingHomeState: Runnable? = null
+    private var pendingRecentsState: Runnable? = null
 
     @SuppressLint("ClickableViewAccessibility")
     fun create() {
@@ -147,7 +153,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        leftGroup.addView(createNavButton(NavAction.BACK, R.drawable.ic_sysbar_back, buttonSizePx))
+        backButton = createNavButton(NavAction.BACK, R.drawable.ic_sysbar_back, buttonSizePx)
+        leftGroup.addView(backButton)
         addSpacer(leftGroup, buttonSpacingPx)
         leftGroup.addView(createNavButton(NavAction.HOME, R.drawable.ic_sysbar_home, buttonSizePx))
         addSpacer(leftGroup, buttonSpacingPx)
@@ -188,6 +195,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         // 배경 재적용(홈화면 + 옵션일 때)
         updateNavBarBackground()
+        updateBackButtonRotation(animate = false)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -233,7 +241,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
 
             val rippleColor = ColorStateList.valueOf(Color.WHITE)
-            val maskDrawable = ShapeDrawable(RectShape())
+            val maskDrawable = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = sizePx / 2f
+                setColor(Color.WHITE)
+            }
             background = RippleDrawable(rippleColor, null, maskDrawable)
 
             elevation = dpToPx(4).toFloat()
@@ -329,7 +341,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
-    fun hide(animate: Boolean = true) {
+    fun hide(animate: Boolean = true, showHotspot: Boolean = true) {
         if (!isShowing) return
 
         navBarView?.let { bar ->
@@ -352,9 +364,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 bar.startAnimation(slideDown)
             }
 
-            if (settings.hotspotEnabled) {
-                hotspotView?.visibility = View.VISIBLE
-            }
+            hotspotView?.visibility =
+                if (showHotspot && settings.hotspotEnabled) View.VISIBLE else View.GONE
 
             isShowing = false
             Log.d(TAG, "Overlay hidden (animate=$animate)")
@@ -403,11 +414,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (!isCreated) return
 
         try {
+            pendingHomeState?.let { handler.removeCallbacks(it) }
+            pendingHomeState = null
+            pendingRecentsState?.let { handler.removeCallbacks(it) }
+            pendingRecentsState = null
             windowManager.removeView(rootView)
             rootView = null
             navBarView = null
             hotspotView = null
             panelButton = null
+            backButton = null
             isCreated = false
             Log.i(TAG, "Overlay destroyed")
         } catch (e: Exception) {
@@ -420,15 +436,56 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     fun setHomeScreenState(onHome: Boolean) {
-        if (isOnHomeScreen == onHome) return
-        isOnHomeScreen = onHome
-        Log.d(TAG, "Home screen state set: $onHome")
-        updateNavBarBackground()
+        if (onHome) {
+            pendingHomeState?.let { handler.removeCallbacks(it) }
+            pendingHomeState = null
+            if (isOnHomeScreen) return
+            isOnHomeScreen = true
+            Log.d(TAG, "Home screen state set: true")
+            updateNavBarBackground()
+            return
+        }
+
+        if (!isOnHomeScreen) return
+        pendingHomeState?.let { handler.removeCallbacks(it) }
+        val task = Runnable {
+            pendingHomeState = null
+            if (!isOnHomeScreen) return@Runnable
+            isOnHomeScreen = false
+            Log.d(TAG, "Home screen state set: false (debounced)")
+            updateNavBarBackground()
+        }
+        pendingHomeState = task
+        handler.postDelayed(task, 200)
     }
 
     fun setRecentsState(isRecents: Boolean) {
-        if (isRecentsVisible == isRecents) return
-        isRecentsVisible = isRecents
+        if (isRecents) {
+            if (isRecentsVisible) return
+            pendingRecentsState?.let { handler.removeCallbacks(it) }
+            pendingRecentsState = null
+
+            if (!isOnHomeScreen) {
+                isRecentsVisible = true
+                updateNavBarBackground()
+                return
+            }
+
+            val task = Runnable {
+                pendingRecentsState = null
+                if (isRecentsVisible) return@Runnable
+                isRecentsVisible = true
+                updateNavBarBackground()
+            }
+            pendingRecentsState = task
+            handler.postDelayed(task, 200)
+            return
+        }
+
+        pendingRecentsState?.let { handler.removeCallbacks(it) }
+        pendingRecentsState = null
+        if (!isRecentsVisible) return
+        isRecentsVisible = false
         updateNavBarBackground()
     }
 
@@ -446,7 +503,32 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             ?.start()
 
         panelButton?.contentDescription =
-            if (isOpen) "알림 패널 올리기" else "알림 패널 내리기"
+            if (isOpen) {
+                context.getString(R.string.notification_panel_close)
+            } else {
+                context.getString(R.string.notification_panel_open)
+            }
+    }
+
+    fun setImeVisible(visible: Boolean) {
+        if (isImeVisible == visible) return
+        isImeVisible = visible
+        updateBackButtonRotation(animate = true)
+    }
+
+    private fun updateBackButtonRotation(animate: Boolean) {
+        val targetRotation = if (isImeVisible) -90f else 0f
+        backButton?.let { button ->
+            button.animate().cancel()
+            if (animate) {
+                button.animate()
+                    .rotation(targetRotation)
+                    .setDuration(ANIMATION_DURATION)
+                    .start()
+            } else {
+                button.rotation = targetRotation
+            }
+        }
     }
 
     private fun updateNavBarBackground() {
