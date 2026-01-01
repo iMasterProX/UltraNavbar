@@ -322,11 +322,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
-    fun show(fade: Boolean = false) {
-        if (isShowing) return
-
+    fun show(fade: Boolean = false, forceAnimation: Boolean = false) {
         navBarView?.let { bar ->
             bar.clearAnimation()
+
+            // 이미 보이는 상태에서 forceAnimation이 true면 애니메이션만 재생
+            if (isShowing && !forceAnimation) return
+
             bar.visibility = View.VISIBLE
 
             if (fade) {
@@ -334,7 +336,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     duration = ANIMATION_DURATION
                 }
                 bar.startAnimation(alphaAnim)
-            } else {
+            } else if (!isShowing) {
+                // 새로 보이는 경우에만 슬라이드 애니메이션
                 val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                     duration = ANIMATION_DURATION
                 }
@@ -343,7 +346,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             hotspotView?.visibility = View.GONE
             isShowing = true
-            Log.d(TAG, "Overlay shown (fade=$fade)")
+            Log.d(TAG, "Overlay shown (fade=$fade, forceAnimation=$forceAnimation)")
         }
     }
 
@@ -450,15 +453,21 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
-    private fun syncOrientationIfNeeded() {
+    private fun syncOrientationIfNeeded(): Boolean {
         val actualOrientation = resolveCurrentOrientation()
-        if (currentOrientation == actualOrientation) return
+        if (currentOrientation == actualOrientation) return false
 
+        val oldOrientation = currentOrientation
         currentOrientation = actualOrientation
+
+        val orientationName = if (actualOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+        Log.d(TAG, "syncOrientationIfNeeded: orientation synced from ${if (oldOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"} to $orientationName")
+
         rootView?.let { root ->
             val params = createLayoutParams()
             windowManager.updateViewLayout(root, params)
         }
+        return true
     }
 
     fun destroy() {
@@ -632,7 +641,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     private fun updateNavBarBackground(forceUpdate: Boolean = false) {
-        syncOrientationIfNeeded()
+        // orientation 동기화 - 변경되면 강제 업데이트 필요
+        val orientationChanged = syncOrientationIfNeeded()
+        val needsUpdate = forceUpdate || orientationChanged
+
         val bar = navBarView ?: return
         val currentBg = bar.background
 
@@ -644,11 +656,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
             val targetBitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
 
-            Log.d(TAG, "updateNavBarBackground: isLandscape=$isLandscape, hasBitmap=${targetBitmap != null}, forceUpdate=$forceUpdate")
+            Log.d(TAG, "updateNavBarBackground: isLandscape=$isLandscape, hasBitmap=${targetBitmap != null}, needsUpdate=$needsUpdate, orientationChanged=$orientationChanged")
 
             if (targetBitmap != null) {
                 val currentBitmap = (currentBg as? BitmapDrawable)?.bitmap
-                if (forceUpdate || currentBitmap !== targetBitmap) {
+                if (needsUpdate || currentBitmap !== targetBitmap) {
                     Log.d(TAG, "Applying pre-cropped background image. Landscape: $isLandscape")
 
                     val bgDrawable = BitmapDrawable(context.resources, targetBitmap).apply {
@@ -657,14 +669,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     bar.background = bgDrawable
                 }
             } else {
-                if (forceUpdate || (currentBg as? ColorDrawable)?.color != Color.BLACK) {
+                if (needsUpdate || (currentBg as? ColorDrawable)?.color != Color.BLACK) {
                     Log.d(TAG, "Fallback to black background (pre-cropped image not loaded). isLandscape=$isLandscape")
                     bar.background = ColorDrawable(Color.BLACK)
                 }
             }
         } else {
             val targetColor = getNavBarBackgroundColor(useLightStyle)
-            if (forceUpdate || (currentBg as? ColorDrawable)?.color != targetColor) {
+            if (needsUpdate || (currentBg as? ColorDrawable)?.color != targetColor) {
                 Log.d(TAG, "Applying color background for app/recents view. Light=$useLightStyle")
                 bar.background = ColorDrawable(targetColor)
             }

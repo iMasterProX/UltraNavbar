@@ -120,17 +120,19 @@ class NavBarAccessibilityService : AccessibilityService() {
                     overlay?.hide(animate = false, showHotspot = false)
                 }
                 Intent.ACTION_SCREEN_ON -> {
-                    Log.d(TAG, "Screen on, updating overlay visibility.")
-                    updateOverlayVisibility(forceFade = false)
+                    // 화면 켜짐 - 아직 잠금화면이므로 오버레이 숨김 유지
+                    Log.d(TAG, "Screen on, keeping overlay hidden until user present.")
+                    // 잠금화면에서는 숨김 상태 유지
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     Log.d(TAG, "User present, showing with fade animation.")
                     handler.postDelayed({
                         homeExitGraceUntil = 0
-                        startHomePolling(2000)
-                        updateOverlayVisibility(forceFade = true)
+                        startHomePolling(1500)
+                        // 페이드 효과로 오버레이 표시 (forceAnimation=true로 이미 보이는 경우에도 애니메이션 재생)
+                        updateOverlayVisibility(forceFade = true, forceAnimation = true)
                         scheduleStateCheck()
-                    }, 200)
+                    }, 150)
                 }
             }
         }
@@ -279,8 +281,15 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        Log.d(TAG, "Configuration changed: orientation=${newConfig.orientation}")
+        val orientationName = if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+        Log.d(TAG, "Configuration changed: orientation=$orientationName")
+
+        // 회전 시 기준값 먼저 재계산
+        calculateNavBarHeight()
+
+        // 오버레이에 orientation 변경 알림
         overlay?.handleOrientationChange(newConfig.orientation)
+
         val uiMode = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
         if (uiMode != lastUiMode) {
             lastUiMode = uiMode
@@ -289,11 +298,13 @@ class NavBarAccessibilityService : AccessibilityService() {
             updateOverlayVisibility(forceFade = true)
         }
 
-
-        // 회전 시 기준값 재계산
-        calculateNavBarHeight()
         updateDefaultNavStyleFromSystem()
-        scheduleStateCheck()
+
+        // orientation 변경 후 fullscreen 상태 재확인 (약간 딜레이로 안정화)
+        handler.postDelayed({
+            checkFullscreenState()
+            scheduleStateCheck()
+        }, 100)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -822,17 +833,17 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun updateOverlayVisibility(forceFade: Boolean = false) {
+    private fun updateOverlayVisibility(forceFade: Boolean = false, forceAnimation: Boolean = false) {
         val lockScreenActive = isLockScreenActive()
         val shouldHide = shouldHideOverlay(lockScreenActive)
         Log.d(
             TAG,
-            "Update visibility: shouldHide=$shouldHide, lockscreen=$lockScreenActive, package=$currentPackage, fullscreen=$isFullscreen"
+            "Update visibility: shouldHide=$shouldHide, lockscreen=$lockScreenActive, package=$currentPackage, fullscreen=$isFullscreen, forceFade=$forceFade"
         )
         if (shouldHide) {
             overlay?.hide(animate = !lockScreenActive, showHotspot = !lockScreenActive)
         } else {
-            overlay?.show(fade = forceFade)
+            overlay?.show(fade = forceFade, forceAnimation = forceAnimation)
             updateNavBarStyle()
         }
     }
