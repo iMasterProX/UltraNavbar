@@ -487,64 +487,56 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     fun setHomeScreenState(onHome: Boolean, immediate: Boolean = false) {
+        pendingHomeState?.let { handler.removeCallbacks(it) }
+        pendingHomeState = null
+
         if (onHome) {
-            pendingHomeState?.let { handler.removeCallbacks(it) }
-            pendingHomeState = null
             if (isOnHomeScreen) return
             isOnHomeScreen = true
-            Log.d(TAG, "Home screen state set: true")
-            updateNavBarBackground()
+            Log.d(TAG, "Home screen state set: true (immediate)")
+            // 홈화면 진입은 항상 즉시 배경 적용
+            handler.post { updateNavBarBackground(forceUpdate = true) }
             return
         }
 
         if (!isOnHomeScreen) return
-        pendingHomeState?.let { handler.removeCallbacks(it) }
-        pendingHomeState = null
+
+        // 앱으로 전환 시 - immediate이면 즉시, 아니면 짧은 딜레이
         if (immediate) {
             isOnHomeScreen = false
             Log.d(TAG, "Home screen state set: false (immediate)")
-            updateNavBarBackground()
+            handler.post { updateNavBarBackground(forceUpdate = true) }
             return
         }
+
+        // 짧은 딜레이 (100ms)로 앱 전환 감지 - 빠른 반응
         val task = Runnable {
             pendingHomeState = null
             if (!isOnHomeScreen) return@Runnable
             isOnHomeScreen = false
             Log.d(TAG, "Home screen state set: false (debounced)")
-            updateNavBarBackground()
+            updateNavBarBackground(forceUpdate = true)
         }
         pendingHomeState = task
-        handler.postDelayed(task, 200)
+        handler.postDelayed(task, 100)
     }
 
     fun setRecentsState(isRecents: Boolean) {
+        pendingRecentsState?.let { handler.removeCallbacks(it) }
+        pendingRecentsState = null
+
         if (isRecents) {
             if (isRecentsVisible) return
-            pendingRecentsState?.let { handler.removeCallbacks(it) }
-            pendingRecentsState = null
-
-            if (!isOnHomeScreen) {
-                isRecentsVisible = true
-                updateNavBarBackground()
-                return
-            }
-
-            val task = Runnable {
-                pendingRecentsState = null
-                if (isRecentsVisible) return@Runnable
-                isRecentsVisible = true
-                updateNavBarBackground()
-            }
-            pendingRecentsState = task
-            handler.postDelayed(task, 200)
+            isRecentsVisible = true
+            Log.d(TAG, "Recents state set: true")
+            handler.post { updateNavBarBackground(forceUpdate = true) }
             return
         }
 
-        pendingRecentsState?.let { handler.removeCallbacks(it) }
-        pendingRecentsState = null
         if (!isRecentsVisible) return
         isRecentsVisible = false
-        updateNavBarBackground()
+        Log.d(TAG, "Recents state set: false")
+        handler.post { updateNavBarBackground(forceUpdate = true) }
     }
 
     /**

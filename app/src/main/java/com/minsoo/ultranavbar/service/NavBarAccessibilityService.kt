@@ -37,7 +37,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         private const val NOTIFICATION_CHANNEL_ID = "UltraNavBarServiceChannel"
         private const val IME_DEBUG_LOG = true
         private const val IME_DEBUG_WINDOW_MS = 1500L
-        private const val HOME_WINDOW_GRACE_MS = 900L
+        private const val HOME_WINDOW_GRACE_MS = 400L  // 900ms -> 400ms 로 단축
 
         @Volatile
         var instance: NavBarAccessibilityService? = null
@@ -398,9 +398,8 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (isSystemUi) {
             if (isRecents && isOnHomeScreen) {
                 isOnHomeScreen = false
-                homeExitGraceUntil = now + 900
-                val exitImmediate = shouldExitHomeImmediately(packageName, isRecents, isSystemUi)
-                overlay?.setHomeScreenState(false, immediate = exitImmediate)
+                homeExitGraceUntil = now + 400  // 900ms -> 400ms
+                overlay?.setHomeScreenState(false, immediate = true)
             }
             return
         }
@@ -414,7 +413,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (isHomeOverlay && (isOnHomeScreen || launcherRecentlyVisible || homeEntryGraceActive)) {
             if (!isOnHomeScreen) {
                 isOnHomeScreen = true
-                homeEnterGraceUntil = maxOf(homeEnterGraceUntil, now + 1200)
+                homeEnterGraceUntil = maxOf(homeEnterGraceUntil, now + 600)  // 1200ms -> 600ms
                 overlay?.setHomeScreenState(true, immediate = true)
             }
             return
@@ -440,14 +439,13 @@ class NavBarAccessibilityService : AccessibilityService() {
                 stopHomePolling()
             }
             if (!newOnHomeScreen) {
-                homeExitGraceUntil = now + 900
+                homeExitGraceUntil = now + 400  // 900ms -> 400ms
             } else if (now > homeEnterGraceUntil) {
                 homeEnterGraceUntil = 0
             }
-            Log.d(TAG, "Home screen state changed: $isOnHomeScreen")
-            val exitImmediate = !newOnHomeScreen &&
-                shouldExitHomeImmediately(packageName, isRecents, isSystemUi)
-            overlay?.setHomeScreenState(isOnHomeScreen, immediate = exitImmediate)
+            Log.d(TAG, "Home screen state changed: $isOnHomeScreen (pkg=$packageName)")
+            // 앱 전환 시 항상 immediate로 처리하여 빠른 배경 전환
+            overlay?.setHomeScreenState(isOnHomeScreen, immediate = true)
         }
 
     }
@@ -580,6 +578,11 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
 
         if (!newOnHomeScreen && isOnHomeScreen && previousPackage != currentPackage) {
+            // 앱이 변경된 경우 즉시 홈화면 상태 업데이트
+            isOnHomeScreen = false
+            homeExitGraceUntil = now + 400
+            Log.d(TAG, "Home screen state (windows) changed: false (app changed to $currentPackage)")
+            overlay?.setHomeScreenState(false, immediate = true)
             return
         }
 
@@ -595,14 +598,13 @@ class NavBarAccessibilityService : AccessibilityService() {
                 stopHomePolling()
             }
             if (!newOnHomeScreen) {
-                homeExitGraceUntil = now + 900
+                homeExitGraceUntil = now + 400  // 900ms -> 400ms
             } else if (now > homeEnterGraceUntil) {
                 homeEnterGraceUntil = 0
             }
-            Log.d(TAG, "Home screen state (windows) changed: $isOnHomeScreen")
-            val exitImmediate = !newOnHomeScreen &&
-                shouldExitHomeImmediately(activePackage, isRecents, isSystemUiActive)
-            overlay?.setHomeScreenState(isOnHomeScreen, immediate = exitImmediate)
+            Log.d(TAG, "Home screen state (windows) changed: $isOnHomeScreen (pkg=$activePackage)")
+            // 모든 상태 변경에서 immediate 사용
+            overlay?.setHomeScreenState(isOnHomeScreen, immediate = true)
         }
 
     }
@@ -1093,19 +1095,19 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (action == NavAction.HOME) {
             val now = SystemClock.elapsedRealtime()
             homeExitGraceUntil = 0
-            startHomePolling(2000)
-            homeEnterGraceUntil = now + 1200
+            startHomePolling(1500)  // 2000ms -> 1500ms
+            homeEnterGraceUntil = now + 600  // 1200ms -> 600ms
             lastHomeActionAt = now
             lastHomeActionPackage = currentPackage
             if (!isOnHomeScreen || isRecentsVisible) {
                 isOnHomeScreen = true
                 isRecentsVisible = false
-                handler.post {
-                    overlay?.setRecentsState(false)
-                    overlay?.setHomeScreenState(true, immediate = true)
-                }
+                // 즉시 배경 전환
+                overlay?.setRecentsState(false)
+                overlay?.setHomeScreenState(true, immediate = true)
             } else {
-                handler.post { overlay?.setHomeScreenState(true, immediate = true) }
+                // 이미 홈화면인 경우도 배경 강제 갱신
+                overlay?.setHomeScreenState(true, immediate = true)
             }
         }
 
