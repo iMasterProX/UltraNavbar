@@ -187,8 +187,18 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun calculateNavBarHeight() {
-        val resId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        // 현재 orientation에 맞는 네비게이션 바 높이 계산
+        val isPortrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+        val resName = if (isPortrait) "navigation_bar_height" else "navigation_bar_height_landscape"
+        var resId = resources.getIdentifier(resName, "dimen", "android")
+
+        // fallback to default navigation_bar_height
+        if (resId == 0) {
+            resId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        }
+
         navBarHeightPx = if (resId > 0) resources.getDimensionPixelSize(resId) else dpToPx(48f)
+        Log.d(TAG, "Navigation bar height calculated: ${navBarHeightPx}px (portrait=$isPortrait)")
     }
 
     private fun dpToPx(dp: Float): Int {
@@ -604,6 +614,10 @@ class NavBarAccessibilityService : AccessibilityService() {
      */
     private fun checkFullscreenState() {
         val screen = getScreenBounds()
+        val isPortrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+
+        // orientation 변경 시 nav bar 높이 재계산
+        calculateNavBarHeight()
 
         val navVisibleThreshold = maxOf((navBarHeightPx * 0.7f).toInt(), dpToPx(40f))
         val gestureOnlyThreshold = dpToPx(24f)
@@ -624,13 +638,42 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
 
             val touchesBottom = (r.bottom >= screen.bottom - 2)
-            val wideEnough = r.width() >= (screen.width() * 0.5f)
+            // 세로/가로 화면에 따라 네비바 너비 기준 조정
+            val minWidthRatio = if (isPortrait) 0.3f else 0.5f
+            val wideEnough = r.width() >= (screen.width() * minWidthRatio)
             if (touchesBottom && wideEnough) {
                 bottomSystemUiHeight = maxOf(bottomSystemUiHeight, r.height())
             }
         }
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || systemUiWindowSeen) {
+        // API 30+ 에서 WindowInsets 기반 감지도 병행
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val navInsetInfo = getSystemNavInsetInfo()
+            if (navInsetInfo != null) {
+                val (navInsetSize, navInsetVisible) = navInsetInfo
+                // WindowInsets 결과를 우선 사용
+                val navBarVisible = navInsetVisible && navInsetSize >= navVisibleThreshold
+                val navBarHiddenOrGestureOnly = !navInsetVisible || navInsetSize <= gestureOnlyThreshold
+                val newFullscreenState = navBarHiddenOrGestureOnly || !navBarVisible
+                isSystemNavVisible = navInsetVisible && navInsetSize > gestureOnlyThreshold
+
+                if (isFullscreen != newFullscreenState) {
+                    isFullscreen = newFullscreenState
+                    Log.d(
+                        TAG,
+                        "Fullscreen state updated (insets): fullscreen=$isFullscreen, navInsetSize=$navInsetSize, portrait=$isPortrait, pkg=$currentPackage"
+                    )
+                    if (isFullscreen) startFullscreenPolling() else stopFullscreenPolling()
+                    updateOverlayVisibility()
+                } else if (isFullscreen) {
+                    startFullscreenPolling()
+                }
+                return
+            }
+        }
+
+        // fallback: window bounds 기반 감지
+        if (systemUiWindowSeen || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             val navBarVisible = bottomSystemUiHeight >= navVisibleThreshold
             val navBarHiddenOrGestureOnly = bottomSystemUiHeight <= gestureOnlyThreshold
             val newFullscreenState = navBarHiddenOrGestureOnly || !navBarVisible
@@ -641,7 +684,7 @@ class NavBarAccessibilityService : AccessibilityService() {
                 isFullscreen = newFullscreenState
                 Log.d(
                     TAG,
-                    "Fullscreen state updated: fullscreen=$isFullscreen, bottomSystemUiHeight=$bottomSystemUiHeight, pkg=$currentPackage"
+                    "Fullscreen state updated (bounds): fullscreen=$isFullscreen, bottomSystemUiHeight=$bottomSystemUiHeight, portrait=$isPortrait, pkg=$currentPackage"
                 )
 
                 if (isFullscreen) startFullscreenPolling() else stopFullscreenPolling()
@@ -649,26 +692,6 @@ class NavBarAccessibilityService : AccessibilityService() {
             } else {
                 if (isFullscreen) startFullscreenPolling()
             }
-            return
-        }
-
-        val navInsetInfo = getSystemNavInsetInfo() ?: return
-        val navInsetSize = navInsetInfo.first
-        val navInsetVisible = navInsetInfo.second
-        val navBarVisible = navInsetVisible && navInsetSize >= navVisibleThreshold
-        val navBarHiddenOrGestureOnly = !navInsetVisible || navInsetSize <= gestureOnlyThreshold
-        val newFullscreenState = navBarHiddenOrGestureOnly || !navBarVisible
-        isSystemNavVisible = navInsetVisible && navInsetSize > gestureOnlyThreshold
-        if (isFullscreen != newFullscreenState) {
-            isFullscreen = newFullscreenState
-            Log.d(
-                TAG,
-                "Fullscreen state updated: fullscreen=$isFullscreen, navInsetSize=$navInsetSize (insets)"
-            )
-            if (isFullscreen) startFullscreenPolling() else stopFullscreenPolling()
-            updateOverlayVisibility()
-        } else if (isFullscreen) {
-            startFullscreenPolling()
         }
     }
 

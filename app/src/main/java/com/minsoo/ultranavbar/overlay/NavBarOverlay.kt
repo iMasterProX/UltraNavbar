@@ -411,12 +411,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (currentOrientation == newOrientation) return
         currentOrientation = newOrientation
 
-        Log.d(
-            TAG,
-            "Orientation changed to: ${
-                if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
-            }"
-        )
+        val orientationName = if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+        Log.d(TAG, "Orientation changed to: $orientationName")
 
         // 높이가 바뀔 수 있으므로 레이아웃 파라미터 갱신
         rootView?.let { root ->
@@ -424,7 +420,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             windowManager.updateViewLayout(root, params)
         }
 
-        updateNavBarBackground()
+        // 배경 이미지 강제 갱신 (orientation 변경 시 올바른 배경 적용)
+        handler.post {
+            updateNavBarBackground(forceUpdate = true)
+        }
     }
 
     private fun resolveCurrentOrientation(): Int {
@@ -640,7 +639,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
-    private fun updateNavBarBackground() {
+    private fun updateNavBarBackground(forceUpdate: Boolean = false) {
         syncOrientationIfNeeded()
         val bar = navBarView ?: return
         val currentBg = bar.background
@@ -650,13 +649,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val useLightStyle = !shouldUseImageBackground && useLightNavStyle
 
         if (shouldUseImageBackground) {
-            val isLandscape = resolveCurrentOrientation() == Configuration.ORIENTATION_LANDSCAPE
+            val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
             val targetBitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
+
+            Log.d(TAG, "updateNavBarBackground: isLandscape=$isLandscape, hasBitmap=${targetBitmap != null}, forceUpdate=$forceUpdate")
 
             if (targetBitmap != null) {
                 val currentBitmap = (currentBg as? BitmapDrawable)?.bitmap
-                if (currentBitmap !== targetBitmap) {
-                    Log.d(TAG, "Applying new pre-cropped background image. Landscape: $isLandscape")
+                if (forceUpdate || currentBitmap !== targetBitmap) {
+                    Log.d(TAG, "Applying pre-cropped background image. Landscape: $isLandscape")
 
                     val bgDrawable = BitmapDrawable(context.resources, targetBitmap).apply {
                         gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
@@ -664,14 +665,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     bar.background = bgDrawable
                 }
             } else {
-                if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
-                    Log.d(TAG, "Fallback to black background (pre-cropped image not loaded).")
+                if (forceUpdate || (currentBg as? ColorDrawable)?.color != Color.BLACK) {
+                    Log.d(TAG, "Fallback to black background (pre-cropped image not loaded). isLandscape=$isLandscape")
                     bar.background = ColorDrawable(Color.BLACK)
                 }
             }
         } else {
             val targetColor = getNavBarBackgroundColor(useLightStyle)
-            if ((currentBg as? ColorDrawable)?.color != targetColor) {
+            if (forceUpdate || (currentBg as? ColorDrawable)?.color != targetColor) {
                 Log.d(TAG, "Applying color background for app/recents view. Light=$useLightStyle")
                 bar.background = ColorDrawable(targetColor)
             }
