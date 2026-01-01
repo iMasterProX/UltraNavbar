@@ -78,6 +78,10 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var imeDebugLastWindowPresent: Boolean = false
     private var lastLauncherWindowSeenAt: Long = 0
 
+    // 잠금해제 대기 플래그 - 화면 꺼짐~잠금해제 사이에 다른 코드에서 overlay를 show하지 않도록 방지
+    @Volatile
+    private var unlockPending: Boolean = false
+
     private var launcherPackages: Set<String> = emptySet()
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -116,21 +120,23 @@ class NavBarAccessibilityService : AccessibilityService() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
-                    Log.d(TAG, "Screen off, hiding overlay.")
+                    Log.d(TAG, "Screen off, hiding overlay and setting unlockPending=true")
+                    unlockPending = true  // 잠금해제 대기 상태 진입
                     overlay?.hide(animate = false, showHotspot = false)
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     // 화면 켜짐 - 아직 잠금화면이므로 오버레이 숨김 유지
-                    Log.d(TAG, "Screen on, keeping overlay hidden until user present.")
-                    // 잠금화면에서는 숨김 상태 유지
+                    Log.d(TAG, "Screen on, keeping overlay hidden until user present (unlockPending=$unlockPending)")
+                    // 잠금화면에서는 숨김 상태 유지, unlockPending도 유지
                 }
                 Intent.ACTION_USER_PRESENT -> {
-                    Log.d(TAG, "User present, showing with fade animation.")
+                    Log.d(TAG, "User present, showing with fade animation only")
                     handler.postDelayed({
+                        unlockPending = false  // 잠금해제 완료, 플래그 해제
                         homeExitGraceUntil = 0
                         startHomePolling(1500)
-                        // 페이드 효과로 오버레이 표시 (forceAnimation=true로 이미 보이는 경우에도 애니메이션 재생)
-                        updateOverlayVisibility(forceFade = true, forceAnimation = true)
+                        // 페이드 효과로만 오버레이 표시 - forceUnlock=true로 호출
+                        updateOverlayVisibility(forceFade = true, forceAnimation = true, forceUnlock = true)
                         scheduleStateCheck()
                     }, 150)
                 }
@@ -833,12 +839,22 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun updateOverlayVisibility(forceFade: Boolean = false, forceAnimation: Boolean = false) {
+    private fun updateOverlayVisibility(
+        forceFade: Boolean = false,
+        forceAnimation: Boolean = false,
+        forceUnlock: Boolean = false
+    ) {
+        // unlockPending이 true이고 forceUnlock이 아니면 show를 건너뜀 (잠금해제 시 페이드만 적용하기 위해)
+        if (unlockPending && !forceUnlock) {
+            Log.d(TAG, "Update visibility skipped: unlockPending=true, waiting for USER_PRESENT")
+            return
+        }
+
         val lockScreenActive = isLockScreenActive()
         val shouldHide = shouldHideOverlay(lockScreenActive)
         Log.d(
             TAG,
-            "Update visibility: shouldHide=$shouldHide, lockscreen=$lockScreenActive, package=$currentPackage, fullscreen=$isFullscreen, forceFade=$forceFade"
+            "Update visibility: shouldHide=$shouldHide, lockscreen=$lockScreenActive, package=$currentPackage, fullscreen=$isFullscreen, forceFade=$forceFade, forceUnlock=$forceUnlock"
         )
         if (shouldHide) {
             overlay?.hide(animate = !lockScreenActive, showHotspot = !lockScreenActive)
