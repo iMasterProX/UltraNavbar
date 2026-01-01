@@ -68,6 +68,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private var landscapeBgBitmap: Bitmap? = null
     private var portraitBgBitmap: Bitmap? = null
+    private val navButtons = mutableListOf<ImageButton>()
+    private var useLightNavStyle = false
     private val handler = Handler(Looper.getMainLooper())
     private var pendingHomeState: Runnable? = null
     private var pendingRecentsState: Runnable? = null
@@ -147,6 +149,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             setPadding(dpToPx(16), 0, dpToPx(16), 0)
             clipChildren = false
         }
+
+        navButtons.clear()
 
         // Left group: Back / Home / Recents
         val leftGroup = LinearLayout(context).apply {
@@ -237,7 +241,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         iconResId: Int,
         sizePx: Int
     ): ImageButton {
-        return ImageButton(context).apply {
+        val button = ImageButton(context).apply {
             layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
 
             val rippleColor = ColorStateList.valueOf(Color.WHITE)
@@ -288,6 +292,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 }
             }
         }
+        navButtons.add(button)
+        return button
     }
 
     private fun addSpacer(parent: ViewGroup, width: Int) {
@@ -375,6 +381,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun refreshSettings() {
         if (!isCreated) return
 
+        val wasShowing = isShowing
+
         loadBackgroundBitmaps()
 
         rootView?.let { root ->
@@ -388,6 +396,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         updateNavBarBackground()
         updatePanelButtonState(isOpen = isPanelOpenUi)
+
+        if (wasShowing) {
+            isShowing = false
+            show(fade = false)
+        } else {
+            navBarView?.visibility = View.GONE
+            hotspotView?.visibility =
+                if (settings.hotspotEnabled) View.VISIBLE else View.GONE
+        }
     }
 
     fun handleOrientationChange(newOrientation: Int) {
@@ -408,6 +425,41 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         updateNavBarBackground()
+    }
+
+    private fun resolveCurrentOrientation(): Int {
+        val configOrientation = context.resources.configuration.orientation
+        if (configOrientation == Configuration.ORIENTATION_LANDSCAPE ||
+            configOrientation == Configuration.ORIENTATION_PORTRAIT
+        ) {
+            return configOrientation
+        }
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            if (bounds.width() >= bounds.height()) {
+                Configuration.ORIENTATION_LANDSCAPE
+            } else {
+                Configuration.ORIENTATION_PORTRAIT
+            }
+        } else {
+            val metrics = context.resources.displayMetrics
+            if (metrics.widthPixels >= metrics.heightPixels) {
+                Configuration.ORIENTATION_LANDSCAPE
+            } else {
+                Configuration.ORIENTATION_PORTRAIT
+            }
+        }
+    }
+
+    private fun syncOrientationIfNeeded() {
+        val actualOrientation = resolveCurrentOrientation()
+        if (currentOrientation == actualOrientation) return
+
+        currentOrientation = actualOrientation
+        rootView?.let { root ->
+            val params = createLayoutParams()
+            windowManager.updateViewLayout(root, params)
+        }
     }
 
     fun destroy() {
@@ -435,7 +487,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         return (dp * context.resources.displayMetrics.density).toInt()
     }
 
-    fun setHomeScreenState(onHome: Boolean) {
+    fun setHomeScreenState(onHome: Boolean, immediate: Boolean = false) {
         if (onHome) {
             pendingHomeState?.let { handler.removeCallbacks(it) }
             pendingHomeState = null
@@ -448,6 +500,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         if (!isOnHomeScreen) return
         pendingHomeState?.let { handler.removeCallbacks(it) }
+        pendingHomeState = null
+        if (immediate) {
+            isOnHomeScreen = false
+            Log.d(TAG, "Home screen state set: false (immediate)")
+            updateNavBarBackground()
+            return
+        }
         val task = Runnable {
             pendingHomeState = null
             if (!isOnHomeScreen) return@Runnable
@@ -531,15 +590,67 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
+    fun setLightNavStyle(isLight: Boolean) {
+        if (useLightNavStyle == isLight) return
+        useLightNavStyle = isLight
+        updateNavBarBackground()
+    }
+
+    private fun resolveSystemColor(name: String, fallback: Int): Int {
+        val id = context.resources.getIdentifier(name, "color", "android")
+        return if (id != 0) context.getColor(id) else fallback
+    }
+
+    private fun getNavBarBackgroundColor(useLightStyle: Boolean): Int {
+        return if (useLightStyle) {
+            resolveSystemColor("system_neutral1_10", 0xFFF5F1E9.toInt())
+        } else {
+            resolveSystemColor("system_neutral1_900", 0xFF1C1B1F.toInt())
+        }
+    }
+
+    private fun getNavBarIconColor(useLightStyle: Boolean): Int {
+        return if (useLightStyle) {
+            resolveSystemColor("system_neutral1_800", 0xFF2E2E2E.toInt())
+        } else {
+            resolveSystemColor("system_neutral1_50", 0xFFE6E1E5.toInt())
+        }
+    }
+
+    private fun getNavBarRippleColor(useLightStyle: Boolean): Int {
+        return if (useLightStyle) {
+            resolveSystemColor("system_neutral1_400", 0x33000000)
+        } else {
+            resolveSystemColor("system_neutral1_50", 0x33FFFFFF)
+        }
+    }
+
+    private fun applyNavBarIconTint(useLightStyle: Boolean) {
+        val color = getNavBarIconColor(useLightStyle)
+        val tint = ColorStateList.valueOf(color)
+        navButtons.forEach { it.imageTintList = tint }
+    }
+
+    private fun applyNavBarRippleColor(useLightStyle: Boolean) {
+        val rippleColor = getNavBarRippleColor(useLightStyle)
+        val colorStateList = ColorStateList.valueOf(rippleColor)
+        navButtons.forEach { button ->
+            val rippleDrawable = button.background as? RippleDrawable ?: return@forEach
+            rippleDrawable.setColor(colorStateList)
+        }
+    }
+
     private fun updateNavBarBackground() {
+        syncOrientationIfNeeded()
         val bar = navBarView ?: return
         val currentBg = bar.background
 
         val shouldUseImageBackground =
             isOnHomeScreen && settings.homeBgEnabled && !isRecentsVisible
+        val useLightStyle = !shouldUseImageBackground && useLightNavStyle
 
         if (shouldUseImageBackground) {
-            val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
+            val isLandscape = resolveCurrentOrientation() == Configuration.ORIENTATION_LANDSCAPE
             val targetBitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
 
             if (targetBitmap != null) {
@@ -559,15 +670,20 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 }
             }
         } else {
-            if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
-                Log.d(TAG, "Applying black background for app/recents view.")
-                bar.background = ColorDrawable(Color.BLACK)
+            val targetColor = getNavBarBackgroundColor(useLightStyle)
+            if ((currentBg as? ColorDrawable)?.color != targetColor) {
+                Log.d(TAG, "Applying color background for app/recents view. Light=$useLightStyle")
+                bar.background = ColorDrawable(targetColor)
             }
         }
+
+        applyNavBarIconTint(useLightStyle)
+        applyNavBarRippleColor(useLightStyle)
     }
 
     fun reloadBackgroundImages() {
         loadBackgroundBitmaps()
         updateNavBarBackground()
     }
+
 }
