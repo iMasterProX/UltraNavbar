@@ -190,6 +190,14 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         calculateNavBarHeight()
         checkImeVisibility()
+
+        // 초기 상태 확인 - 서비스 시작 시 홈화면인지 체크
+        handler.postDelayed({
+            updateHomeAndRecentsFromWindows()
+            checkFullscreenState()
+            scheduleStateCheck()
+        }, 300)
+
         Log.i(TAG, "Overlay created and service fully initialized")
     }
 
@@ -500,18 +508,6 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun isHomeOverlayPackage(packageName: String): Boolean {
         if (packageName.isBlank()) return false
         return packageName.lowercase().contains("quicksearchbox")
-    }
-
-    private fun shouldExitHomeImmediately(
-        packageName: String,
-        isRecents: Boolean,
-        isSystemUi: Boolean
-    ): Boolean {
-        if (isSystemUi || isRecents) return false
-        if (packageName.isBlank()) return false
-        if (isLauncherPackage(packageName)) return false
-        if (isHomeOverlayPackage(packageName)) return false
-        return true
     }
 
     private fun updateHomeAndRecentsFromWindows() {

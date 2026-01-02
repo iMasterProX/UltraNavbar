@@ -98,7 +98,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             isShowing = true
 
             loadBackgroundBitmaps()
-            updateNavBarBackground()
+            // 초기 배경 강제 적용
+            updateNavBarBackground(forceUpdate = true)
 
             // 초기 패널 버튼 상태(기본: 닫힘)
             updatePanelButtonState(isOpen = false)
@@ -643,7 +644,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     /**
      * 네비게이션 바 배경색 결정 (Android 12 스타일)
-     * - 다크모드 OFF (라이트 모드) → 밝은 크림/베이지 톤 (Material You neutral1_10)
+     * - 다크모드 OFF (라이트 모드) → 순수 흰색
      * - 다크모드 ON (다크 모드) → 어두운 그레이 톤 (Material You neutral1_900)
      */
     private fun getNavBarBackgroundColor(): Int {
@@ -651,8 +652,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             // 다크모드 ON → 어두운 그레이 (Android 12 기본 다크 네비바)
             resolveSystemColor("system_neutral1_900", 0xFF1C1B1F.toInt())
         } else {
-            // 다크모드 OFF → 밝은 크림색 (Android 12 기본 라이트 네비바)
-            resolveSystemColor("system_neutral1_10", 0xFFF5F5F5.toInt())
+            // 다크모드 OFF → 순수 흰색 (Android 12 기본 라이트 네비바)
+            Color.WHITE
         }
     }
 
@@ -666,8 +667,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             // 다크모드 ON → 밝은 그레이 아이콘
             resolveSystemColor("system_neutral1_50", 0xFFE6E1E5.toInt())
         } else {
-            // 다크모드 OFF → 어두운 그레이 아이콘
-            resolveSystemColor("system_neutral1_800", 0xFF49454F.toInt())
+            // 다크모드 OFF → 어두운 그레이 아이콘 (순수 검정 대신 약간 부드러운 색상)
+            0xFF3C3C3C.toInt()
         }
     }
 
@@ -677,10 +678,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun getNavBarRippleColor(): Int {
         return if (isSystemInDarkMode()) {
             // 다크모드 ON → 밝은 리플
-            resolveSystemColor("system_neutral1_100", 0x33FFFFFF)
+            0x33FFFFFF
         } else {
             // 다크모드 OFF → 어두운 리플
-            resolveSystemColor("system_neutral1_300", 0x33000000)
+            0x33000000
         }
     }
 
