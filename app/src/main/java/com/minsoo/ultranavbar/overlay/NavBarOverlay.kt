@@ -626,39 +626,61 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 네비게이션 바 배경색 결정
-     * - 다크모드 OFF (라이트 모드) → 흰색 배경
-     * - 다크모드 ON (다크 모드) → 검은색 배경
+     * 시스템 색상 리소스 조회 (Android 12+ Material You 지원)
+     */
+    private fun resolveSystemColor(name: String, fallback: Int): Int {
+        val id = context.resources.getIdentifier(name, "color", "android")
+        return if (id != 0) {
+            try {
+                context.getColor(id)
+            } catch (e: Exception) {
+                fallback
+            }
+        } else {
+            fallback
+        }
+    }
+
+    /**
+     * 네비게이션 바 배경색 결정 (Android 12 스타일)
+     * - 다크모드 OFF (라이트 모드) → 밝은 크림/베이지 톤 (Material You neutral1_10)
+     * - 다크모드 ON (다크 모드) → 어두운 그레이 톤 (Material You neutral1_900)
      */
     private fun getNavBarBackgroundColor(): Int {
         return if (isSystemInDarkMode()) {
-            Color.BLACK  // 다크모드 ON → 검은색
+            // 다크모드 ON → 어두운 그레이 (Android 12 기본 다크 네비바)
+            resolveSystemColor("system_neutral1_900", 0xFF1C1B1F.toInt())
         } else {
-            Color.WHITE  // 다크모드 OFF → 흰색
+            // 다크모드 OFF → 밝은 크림색 (Android 12 기본 라이트 네비바)
+            resolveSystemColor("system_neutral1_10", 0xFFF5F5F5.toInt())
         }
     }
 
     /**
-     * 네비게이션 바 아이콘 색상 결정
-     * - 다크모드 OFF → 검은색 아이콘 (흰색 배경에서 잘 보이도록)
-     * - 다크모드 ON → 흰색 아이콘 (검은색 배경에서 잘 보이도록)
+     * 네비게이션 바 아이콘 색상 결정 (Android 12 스타일)
+     * - 다크모드 OFF → 어두운 그레이 아이콘
+     * - 다크모드 ON → 밝은 그레이 아이콘
      */
     private fun getNavBarIconColor(): Int {
         return if (isSystemInDarkMode()) {
-            Color.WHITE  // 다크모드 ON → 흰색 아이콘
+            // 다크모드 ON → 밝은 그레이 아이콘
+            resolveSystemColor("system_neutral1_50", 0xFFE6E1E5.toInt())
         } else {
-            Color.BLACK  // 다크모드 OFF → 검은색 아이콘
+            // 다크모드 OFF → 어두운 그레이 아이콘
+            resolveSystemColor("system_neutral1_800", 0xFF49454F.toInt())
         }
     }
 
     /**
-     * 네비게이션 바 리플 색상 결정
+     * 네비게이션 바 리플 색상 결정 (Android 12 스타일)
      */
     private fun getNavBarRippleColor(): Int {
         return if (isSystemInDarkMode()) {
-            0x33FFFFFF  // 다크모드 ON → 흰색 리플
+            // 다크모드 ON → 밝은 리플
+            resolveSystemColor("system_neutral1_100", 0x33FFFFFF)
         } else {
-            0x33000000  // 다크모드 OFF → 검은색 리플
+            // 다크모드 OFF → 어두운 리플
+            resolveSystemColor("system_neutral1_300", 0x33000000)
         }
     }
 
