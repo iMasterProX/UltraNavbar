@@ -130,15 +130,14 @@ class NavBarAccessibilityService : AccessibilityService() {
                     // 잠금화면에서는 숨김 상태 유지, unlockPending도 유지
                 }
                 Intent.ACTION_USER_PRESENT -> {
-                    Log.d(TAG, "User present, showing with fade animation only")
-                    handler.postDelayed({
-                        unlockPending = false  // 잠금해제 완료, 플래그 해제
-                        homeExitGraceUntil = 0
-                        startHomePolling(1500)
-                        // 페이드 효과로만 오버레이 표시 - forceUnlock=true로 호출
-                        updateOverlayVisibility(forceFade = true, forceAnimation = true, forceUnlock = true)
-                        scheduleStateCheck()
-                    }, 150)
+                    Log.d(TAG, "User present, showing with fade animation only (immediate)")
+                    // 즉시 실행 - 딜레이 없이
+                    unlockPending = false  // 잠금해제 완료, 플래그 해제
+                    homeExitGraceUntil = 0
+                    startHomePolling(1500)
+                    // 페이드 효과로만 오버레이 표시 - forceUnlock=true로 호출
+                    updateOverlayVisibility(forceFade = true, forceAnimation = true, forceUnlock = true)
+                    scheduleStateCheck()
                 }
             }
         }
@@ -306,11 +305,16 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         updateDefaultNavStyleFromSystem()
 
-        // orientation 변경 후 fullscreen 상태 재확인 (약간 딜레이로 안정화)
+        // orientation 변경 후 fullscreen 상태 재확인 - 즉시 한번 + 딜레이 후 한번
+        checkFullscreenState()
+        scheduleStateCheck()
+
+        // 딜레이 후 다시 확인 (레이아웃 안정화 후)
         handler.postDelayed({
+            calculateNavBarHeight()  // 다시 높이 계산
             checkFullscreenState()
             scheduleStateCheck()
-        }, 100)
+        }, 200)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

@@ -411,16 +411,35 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     fun handleOrientationChange(newOrientation: Int) {
-        if (currentOrientation == newOrientation) return
+        val oldOrientation = currentOrientation
+        val changed = currentOrientation != newOrientation
+
+        // 항상 orientation 상태 동기화 (강제)
         currentOrientation = newOrientation
 
         val orientationName = if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
-        Log.d(TAG, "Orientation changed to: $orientationName")
+        val oldOrientationName = if (oldOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+        Log.d(TAG, "handleOrientationChange: $oldOrientationName -> $orientationName (changed=$changed)")
 
-        // 높이가 바뀔 수 있으므로 레이아웃 파라미터 갱신
+        // 높이가 바뀔 수 있으므로 레이아웃 파라미터 갱신 (항상 수행)
         rootView?.let { root ->
             val params = createLayoutParams()
-            windowManager.updateViewLayout(root, params)
+            try {
+                windowManager.updateViewLayout(root, params)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update layout params on orientation change", e)
+            }
+        }
+
+        // orientation 변경 시 배경 이미지도 다시 로드 (필요 시)
+        if (changed) {
+            // 배경 비트맵이 없으면 다시 로드
+            val needReload = (newOrientation == Configuration.ORIENTATION_PORTRAIT && portraitBgBitmap == null) ||
+                             (newOrientation == Configuration.ORIENTATION_LANDSCAPE && landscapeBgBitmap == null)
+            if (needReload && settings.homeBgEnabled) {
+                Log.d(TAG, "Reloading background bitmaps due to orientation change")
+                loadBackgroundBitmaps()
+            }
         }
 
         // 배경 이미지 강제 갱신 (orientation 변경 시 올바른 배경 적용)
@@ -596,43 +615,61 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         updateNavBarBackground()
     }
 
-    private fun resolveSystemColor(name: String, fallback: Int): Int {
-        val id = context.resources.getIdentifier(name, "color", "android")
-        return if (id != 0) context.getColor(id) else fallback
+    /**
+     * 시스템 다크모드 상태 직접 확인
+     * - 다크모드 OFF → false (라이트 모드)
+     * - 다크모드 ON → true (다크 모드)
+     */
+    private fun isSystemInDarkMode(): Boolean {
+        val mode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        return mode == Configuration.UI_MODE_NIGHT_YES
     }
 
-    private fun getNavBarBackgroundColor(useLightStyle: Boolean): Int {
-        return if (useLightStyle) {
-            resolveSystemColor("system_neutral1_10", 0xFFF5F1E9.toInt())
+    /**
+     * 네비게이션 바 배경색 결정
+     * - 다크모드 OFF (라이트 모드) → 흰색 배경
+     * - 다크모드 ON (다크 모드) → 검은색 배경
+     */
+    private fun getNavBarBackgroundColor(): Int {
+        return if (isSystemInDarkMode()) {
+            Color.BLACK  // 다크모드 ON → 검은색
         } else {
-            resolveSystemColor("system_neutral1_900", 0xFF1C1B1F.toInt())
+            Color.WHITE  // 다크모드 OFF → 흰색
         }
     }
 
-    private fun getNavBarIconColor(useLightStyle: Boolean): Int {
-        return if (useLightStyle) {
-            resolveSystemColor("system_neutral1_800", 0xFF2E2E2E.toInt())
+    /**
+     * 네비게이션 바 아이콘 색상 결정
+     * - 다크모드 OFF → 검은색 아이콘 (흰색 배경에서 잘 보이도록)
+     * - 다크모드 ON → 흰색 아이콘 (검은색 배경에서 잘 보이도록)
+     */
+    private fun getNavBarIconColor(): Int {
+        return if (isSystemInDarkMode()) {
+            Color.WHITE  // 다크모드 ON → 흰색 아이콘
         } else {
-            resolveSystemColor("system_neutral1_50", 0xFFE6E1E5.toInt())
+            Color.BLACK  // 다크모드 OFF → 검은색 아이콘
         }
     }
 
-    private fun getNavBarRippleColor(useLightStyle: Boolean): Int {
-        return if (useLightStyle) {
-            resolveSystemColor("system_neutral1_400", 0x33000000)
+    /**
+     * 네비게이션 바 리플 색상 결정
+     */
+    private fun getNavBarRippleColor(): Int {
+        return if (isSystemInDarkMode()) {
+            0x33FFFFFF  // 다크모드 ON → 흰색 리플
         } else {
-            resolveSystemColor("system_neutral1_50", 0x33FFFFFF)
+            0x33000000  // 다크모드 OFF → 검은색 리플
         }
     }
 
-    private fun applyNavBarIconTint(useLightStyle: Boolean) {
-        val color = getNavBarIconColor(useLightStyle)
+    private fun applyNavBarIconTint() {
+        val color = getNavBarIconColor()
         val tint = ColorStateList.valueOf(color)
         navButtons.forEach { it.imageTintList = tint }
     }
 
-    private fun applyNavBarRippleColor(useLightStyle: Boolean) {
-        val rippleColor = getNavBarRippleColor(useLightStyle)
+    private fun applyNavBarRippleColor() {
+        val rippleColor = getNavBarRippleColor()
         val colorStateList = ColorStateList.valueOf(rippleColor)
         navButtons.forEach { button ->
             val rippleDrawable = button.background as? RippleDrawable ?: return@forEach
@@ -650,7 +687,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         val shouldUseImageBackground =
             isOnHomeScreen && settings.homeBgEnabled && !isRecentsVisible
-        val useLightStyle = !shouldUseImageBackground && useLightNavStyle
+        val isDarkMode = isSystemInDarkMode()
 
         if (shouldUseImageBackground) {
             val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
@@ -674,16 +711,25 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     bar.background = ColorDrawable(Color.BLACK)
                 }
             }
+            // 홈화면 커스텀 배경 사용 시: 흰색 아이콘/리플 (배경이 어두우므로)
+            val tint = ColorStateList.valueOf(Color.WHITE)
+            navButtons.forEach { it.imageTintList = tint }
+            val rippleColorStateList = ColorStateList.valueOf(0x33FFFFFF)
+            navButtons.forEach { button ->
+                val rippleDrawable = button.background as? RippleDrawable ?: return@forEach
+                rippleDrawable.setColor(rippleColorStateList)
+            }
         } else {
-            val targetColor = getNavBarBackgroundColor(useLightStyle)
+            // 앱 실행 중: 다크모드 여부에 따라 배경색 결정
+            val targetColor = getNavBarBackgroundColor()
             if (needsUpdate || (currentBg as? ColorDrawable)?.color != targetColor) {
-                Log.d(TAG, "Applying color background for app/recents view. Light=$useLightStyle")
+                Log.d(TAG, "Applying color background for app/recents view. DarkMode=$isDarkMode, color=${if (isDarkMode) "BLACK" else "WHITE"}")
                 bar.background = ColorDrawable(targetColor)
             }
+            // 다크모드 여부에 따라 아이콘/리플 색상 설정
+            applyNavBarIconTint()
+            applyNavBarRippleColor()
         }
-
-        applyNavBarIconTint(useLightStyle)
-        applyNavBarRippleColor(useLightStyle)
     }
 
     fun reloadBackgroundImages() {
