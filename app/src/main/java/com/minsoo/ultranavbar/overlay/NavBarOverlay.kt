@@ -397,7 +397,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             windowManager.updateViewLayout(root, params)
         }
 
-        updateNavBarBackground()
+        updateNavBarBackground(forceUpdate = true)
         updatePanelButtonState(isOpen = isPanelOpenUi)
 
         if (wasShowing) {
@@ -744,11 +744,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         } else {
             // 앱 실행 중: 다크모드 여부에 따라 배경색 결정
             val targetColor = getNavBarBackgroundColor()
-            if (needsUpdate || (currentBg as? ColorDrawable)?.color != targetColor) {
-                Log.d(TAG, "Applying color background for app/recents view. DarkMode=$isDarkMode, color=${if (isDarkMode) "BLACK" else "WHITE"}")
+            val currentColor = (currentBg as? ColorDrawable)?.color
+            val colorChanged = currentColor != targetColor
+            val wasBitmap = currentBg is BitmapDrawable
+
+            // 배경이 비트맵이었거나, 색상이 변경되었거나, 강제 업데이트인 경우 항상 적용
+            if (needsUpdate || colorChanged || wasBitmap) {
+                Log.d(TAG, "Applying color background for app/recents view. DarkMode=$isDarkMode, targetColor=${String.format("#%08X", targetColor)}, wasBitmap=$wasBitmap")
                 bar.background = ColorDrawable(targetColor)
             }
-            // 다크모드 여부에 따라 아이콘/리플 색상 설정
+            // 다크모드 여부에 따라 아이콘/리플 색상 설정 (항상 적용)
             applyNavBarIconTint()
             applyNavBarRippleColor()
         }
