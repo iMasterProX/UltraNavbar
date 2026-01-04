@@ -411,6 +411,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             showGestureOverlay()  // 스와이프 다운 감지 활성화
         }
 
+        // 윈도우 높이를 네비바 높이로 복원 (핫스팟만 보이던 상태에서 복원)
+        updateWindowHeight(getSystemNavigationBarHeightPx())
+
         // 이미 보이는 상태에서 fade 요청이 오면 fade 애니메이션만 적용
         if (isShowing) {
             if (fade) {
@@ -485,9 +488,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             bar.clearAnimation()
             bar.animate().cancel()
 
+            val shouldShowHotspot = showHotspot && settings.hotspotEnabled
+
             if (!animate) {
                 bar.visibility = View.GONE
                 backgroundView?.visibility = View.GONE
+                // 윈도우 크기를 핫스팟 영역만 차지하도록 축소 (터치 통과를 위해)
+                if (shouldShowHotspot) {
+                    updateWindowHeight(dpToPx(settings.hotspotHeight))
+                }
             } else {
                 val slideDown = TranslateAnimation(0f, 0f, 0f, bar.height.toFloat()).apply {
                     duration = ANIMATION_DURATION
@@ -496,6 +505,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         override fun onAnimationEnd(animation: Animation?) {
                             bar.visibility = View.GONE
                             backgroundView?.visibility = View.GONE
+                            // 애니메이션 완료 후 윈도우 크기 축소
+                            if (shouldShowHotspot) {
+                                updateWindowHeight(dpToPx(settings.hotspotHeight))
+                            }
                         }
                         override fun onAnimationRepeat(animation: Animation?) {}
                     })
@@ -503,12 +516,22 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 bar.startAnimation(slideDown)
             }
 
-            hotspotView?.visibility =
-                if (showHotspot && settings.hotspotEnabled) View.VISIBLE else View.GONE
+            hotspotView?.visibility = if (shouldShowHotspot) View.VISIBLE else View.GONE
 
             isShowing = false
             hideGestureOverlay()  // 제스처 오버레이 숨김 및 상태 리셋
             Log.d(TAG, "Overlay hidden (animate=$animate)")
+        }
+    }
+
+    private fun updateWindowHeight(heightPx: Int) {
+        try {
+            val params = rootView?.layoutParams as? WindowManager.LayoutParams ?: return
+            params.height = heightPx
+            windowManager.updateViewLayout(rootView, params)
+            Log.d(TAG, "Window height updated to $heightPx")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update window height", e)
         }
     }
 
