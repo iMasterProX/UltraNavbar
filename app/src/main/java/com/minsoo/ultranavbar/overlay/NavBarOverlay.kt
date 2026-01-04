@@ -361,6 +361,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun show(fade: Boolean = false) {
         if (isShowing) return
 
+        backgroundView?.visibility = View.VISIBLE
         navBarView?.let { bar ->
             bar.clearAnimation()
             bar.visibility = View.VISIBLE
@@ -392,6 +393,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             if (!animate) {
                 bar.visibility = View.GONE
+                backgroundView?.visibility = View.GONE
             } else {
                 val slideDown = TranslateAnimation(0f, 0f, 0f, bar.height.toFloat()).apply {
                     duration = ANIMATION_DURATION
@@ -399,6 +401,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         override fun onAnimationStart(animation: Animation?) {}
                         override fun onAnimationEnd(animation: Animation?) {
                             bar.visibility = View.GONE
+                            backgroundView?.visibility = View.GONE
                         }
                         override fun onAnimationRepeat(animation: Animation?) {}
                     })
