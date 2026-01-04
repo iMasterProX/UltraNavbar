@@ -42,7 +42,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     companion object {
         private const val TAG = "NavBarOverlay"
         private const val ANIMATION_DURATION = 200L
-        private const val BG_TRANSITION_DURATION = 300  // 배경 전환 애니메이션 시간 (ms)
+        private const val BG_TRANSITION_DURATION = 350  // 배경 전환 애니메이션 시간 (ms)
         private const val DEFAULT_NAV_BUTTON_DP = 48
     }
 
@@ -579,9 +579,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
                     }
 
-                    // 검은 배경에서 이미지 배경으로 전환 시 페이드 애니메이션 적용
-                    if (currentBg is ColorDrawable) {
-                        val transition = TransitionDrawable(arrayOf(currentBg, bgDrawable))
+                    // 검은 배경에서 이미지 배경으로 전환 시 페이드 애니메이션 적용 (Android 12 스타일)
+                    if (currentBg is ColorDrawable || currentBg is TransitionDrawable) {
+                        val fromDrawable = if (currentBg is TransitionDrawable) {
+                            currentBg.getDrawable(currentBg.numberOfLayers - 1)
+                        } else {
+                            currentBg
+                        }
+                        val transition = TransitionDrawable(arrayOf(fromDrawable, bgDrawable)).apply {
+                            isCrossFadeEnabled = true  // 자연스러운 크로스페이드
+                        }
                         bar.background = transition
                         transition.startTransition(BG_TRANSITION_DURATION)
                     } else {
@@ -599,15 +606,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 Log.d(TAG, "Applying black background for app/recents view.")
                 val blackDrawable = ColorDrawable(Color.BLACK)
 
-                // 이미지 배경에서 검은 배경으로 전환 시 페이드 애니메이션 적용
+                // 이미지 배경에서 검은 배경으로 전환 시 페이드 애니메이션 적용 (Android 12 스타일)
                 if (currentBg is BitmapDrawable || currentBg is TransitionDrawable) {
                     val fromDrawable = if (currentBg is TransitionDrawable) {
-                        // TransitionDrawable인 경우 마지막 레이어 사용
                         currentBg.getDrawable(currentBg.numberOfLayers - 1)
                     } else {
                         currentBg
                     }
-                    val transition = TransitionDrawable(arrayOf(fromDrawable, blackDrawable))
+                    val transition = TransitionDrawable(arrayOf(fromDrawable, blackDrawable)).apply {
+                        isCrossFadeEnabled = true  // 자연스러운 크로스페이드
+                    }
                     bar.background = transition
                     transition.startTransition(BG_TRANSITION_DURATION)
                 } else {
