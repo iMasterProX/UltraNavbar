@@ -74,6 +74,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var pendingHomeState: Runnable? = null
     private var pendingRecentsState: Runnable? = null
 
+    // 핫스팟 스와이프 감지용 변수
+    private var hotspotTouchStartY: Float = 0f
+    private var hotspotTouchStartTime: Long = 0L
+    private val SWIPE_THRESHOLD_DP = 30  // 스와이프로 인식하는 최소 거리 (dp)
+
     @SuppressLint("ClickableViewAccessibility")
     fun create() {
         if (isCreated) return
@@ -206,6 +211,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     @SuppressLint("ClickableViewAccessibility")
     private fun createHotspot() {
         val hotspotHeightPx = dpToPx(settings.hotspotHeight)
+        val swipeThresholdPx = dpToPx(SWIPE_THRESHOLD_DP)
 
         hotspotView = View(context).apply {
             layoutParams = FrameLayout.LayoutParams(
@@ -223,12 +229,34 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     return@setOnTouchListener false
                 }
 
-                if (event.action == MotionEvent.ACTION_DOWN) {
-                    Log.d(TAG, "Hotspot touched, showing overlay")
-                    show(fade = false)
-                    true
-                } else {
-                    false
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        // 터치 시작 위치 기록
+                        hotspotTouchStartY = event.rawY
+                        hotspotTouchStartTime = System.currentTimeMillis()
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        // 위로 스와이프 감지 (Y좌표가 감소하면 위로 이동)
+                        val deltaY = hotspotTouchStartY - event.rawY
+                        if (deltaY >= swipeThresholdPx) {
+                            Log.d(TAG, "Hotspot swipe up detected, showing overlay")
+                            show(fade = false)
+                            // 스와이프 완료 후 다음 제스처를 위해 초기화
+                            hotspotTouchStartY = event.rawY
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        // 터치 종료 시에도 스와이프 체크
+                        val deltaY = hotspotTouchStartY - event.rawY
+                        if (deltaY >= swipeThresholdPx) {
+                            Log.d(TAG, "Hotspot swipe up on release, showing overlay")
+                            show(fade = false)
+                        }
+                        true
+                    }
+                    else -> false
                 }
             }
         }
