@@ -34,6 +34,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         private const val TAG = "NavBarAccessibility"
         private const val NOTIFICATION_ID = 1
         private const val NOTIFICATION_CHANNEL_ID = "UltraNavBarServiceChannel"
+        private const val UNLOCK_HOME_FADE_WINDOW_MS = 2000L
 
         @Volatile
         var instance: NavBarAccessibilityService? = null
@@ -54,6 +55,8 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isImeVisible: Boolean = false
     private var lastImeEventAt: Long = 0
     private var imeFocusActive: Boolean = false
+    private var unlockInstantPending: Boolean = false
+    private var unlockInstantStartedAt: Long = 0
 
     private var launcherPackages: Set<String> = emptySet()
 
@@ -328,6 +331,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         val newOnHomeScreen = launcherPackages.contains(packageName) && !isRecents
         if (isOnHomeScreen != newOnHomeScreen) {
+            maybePrepareUnlockHomeInstant(newOnHomeScreen)
             isOnHomeScreen = newOnHomeScreen
             Log.d(TAG, "Home screen state changed: $isOnHomeScreen")
             overlay?.setHomeScreenState(isOnHomeScreen)
@@ -371,6 +375,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         val newOnHomeScreen = launcherPackages.contains(packageName) && !isRecents
         if (isOnHomeScreen != newOnHomeScreen) {
+            maybePrepareUnlockHomeInstant(newOnHomeScreen)
             isOnHomeScreen = newOnHomeScreen
             Log.d(TAG, "Home screen state (windows) changed: $isOnHomeScreen")
             overlay?.setHomeScreenState(isOnHomeScreen)
@@ -415,8 +420,9 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         // 목적: "기본 네비바가 숨겨진 상태"면 커스텀 네비바도 숨김
         val newFullscreenState = navBarHiddenOrGestureOnly || !navBarVisible
+        val fullscreenChanged = isFullscreen != newFullscreenState
 
-        if (isFullscreen != newFullscreenState) {
+        if (fullscreenChanged) {
             isFullscreen = newFullscreenState
             Log.d(
                 TAG,
@@ -428,6 +434,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         } else {
             if (isFullscreen) startFullscreenPolling()
         }
+        overlay?.setFullscreenState(isFullscreen)
     }
 
     private fun getScreenBounds(): Rect {
@@ -500,9 +507,48 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun markUnlockPending() {
+        unlockInstantPending = true
+        unlockInstantStartedAt = 0L
+    }
+
+    private fun maybeExpireUnlockPending(now: Long) {
+        if (!unlockInstantPending) return
+        if (unlockInstantStartedAt == 0L) return
+        if (now - unlockInstantStartedAt > UNLOCK_HOME_FADE_WINDOW_MS) {
+            unlockInstantPending = false
+            unlockInstantStartedAt = 0L
+        }
+    }
+
+    private fun maybePrepareUnlockHomeInstant(onHomeScreen: Boolean) {
+        if (!unlockInstantPending) return
+        val now = SystemClock.elapsedRealtime()
+        if (unlockInstantStartedAt == 0L) {
+            unlockInstantStartedAt = now
+        }
+        if (now - unlockInstantStartedAt > UNLOCK_HOME_FADE_WINDOW_MS) {
+            unlockInstantPending = false
+            unlockInstantStartedAt = 0L
+            return
+        }
+        if (onHomeScreen) {
+            overlay?.prepareForUnlockHomeInstant()
+        }
+    }
+
     private fun updateOverlayVisibility(forceFade: Boolean = false) {
         val lockScreenActive = isLockScreenActive()
+        val now = SystemClock.elapsedRealtime()
+        if (lockScreenActive) {
+            markUnlockPending()
+        } else if (unlockInstantPending && unlockInstantStartedAt == 0L) {
+            unlockInstantStartedAt = now
+        }
         val shouldHide = shouldHideOverlay(lockScreenActive)
+        maybeExpireUnlockPending(now)
+        val shouldFade = forceFade
+        val shouldShowInstant = unlockInstantPending
         Log.d(
             TAG,
             "Update visibility: shouldHide=$shouldHide, lockscreen=$lockScreenActive, package=$currentPackage, fullscreen=$isFullscreen"
@@ -510,7 +556,15 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (shouldHide) {
             overlay?.hide(animate = !lockScreenActive, showHotspot = !lockScreenActive)
         } else {
-            overlay?.show(fade = forceFade)
+            maybePrepareUnlockHomeInstant(false)
+            if (shouldShowInstant) {
+                overlay?.markNextShowInstant()
+            }
+            overlay?.show(fade = shouldFade)
+            if (unlockInstantPending) {
+                unlockInstantPending = false
+                unlockInstantStartedAt = 0L
+            }
         }
     }
 
