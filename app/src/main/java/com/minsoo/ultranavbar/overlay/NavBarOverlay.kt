@@ -68,16 +68,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private var landscapeBgBitmap: Bitmap? = null
     private var portraitBgBitmap: Bitmap? = null
-    private val navButtons = mutableListOf<ImageButton>()
-    private var useLightNavStyle = false
     private val handler = Handler(Looper.getMainLooper())
     private var pendingHomeState: Runnable? = null
     private var pendingRecentsState: Runnable? = null
-
-    // 핫스팟 스와이프 감지용 변수
-    private var hotspotTouchStartY: Float = 0f
-    private var hotspotTouchStartTime: Long = 0L
-    private val SWIPE_THRESHOLD_DP = 30  // 스와이프로 인식하는 최소 거리 (dp)
 
     @SuppressLint("ClickableViewAccessibility")
     fun create() {
@@ -103,8 +96,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             isShowing = true
 
             loadBackgroundBitmaps()
-            // 초기 배경 강제 적용
-            updateNavBarBackground(forceUpdate = true)
+            updateNavBarBackground()
 
             // 초기 패널 버튼 상태(기본: 닫힘)
             updatePanelButtonState(isOpen = false)
@@ -155,8 +147,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             setPadding(dpToPx(16), 0, dpToPx(16), 0)
             clipChildren = false
         }
-
-        navButtons.clear()
 
         // Left group: Back / Home / Recents
         val leftGroup = LinearLayout(context).apply {
@@ -211,7 +201,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     @SuppressLint("ClickableViewAccessibility")
     private fun createHotspot() {
         val hotspotHeightPx = dpToPx(settings.hotspotHeight)
-        val swipeThresholdPx = dpToPx(SWIPE_THRESHOLD_DP)
 
         hotspotView = View(context).apply {
             layoutParams = FrameLayout.LayoutParams(
@@ -229,34 +218,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     return@setOnTouchListener false
                 }
 
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        // 터치 시작 위치 기록
-                        hotspotTouchStartY = event.rawY
-                        hotspotTouchStartTime = System.currentTimeMillis()
-                        true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        // 위로 스와이프 감지 (Y좌표가 감소하면 위로 이동)
-                        val deltaY = hotspotTouchStartY - event.rawY
-                        if (deltaY >= swipeThresholdPx) {
-                            Log.d(TAG, "Hotspot swipe up detected, showing overlay")
-                            show(fade = false)
-                            // 스와이프 완료 후 다음 제스처를 위해 초기화
-                            hotspotTouchStartY = event.rawY
-                        }
-                        true
-                    }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        // 터치 종료 시에도 스와이프 체크
-                        val deltaY = hotspotTouchStartY - event.rawY
-                        if (deltaY >= swipeThresholdPx) {
-                            Log.d(TAG, "Hotspot swipe up on release, showing overlay")
-                            show(fade = false)
-                        }
-                        true
-                    }
-                    else -> false
+                if (event.action == MotionEvent.ACTION_DOWN) {
+                    Log.d(TAG, "Hotspot touched, showing overlay")
+                    show(fade = false)
+                    true
+                } else {
+                    false
                 }
             }
         }
@@ -270,7 +237,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         iconResId: Int,
         sizePx: Int
     ): ImageButton {
-        val button = ImageButton(context).apply {
+        return ImageButton(context).apply {
             layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
 
             val rippleColor = ColorStateList.valueOf(Color.WHITE)
@@ -321,8 +288,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 }
             }
         }
-        navButtons.add(button)
-        return button
     }
 
     private fun addSpacer(parent: ViewGroup, width: Int) {
@@ -351,13 +316,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
-    fun show(fade: Boolean = false, forceAnimation: Boolean = false) {
+    fun show(fade: Boolean = false) {
+        if (isShowing) return
+
         navBarView?.let { bar ->
             bar.clearAnimation()
-
-            // 이미 보이는 상태에서 forceAnimation이 true면 애니메이션만 재생
-            if (isShowing && !forceAnimation) return
-
             bar.visibility = View.VISIBLE
 
             if (fade) {
@@ -365,8 +328,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     duration = ANIMATION_DURATION
                 }
                 bar.startAnimation(alphaAnim)
-            } else if (!isShowing) {
-                // 새로 보이는 경우에만 슬라이드 애니메이션
+            } else {
                 val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                     duration = ANIMATION_DURATION
                 }
@@ -375,7 +337,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             hotspotView?.visibility = View.GONE
             isShowing = true
-            Log.d(TAG, "Overlay shown (fade=$fade, forceAnimation=$forceAnimation)")
+            Log.d(TAG, "Overlay shown (fade=$fade)")
         }
     }
 
@@ -413,8 +375,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun refreshSettings() {
         if (!isCreated) return
 
-        val wasShowing = isShowing
-
         loadBackgroundBitmaps()
 
         rootView?.let { root ->
@@ -426,96 +386,28 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             windowManager.updateViewLayout(root, params)
         }
 
-        updateNavBarBackground(forceUpdate = true)
+        updateNavBarBackground()
         updatePanelButtonState(isOpen = isPanelOpenUi)
-
-        if (wasShowing) {
-            isShowing = false
-            show(fade = false)
-        } else {
-            navBarView?.visibility = View.GONE
-            hotspotView?.visibility =
-                if (settings.hotspotEnabled) View.VISIBLE else View.GONE
-        }
     }
 
     fun handleOrientationChange(newOrientation: Int) {
-        val oldOrientation = currentOrientation
-        val changed = currentOrientation != newOrientation
-
-        // 항상 orientation 상태 동기화 (강제)
+        if (currentOrientation == newOrientation) return
         currentOrientation = newOrientation
 
-        val orientationName = if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
-        val oldOrientationName = if (oldOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
-        Log.d(TAG, "handleOrientationChange: $oldOrientationName -> $orientationName (changed=$changed)")
+        Log.d(
+            TAG,
+            "Orientation changed to: ${
+                if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+            }"
+        )
 
-        // 높이가 바뀔 수 있으므로 레이아웃 파라미터 갱신 (항상 수행)
-        rootView?.let { root ->
-            val params = createLayoutParams()
-            try {
-                windowManager.updateViewLayout(root, params)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to update layout params on orientation change", e)
-            }
-        }
-
-        // orientation 변경 시 배경 이미지도 다시 로드 (필요 시)
-        if (changed) {
-            // 배경 비트맵이 없으면 다시 로드
-            val needReload = (newOrientation == Configuration.ORIENTATION_PORTRAIT && portraitBgBitmap == null) ||
-                             (newOrientation == Configuration.ORIENTATION_LANDSCAPE && landscapeBgBitmap == null)
-            if (needReload && settings.homeBgEnabled) {
-                Log.d(TAG, "Reloading background bitmaps due to orientation change")
-                loadBackgroundBitmaps()
-            }
-        }
-
-        // 배경 이미지 강제 갱신 (orientation 변경 시 올바른 배경 적용)
-        handler.post {
-            updateNavBarBackground(forceUpdate = true)
-        }
-    }
-
-    private fun resolveCurrentOrientation(): Int {
-        val configOrientation = context.resources.configuration.orientation
-        if (configOrientation == Configuration.ORIENTATION_LANDSCAPE ||
-            configOrientation == Configuration.ORIENTATION_PORTRAIT
-        ) {
-            return configOrientation
-        }
-        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            val bounds = windowManager.currentWindowMetrics.bounds
-            if (bounds.width() >= bounds.height()) {
-                Configuration.ORIENTATION_LANDSCAPE
-            } else {
-                Configuration.ORIENTATION_PORTRAIT
-            }
-        } else {
-            val metrics = context.resources.displayMetrics
-            if (metrics.widthPixels >= metrics.heightPixels) {
-                Configuration.ORIENTATION_LANDSCAPE
-            } else {
-                Configuration.ORIENTATION_PORTRAIT
-            }
-        }
-    }
-
-    private fun syncOrientationIfNeeded(): Boolean {
-        val actualOrientation = resolveCurrentOrientation()
-        if (currentOrientation == actualOrientation) return false
-
-        val oldOrientation = currentOrientation
-        currentOrientation = actualOrientation
-
-        val orientationName = if (actualOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
-        Log.d(TAG, "syncOrientationIfNeeded: orientation synced from ${if (oldOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"} to $orientationName")
-
+        // 높이가 바뀔 수 있으므로 레이아웃 파라미터 갱신
         rootView?.let { root ->
             val params = createLayoutParams()
             windowManager.updateViewLayout(root, params)
         }
-        return true
+
+        updateNavBarBackground()
     }
 
     fun destroy() {
@@ -543,57 +435,58 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         return (dp * context.resources.displayMetrics.density).toInt()
     }
 
-    fun setHomeScreenState(onHome: Boolean, immediate: Boolean = false) {
-        pendingHomeState?.let { handler.removeCallbacks(it) }
-        pendingHomeState = null
-
+    fun setHomeScreenState(onHome: Boolean) {
         if (onHome) {
+            pendingHomeState?.let { handler.removeCallbacks(it) }
+            pendingHomeState = null
             if (isOnHomeScreen) return
             isOnHomeScreen = true
-            Log.d(TAG, "Home screen state set: true (immediate)")
-            // 홈화면 진입은 항상 즉시 배경 적용
-            handler.post { updateNavBarBackground(forceUpdate = true) }
+            Log.d(TAG, "Home screen state set: true")
+            updateNavBarBackground()
             return
         }
 
         if (!isOnHomeScreen) return
-
-        // 앱으로 전환 시 - immediate이면 즉시, 아니면 짧은 딜레이
-        if (immediate) {
-            isOnHomeScreen = false
-            Log.d(TAG, "Home screen state set: false (immediate)")
-            handler.post { updateNavBarBackground(forceUpdate = true) }
-            return
-        }
-
-        // 짧은 딜레이 (100ms)로 앱 전환 감지 - 빠른 반응
+        pendingHomeState?.let { handler.removeCallbacks(it) }
         val task = Runnable {
             pendingHomeState = null
             if (!isOnHomeScreen) return@Runnable
             isOnHomeScreen = false
             Log.d(TAG, "Home screen state set: false (debounced)")
-            updateNavBarBackground(forceUpdate = true)
+            updateNavBarBackground()
         }
         pendingHomeState = task
-        handler.postDelayed(task, 100)
+        handler.postDelayed(task, 200)
     }
 
     fun setRecentsState(isRecents: Boolean) {
-        pendingRecentsState?.let { handler.removeCallbacks(it) }
-        pendingRecentsState = null
-
         if (isRecents) {
             if (isRecentsVisible) return
-            isRecentsVisible = true
-            Log.d(TAG, "Recents state set: true")
-            handler.post { updateNavBarBackground(forceUpdate = true) }
+            pendingRecentsState?.let { handler.removeCallbacks(it) }
+            pendingRecentsState = null
+
+            if (!isOnHomeScreen) {
+                isRecentsVisible = true
+                updateNavBarBackground()
+                return
+            }
+
+            val task = Runnable {
+                pendingRecentsState = null
+                if (isRecentsVisible) return@Runnable
+                isRecentsVisible = true
+                updateNavBarBackground()
+            }
+            pendingRecentsState = task
+            handler.postDelayed(task, 200)
             return
         }
 
+        pendingRecentsState?.let { handler.removeCallbacks(it) }
+        pendingRecentsState = null
         if (!isRecentsVisible) return
         isRecentsVisible = false
-        Log.d(TAG, "Recents state set: false")
-        handler.post { updateNavBarBackground(forceUpdate = true) }
+        updateNavBarBackground()
     }
 
     /**
@@ -638,118 +531,21 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
-    fun setLightNavStyle(isLight: Boolean) {
-        if (useLightNavStyle == isLight) return
-        useLightNavStyle = isLight
-        updateNavBarBackground()
-    }
-
-    /**
-     * 시스템 다크모드 상태 직접 확인
-     * - 다크모드 OFF → false (라이트 모드)
-     * - 다크모드 ON → true (다크 모드)
-     */
-    private fun isSystemInDarkMode(): Boolean {
-        val mode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        return mode == Configuration.UI_MODE_NIGHT_YES
-    }
-
-    /**
-     * 시스템 색상 리소스 조회 (Android 12+ Material You 지원)
-     */
-    private fun resolveSystemColor(name: String, fallback: Int): Int {
-        val id = context.resources.getIdentifier(name, "color", "android")
-        return if (id != 0) {
-            try {
-                context.getColor(id)
-            } catch (e: Exception) {
-                fallback
-            }
-        } else {
-            fallback
-        }
-    }
-
-    /**
-     * 네비게이션 바 배경색 결정 (Android 12 스타일)
-     * - 다크모드 OFF (라이트 모드) → 순수 흰색
-     * - 다크모드 ON (다크 모드) → 어두운 그레이 톤 (Material You neutral1_900)
-     */
-    private fun getNavBarBackgroundColor(): Int {
-        return if (isSystemInDarkMode()) {
-            // 다크모드 ON → 어두운 그레이 (Android 12 기본 다크 네비바)
-            resolveSystemColor("system_neutral1_900", 0xFF1C1B1F.toInt())
-        } else {
-            // 다크모드 OFF → 순수 흰색 (Android 12 기본 라이트 네비바)
-            Color.WHITE
-        }
-    }
-
-    /**
-     * 네비게이션 바 아이콘 색상 결정 (Android 12 스타일)
-     * - 다크모드 OFF → 어두운 그레이 아이콘
-     * - 다크모드 ON → 밝은 그레이 아이콘
-     */
-    private fun getNavBarIconColor(): Int {
-        return if (isSystemInDarkMode()) {
-            // 다크모드 ON → 밝은 그레이 아이콘
-            resolveSystemColor("system_neutral1_50", 0xFFE6E1E5.toInt())
-        } else {
-            // 다크모드 OFF → 어두운 그레이 아이콘 (순수 검정 대신 약간 부드러운 색상)
-            0xFF3C3C3C.toInt()
-        }
-    }
-
-    /**
-     * 네비게이션 바 리플 색상 결정 (Android 12 스타일)
-     */
-    private fun getNavBarRippleColor(): Int {
-        return if (isSystemInDarkMode()) {
-            // 다크모드 ON → 밝은 리플
-            0x33FFFFFF
-        } else {
-            // 다크모드 OFF → 어두운 리플
-            0x33000000
-        }
-    }
-
-    private fun applyNavBarIconTint() {
-        val color = getNavBarIconColor()
-        val tint = ColorStateList.valueOf(color)
-        navButtons.forEach { it.imageTintList = tint }
-    }
-
-    private fun applyNavBarRippleColor() {
-        val rippleColor = getNavBarRippleColor()
-        val colorStateList = ColorStateList.valueOf(rippleColor)
-        navButtons.forEach { button ->
-            val rippleDrawable = button.background as? RippleDrawable ?: return@forEach
-            rippleDrawable.setColor(colorStateList)
-        }
-    }
-
-    private fun updateNavBarBackground(forceUpdate: Boolean = false) {
-        // orientation 동기화 - 변경되면 강제 업데이트 필요
-        val orientationChanged = syncOrientationIfNeeded()
-        val needsUpdate = forceUpdate || orientationChanged
-
+    private fun updateNavBarBackground() {
         val bar = navBarView ?: return
         val currentBg = bar.background
 
         val shouldUseImageBackground =
             isOnHomeScreen && settings.homeBgEnabled && !isRecentsVisible
-        val isDarkMode = isSystemInDarkMode()
 
         if (shouldUseImageBackground) {
             val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
             val targetBitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
 
-            Log.d(TAG, "updateNavBarBackground: isLandscape=$isLandscape, hasBitmap=${targetBitmap != null}, needsUpdate=$needsUpdate, orientationChanged=$orientationChanged")
-
             if (targetBitmap != null) {
                 val currentBitmap = (currentBg as? BitmapDrawable)?.bitmap
-                if (needsUpdate || currentBitmap !== targetBitmap) {
-                    Log.d(TAG, "Applying pre-cropped background image. Landscape: $isLandscape")
+                if (currentBitmap !== targetBitmap) {
+                    Log.d(TAG, "Applying new pre-cropped background image. Landscape: $isLandscape")
 
                     val bgDrawable = BitmapDrawable(context.resources, targetBitmap).apply {
                         gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
@@ -757,34 +553,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     bar.background = bgDrawable
                 }
             } else {
-                if (needsUpdate || (currentBg as? ColorDrawable)?.color != Color.BLACK) {
-                    Log.d(TAG, "Fallback to black background (pre-cropped image not loaded). isLandscape=$isLandscape")
+                if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
+                    Log.d(TAG, "Fallback to black background (pre-cropped image not loaded).")
                     bar.background = ColorDrawable(Color.BLACK)
                 }
             }
-            // 홈화면 커스텀 배경 사용 시: 흰색 아이콘/리플 (배경이 어두우므로)
-            val tint = ColorStateList.valueOf(Color.WHITE)
-            navButtons.forEach { it.imageTintList = tint }
-            val rippleColorStateList = ColorStateList.valueOf(0x33FFFFFF)
-            navButtons.forEach { button ->
-                val rippleDrawable = button.background as? RippleDrawable ?: return@forEach
-                rippleDrawable.setColor(rippleColorStateList)
-            }
         } else {
-            // 앱 실행 중: 다크모드 여부에 따라 배경색 결정
-            val targetColor = getNavBarBackgroundColor()
-            val currentColor = (currentBg as? ColorDrawable)?.color
-            val colorChanged = currentColor != targetColor
-            val wasBitmap = currentBg is BitmapDrawable
-
-            // 배경이 비트맵이었거나, 색상이 변경되었거나, 강제 업데이트인 경우 항상 적용
-            if (needsUpdate || colorChanged || wasBitmap) {
-                Log.d(TAG, "Applying color background for app/recents view. DarkMode=$isDarkMode, targetColor=${String.format("#%08X", targetColor)}, wasBitmap=$wasBitmap")
-                bar.background = ColorDrawable(targetColor)
+            if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
+                Log.d(TAG, "Applying black background for app/recents view.")
+                bar.background = ColorDrawable(Color.BLACK)
             }
-            // 다크모드 여부에 따라 아이콘/리플 색상 설정 (항상 적용)
-            applyNavBarIconTint()
-            applyNavBarRippleColor()
         }
     }
 
@@ -792,5 +570,4 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         loadBackgroundBitmaps()
         updateNavBarBackground()
     }
-
 }
