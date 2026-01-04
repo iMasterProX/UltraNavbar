@@ -10,6 +10,7 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.TransitionDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Handler
 import android.os.Looper
@@ -41,6 +42,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     companion object {
         private const val TAG = "NavBarOverlay"
         private const val ANIMATION_DURATION = 200L
+        private const val BG_TRANSITION_DURATION = 300  // 배경 전환 애니메이션 시간 (ms)
         private const val DEFAULT_NAV_BUTTON_DP = 48
     }
 
@@ -576,7 +578,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     val bgDrawable = BitmapDrawable(context.resources, targetBitmap).apply {
                         gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
                     }
-                    bar.background = bgDrawable
+
+                    // 검은 배경에서 이미지 배경으로 전환 시 페이드 애니메이션 적용
+                    if (currentBg is ColorDrawable) {
+                        val transition = TransitionDrawable(arrayOf(currentBg, bgDrawable))
+                        bar.background = transition
+                        transition.startTransition(BG_TRANSITION_DURATION)
+                    } else {
+                        bar.background = bgDrawable
+                    }
                 }
             } else {
                 if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
@@ -587,7 +597,22 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         } else {
             if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
                 Log.d(TAG, "Applying black background for app/recents view.")
-                bar.background = ColorDrawable(Color.BLACK)
+                val blackDrawable = ColorDrawable(Color.BLACK)
+
+                // 이미지 배경에서 검은 배경으로 전환 시 페이드 애니메이션 적용
+                if (currentBg is BitmapDrawable || currentBg is TransitionDrawable) {
+                    val fromDrawable = if (currentBg is TransitionDrawable) {
+                        // TransitionDrawable인 경우 마지막 레이어 사용
+                        currentBg.getDrawable(currentBg.numberOfLayers - 1)
+                    } else {
+                        currentBg
+                    }
+                    val transition = TransitionDrawable(arrayOf(fromDrawable, blackDrawable))
+                    bar.background = transition
+                    transition.startTransition(BG_TRANSITION_DURATION)
+                } else {
+                    bar.background = blackDrawable
+                }
             }
         }
     }
