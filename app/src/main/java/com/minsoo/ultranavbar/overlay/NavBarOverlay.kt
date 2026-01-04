@@ -10,9 +10,10 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.TransitionDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Handler
+import android.animation.ValueAnimator
+import android.view.animation.PathInterpolator
 import android.os.Looper
 import android.util.Log
 import android.view.Gravity
@@ -52,6 +53,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private val settings: SettingsManager = SettingsManager.getInstance(context)
 
     private var rootView: FrameLayout? = null
+    private var backgroundView: View? = null  // 항상 검은색 - 시스템 네비바 가림용
     private var navBarView: ViewGroup? = null
     private var hotspotView: View? = null
     private var panelButton: ImageButton? = null
@@ -140,6 +142,18 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val barHeightPx = getSystemNavigationBarHeightPx()
         val buttonSizePx = dpToPx(DEFAULT_NAV_BUTTON_DP)
         val buttonSpacingPx = dpToPx(8)
+
+        // 항상 검은색인 배경 레이어 (시스템 네비바 가리기용)
+        backgroundView = View(context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                barHeightPx
+            ).apply {
+                gravity = Gravity.BOTTOM
+            }
+            setBackgroundColor(Color.BLACK)
+        }
+        rootView?.addView(backgroundView)
 
         val bar = RelativeLayout(context).apply {
             layoutParams = FrameLayout.LayoutParams(
@@ -448,6 +462,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             pendingRecentsState = null
             windowManager.removeView(rootView)
             rootView = null
+            backgroundView = null
             navBarView = null
             hotspotView = null
             panelButton = null
@@ -559,6 +574,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
+    // Android 12 표준 애니메이션 인터폴레이터 (STANDARD_DECELERATE)
+    private val android12Interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
+    private var bgAnimator: ValueAnimator? = null
+
     private fun updateNavBarBackground() {
         val bar = navBarView ?: return
         val currentBg = bar.background
@@ -579,18 +598,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
                     }
 
-                    // 검은 배경에서 이미지 배경으로 전환 시 페이드 애니메이션 적용 (Android 12 스타일)
-                    if (currentBg is ColorDrawable || currentBg is TransitionDrawable) {
-                        val fromDrawable = if (currentBg is TransitionDrawable) {
-                            currentBg.getDrawable(currentBg.numberOfLayers - 1)
-                        } else {
-                            currentBg
-                        }
-                        val transition = TransitionDrawable(arrayOf(fromDrawable, bgDrawable)).apply {
-                            isCrossFadeEnabled = true  // 자연스러운 크로스페이드
-                        }
-                        bar.background = transition
-                        transition.startTransition(BG_TRANSITION_DURATION)
+                    // 검은 배경에서 이미지 배경으로 전환: 페이드 인
+                    val needsFade = currentBg is ColorDrawable || currentBg?.alpha == 0
+                    if (needsFade) {
+                        bgDrawable.alpha = 0
+                        bar.background = bgDrawable
+                        animateBackgroundAlpha(bgDrawable, 0, 255)
                     } else {
                         bar.background = bgDrawable
                     }
@@ -602,26 +615,40 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 }
             }
         } else {
-            if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
+            val isCurrentlyImage = currentBg is BitmapDrawable && currentBg.alpha > 0
+            if (isCurrentlyImage) {
                 Log.d(TAG, "Applying black background for app/recents view.")
-                val blackDrawable = ColorDrawable(Color.BLACK)
-
-                // 이미지 배경에서 검은 배경으로 전환 시 페이드 애니메이션 적용 (Android 12 스타일)
-                if (currentBg is BitmapDrawable || currentBg is TransitionDrawable) {
-                    val fromDrawable = if (currentBg is TransitionDrawable) {
-                        currentBg.getDrawable(currentBg.numberOfLayers - 1)
-                    } else {
-                        currentBg
-                    }
-                    val transition = TransitionDrawable(arrayOf(fromDrawable, blackDrawable)).apply {
-                        isCrossFadeEnabled = true  // 자연스러운 크로스페이드
-                    }
-                    bar.background = transition
-                    transition.startTransition(BG_TRANSITION_DURATION)
-                } else {
-                    bar.background = blackDrawable
+                // 이미지 배경에서 검은 배경으로: 페이드 아웃 후 검은 배경으로 설정
+                animateBackgroundAlpha(currentBg as BitmapDrawable, 255, 0) {
+                    bar.background = ColorDrawable(Color.BLACK)
                 }
+            } else if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
+                bar.background = ColorDrawable(Color.BLACK)
             }
+        }
+    }
+
+    private fun animateBackgroundAlpha(
+        drawable: BitmapDrawable,
+        fromAlpha: Int,
+        toAlpha: Int,
+        onEnd: (() -> Unit)? = null
+    ) {
+        bgAnimator?.cancel()
+        bgAnimator = ValueAnimator.ofInt(fromAlpha, toAlpha).apply {
+            duration = BG_TRANSITION_DURATION.toLong()
+            interpolator = android12Interpolator
+            addUpdateListener { animation ->
+                drawable.alpha = animation.animatedValue as Int
+            }
+            if (onEnd != null) {
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        onEnd()
+                    }
+                })
+            }
+            start()
         }
     }
 
