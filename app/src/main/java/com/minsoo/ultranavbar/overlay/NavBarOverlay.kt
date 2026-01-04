@@ -55,6 +55,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var rootView: FrameLayout? = null
     private var backgroundView: View? = null  // 항상 검은색 - 시스템 네비바 가림용
     private var navBarView: ViewGroup? = null
+    private var gestureOverlayView: View? = null  // 스와이프 다운 감지용 투명 오버레이
     private var hotspotView: View? = null
     private var panelButton: ImageButton? = null
     private var backButton: ImageButton? = null
@@ -216,35 +217,48 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         bar.addView(rightGroup, rightParams)
 
         navBarView = bar
+        rootView?.addView(navBarView)
 
-        // 네비바에서 아래로 스와이프하면 숨기기 (제스처로 보여진 경우에만)
+        // 스와이프 다운 감지용 투명 오버레이 (제스처로 보여진 경우에만 활성화)
         val swipeThresholdPx = dpToPx(SWIPE_THRESHOLD_DP)
-        bar.setOnTouchListener { _, event ->
-            if (!isGestureShown) {
-                return@setOnTouchListener false
+        gestureOverlayView = View(context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                barHeightPx
+            ).apply {
+                gravity = Gravity.BOTTOM
             }
+            setBackgroundColor(Color.TRANSPARENT)
+            visibility = View.GONE  // 기본적으로 숨김
 
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    navBarTouchStartY = event.rawY
-                    false  // 버튼 클릭 이벤트 전달을 위해 false 반환
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val deltaY = event.rawY - navBarTouchStartY
-                    if (deltaY >= swipeThresholdPx) {
-                        Log.d(TAG, "Navbar swipe down detected, hiding overlay")
-                        isGestureShown = false
-                        hide(animate = true, showHotspot = true)
+            setOnTouchListener { _, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        navBarTouchStartY = event.rawY
                         true
-                    } else {
-                        false
                     }
+                    MotionEvent.ACTION_MOVE -> {
+                        val deltaY = event.rawY - navBarTouchStartY
+                        if (deltaY >= swipeThresholdPx) {
+                            Log.d(TAG, "Gesture overlay swipe down detected, hiding overlay")
+                            hideGestureOverlay()
+                            hide(animate = true, showHotspot = true)
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        val deltaY = event.rawY - navBarTouchStartY
+                        // 스와이프가 아닌 탭이면 오버레이 숨기고 버튼 클릭 허용
+                        if (deltaY < swipeThresholdPx) {
+                            hideGestureOverlay()
+                        }
+                        true
+                    }
+                    else -> false
                 }
-                else -> false
             }
         }
-
-        rootView?.addView(navBarView)
+        rootView?.addView(gestureOverlayView)
 
         // 배경 재적용(홈화면 + 옵션일 때)
         updateNavBarBackground()
@@ -394,7 +408,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun show(fade: Boolean = false, fromGesture: Boolean = false) {
         if (fromGesture) {
             gestureShowTime = android.os.SystemClock.elapsedRealtime()
-            isGestureShown = true
+            showGestureOverlay()  // 스와이프 다운 감지 활성화
         }
 
         // 이미 보이는 상태에서 fade 요청이 오면 fade 애니메이션만 적용
@@ -456,11 +470,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 제스처로 보여준 후 일정 시간 동안은 자동 숨김을 방지
+     * 자동 숨김 가능 여부 - setFullscreenState()로 처리하므로 항상 true
      */
     fun canAutoHide(): Boolean {
-        val elapsed = android.os.SystemClock.elapsedRealtime() - gestureShowTime
-        return elapsed > 3000  // 3초 동안 자동 숨김 방지
+        return true
     }
 
     fun hide(animate: Boolean = true, showHotspot: Boolean = true) {
@@ -492,7 +505,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 if (showHotspot && settings.hotspotEnabled) View.VISIBLE else View.GONE
 
             isShowing = false
-            isGestureShown = false  // 제스처 상태 리셋
+            hideGestureOverlay()  // 제스처 오버레이 숨김 및 상태 리셋
             Log.d(TAG, "Overlay hidden (animate=$animate)")
         }
     }
@@ -547,6 +560,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             rootView = null
             backgroundView = null
             navBarView = null
+            gestureOverlayView = null
             hotspotView = null
             panelButton = null
             backButton = null
@@ -735,8 +749,33 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
-    // 서비스에서 호출하는 stub 메서드들 (미구현 - 필요시 구현)
-    fun setFullscreenState(fullscreen: Boolean) { /* no-op */ }
+    /**
+     * 제스처 오버레이 표시 (스와이프 다운 감지 활성화)
+     */
+    private fun showGestureOverlay() {
+        gestureOverlayView?.visibility = View.VISIBLE
+        isGestureShown = true
+    }
+
+    /**
+     * 제스처 오버레이 숨김
+     */
+    private fun hideGestureOverlay() {
+        gestureOverlayView?.visibility = View.GONE
+        isGestureShown = false
+    }
+
+    /**
+     * 전체화면 상태 설정 - 전체화면 진입 시 제스처로 보여진 네비바 숨김
+     */
+    fun setFullscreenState(fullscreen: Boolean) {
+        if (fullscreen && isGestureShown) {
+            Log.d(TAG, "Fullscreen entered, hiding gesture-shown navbar")
+            hideGestureOverlay()
+            hide(animate = true, showHotspot = true)
+        }
+    }
+
     fun prepareForUnlockHomeInstant() { /* no-op */ }
     fun markNextShowInstant() { /* no-op */ }
 
