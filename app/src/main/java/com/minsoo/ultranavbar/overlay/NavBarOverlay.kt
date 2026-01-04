@@ -470,10 +470,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 자동 숨김 가능 여부 - setFullscreenState()로 처리하므로 항상 true
+     * 자동 숨김 가능 여부 - Android 12 기준 4초 후 자동 숨김 허용
      */
     fun canAutoHide(): Boolean {
-        return true
+        if (!isGestureShown) return true
+        val elapsed = android.os.SystemClock.elapsedRealtime() - gestureShowTime
+        return elapsed > 4000  // Android 12 기준 4초
     }
 
     fun hide(animate: Boolean = true, showHotspot: Boolean = true) {
@@ -766,14 +768,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 전체화면 상태 설정 - 전체화면 진입 시 제스처로 보여진 네비바 숨김
+     * 전체화면 상태 설정 (stub - canAutoHide()로 처리)
      */
     fun setFullscreenState(fullscreen: Boolean) {
-        if (fullscreen && isGestureShown) {
-            Log.d(TAG, "Fullscreen entered, hiding gesture-shown navbar")
-            hideGestureOverlay()
-            hide(animate = true, showHotspot = true)
-        }
+        // no-op: canAutoHide()가 4초 후 자동 숨김을 허용함
     }
 
     fun prepareForUnlockHomeInstant() { /* no-op */ }
