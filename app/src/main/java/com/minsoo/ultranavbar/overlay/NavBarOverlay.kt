@@ -61,6 +61,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private var isShowing = true
     private var isCreated = false
+    private var gestureShowTime: Long = 0  // 제스처로 보여준 시간 (자동숨김 방지용)
     private var currentOrientation = Configuration.ORIENTATION_LANDSCAPE
 
     private var isOnHomeScreen = false
@@ -250,7 +251,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         val deltaY = hotspotTouchStartY - event.rawY
                         if (deltaY >= swipeThresholdPx) {
                             Log.d(TAG, "Hotspot swipe up detected, showing overlay")
-                            show(fade = false)
+                            show(fade = false, fromGesture = true)
                             // 스와이프 완료 후 다음 제스처를 위해 초기화
                             hotspotTouchStartY = event.rawY
                         }
@@ -261,7 +262,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         val deltaY = hotspotTouchStartY - event.rawY
                         if (deltaY >= swipeThresholdPx) {
                             Log.d(TAG, "Hotspot swipe up on release, showing overlay")
-                            show(fade = false)
+                            show(fade = false, fromGesture = true)
                         }
                         true
                     }
@@ -358,8 +359,24 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
-    fun show(fade: Boolean = false) {
-        if (isShowing) return
+    fun show(fade: Boolean = false, fromGesture: Boolean = false) {
+        if (fromGesture) {
+            gestureShowTime = android.os.SystemClock.elapsedRealtime()
+        }
+
+        // 이미 보이는 상태에서 fade 요청이 오면 fade 애니메이션만 적용
+        if (isShowing) {
+            if (fade) {
+                navBarView?.let { bar ->
+                    bar.clearAnimation()
+                    val alphaAnim = AlphaAnimation(0f, 1f).apply {
+                        duration = ANIMATION_DURATION
+                    }
+                    bar.startAnimation(alphaAnim)
+                }
+            }
+            return
+        }
 
         backgroundView?.visibility = View.VISIBLE
         navBarView?.let { bar ->
@@ -367,10 +384,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             bar.visibility = View.VISIBLE
 
             if (fade) {
-                val alphaAnim = AlphaAnimation(0f, 1f).apply {
-                    duration = ANIMATION_DURATION
-                }
-                bar.startAnimation(alphaAnim)
+                bar.alpha = 0f
+                bar.animate()
+                    .alpha(1f)
+                    .setDuration(ANIMATION_DURATION)
+                    .start()
             } else {
                 val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                     duration = ANIMATION_DURATION
@@ -380,8 +398,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             hotspotView?.visibility = View.GONE
             isShowing = true
-            Log.d(TAG, "Overlay shown (fade=$fade)")
+            Log.d(TAG, "Overlay shown (fade=$fade, fromGesture=$fromGesture)")
         }
+    }
+
+    /**
+     * 제스처로 보여준 후 일정 시간 동안은 자동 숨김을 방지
+     */
+    fun canAutoHide(): Boolean {
+        val elapsed = android.os.SystemClock.elapsedRealtime() - gestureShowTime
+        return elapsed > 3000  // 3초 동안 자동 숨김 방지
     }
 
     fun hide(animate: Boolean = true, showHotspot: Boolean = true) {

@@ -508,6 +508,11 @@ class NavBarAccessibilityService : AccessibilityService() {
             "Update visibility: shouldHide=$shouldHide, lockscreen=$lockScreenActive, package=$currentPackage, fullscreen=$isFullscreen"
         )
         if (shouldHide) {
+            // 제스처로 보여준 직후에는 자동 숨김 방지 (잠금화면은 예외)
+            if (!lockScreenActive && overlay?.canAutoHide() == false) {
+                Log.d(TAG, "Auto-hide blocked: recently shown by gesture")
+                return
+            }
             overlay?.hide(animate = !lockScreenActive, showHotspot = !lockScreenActive)
         } else {
             overlay?.show(fade = forceFade)
