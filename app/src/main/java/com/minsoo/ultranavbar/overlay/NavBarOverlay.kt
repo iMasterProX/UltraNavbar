@@ -681,6 +681,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
+    // 서비스에서 호출하는 stub 메서드들 (미구현 - 필요시 구현)
+    fun setFullscreenState(fullscreen: Boolean) { /* no-op */ }
+    fun prepareForUnlockHomeInstant() { /* no-op */ }
+    fun markNextShowInstant() { /* no-op */ }
+
     fun reloadBackgroundImages() {
         loadBackgroundBitmaps()
         updateNavBarBackground()
