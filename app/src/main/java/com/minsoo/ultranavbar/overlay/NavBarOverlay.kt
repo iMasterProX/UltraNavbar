@@ -33,7 +33,6 @@ import com.minsoo.ultranavbar.model.NavAction
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.util.ImageCropUtil
-import kotlin.math.abs
 
 /**
  * 네비게이션 바 오버레이
@@ -62,21 +61,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private var isShowing = true
     private var isCreated = false
+    private var gestureShowTime: Long = 0  // 제스처로 보여준 시간 (자동숨김 방지용)
     private var currentOrientation = Configuration.ORIENTATION_LANDSCAPE
 
     private var isOnHomeScreen = false
     private var isRecentsVisible = false
     private var isImeVisible = false
-    private var isFullscreenActive = false
-    private var isHotspotActive = false
-    private var forceNextShowFade = false
-    private var forceNextShowInstant = false
-    private var skipNextBackgroundFade = false
 
     // “패널이 열림/닫힘” UI 상태(서비스 감지값으로 동기화 + 버튼 클릭 시 낙관 토글)
     private var isPanelOpenUi: Boolean = false
-
-    private var suppressBackgroundDuringHomeFade: Boolean = false
 
     private var landscapeBgBitmap: Bitmap? = null
     private var portraitBgBitmap: Bitmap? = null
@@ -150,9 +143,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val barHeightPx = getSystemNavigationBarHeightPx()
         val buttonSizePx = dpToPx(DEFAULT_NAV_BUTTON_DP)
         val buttonSpacingPx = dpToPx(8)
-        val swipeThresholdPx = dpToPx(SWIPE_THRESHOLD_DP)
-        var navBarTouchStartX = 0f
-        var navBarTouchStartY = 0f
 
         // 항상 검은색인 배경 레이어 (시스템 네비바 가리기용)
         backgroundView = View(context).apply {
@@ -221,39 +211,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
         bar.addView(rightGroup, rightParams)
 
-        bar.setOnTouchListener { _, event ->
-            if (!isShowing ||
-                !settings.autoHideOnVideo ||
-                !isFullscreenActive ||
-                isOnHomeScreen
-            ) {
-                return@setOnTouchListener false
-            }
-            if (settings.ignoreStylus && event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS) {
-                return@setOnTouchListener false
-            }
-
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    navBarTouchStartX = event.rawX
-                    navBarTouchStartY = event.rawY
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val deltaY = event.rawY - navBarTouchStartY
-                    val deltaX = abs(event.rawX - navBarTouchStartX)
-                    if (deltaY >= swipeThresholdPx && deltaY > deltaX) {
-                        hide(animate = true, showHotspot = true)
-                        return@setOnTouchListener true
-                    }
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    navBarTouchStartX = 0f
-                    navBarTouchStartY = 0f
-                }
-            }
-            false
-        }
-
         navBarView = bar
         rootView?.addView(navBarView)
 
@@ -294,7 +251,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         val deltaY = hotspotTouchStartY - event.rawY
                         if (deltaY >= swipeThresholdPx) {
                             Log.d(TAG, "Hotspot swipe up detected, showing overlay")
-                            show(fade = false)
+                            show(fade = false, fromGesture = true)
                             // 스와이프 완료 후 다음 제스처를 위해 초기화
                             hotspotTouchStartY = event.rawY
                         }
@@ -305,7 +262,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         val deltaY = hotspotTouchStartY - event.rawY
                         if (deltaY >= swipeThresholdPx) {
                             Log.d(TAG, "Hotspot swipe up on release, showing overlay")
-                            show(fade = false)
+                            show(fade = false, fromGesture = true)
                         }
                         true
                     }
@@ -402,41 +359,36 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
-    private fun updateOverlayHeightForVisibility(showing: Boolean, showHotspot: Boolean) {
-        val targetHeight = if (showing) {
-            getSystemNavigationBarHeightPx()
-        } else {
-            if (showHotspot) dpToPx(settings.hotspotHeight) else 0
+    fun show(fade: Boolean = false, fromGesture: Boolean = false) {
+        if (fromGesture) {
+            gestureShowTime = android.os.SystemClock.elapsedRealtime()
         }
-        rootView?.let { root ->
-            val params = createLayoutParams().apply {
-                height = targetHeight
+
+        // 이미 보이는 상태에서 fade 요청이 오면 fade 애니메이션만 적용
+        if (isShowing) {
+            if (fade) {
+                navBarView?.let { bar ->
+                    bar.clearAnimation()
+                    val alphaAnim = AlphaAnimation(0f, 1f).apply {
+                        duration = ANIMATION_DURATION
+                    }
+                    bar.startAnimation(alphaAnim)
+                }
             }
-            windowManager.updateViewLayout(root, params)
+            return
         }
-    }
 
-    fun show(fade: Boolean = false) {
-        if (isShowing) return
-
-        isHotspotActive = false
-        updateOverlayHeightForVisibility(showing = true, showHotspot = false)
-        backgroundView?.visibility =
-            if (suppressBackgroundDuringHomeFade) View.GONE else View.VISIBLE
+        backgroundView?.visibility = View.VISIBLE
         navBarView?.let { bar ->
             bar.clearAnimation()
             bar.visibility = View.VISIBLE
 
-            val useInstant = forceNextShowInstant
-            val useFade = !useInstant && (fade || forceNextShowFade)
-            if (useInstant) {
-                bar.clearAnimation()
-                bar.visibility = View.VISIBLE
-            } else if (useFade) {
-                val alphaAnim = AlphaAnimation(0f, 1f).apply {
-                    duration = ANIMATION_DURATION
-                }
-                bar.startAnimation(alphaAnim)
+            if (fade) {
+                bar.alpha = 0f
+                bar.animate()
+                    .alpha(1f)
+                    .setDuration(ANIMATION_DURATION)
+                    .start()
             } else {
                 val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                     duration = ANIMATION_DURATION
@@ -446,19 +398,21 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             hotspotView?.visibility = View.GONE
             isShowing = true
-            forceNextShowInstant = false
-            forceNextShowFade = false
-            Log.d(TAG, "Overlay shown (fade=$useFade)")
+            Log.d(TAG, "Overlay shown (fade=$fade, fromGesture=$fromGesture)")
         }
+    }
+
+    /**
+     * 제스처로 보여준 후 일정 시간 동안은 자동 숨김을 방지
+     */
+    fun canAutoHide(): Boolean {
+        val elapsed = android.os.SystemClock.elapsedRealtime() - gestureShowTime
+        return elapsed > 3000  // 3초 동안 자동 숨김 방지
     }
 
     fun hide(animate: Boolean = true, showHotspot: Boolean = true) {
         if (!isShowing) return
 
-        val showHotspotEnabled = showHotspot && settings.hotspotEnabled
-        if (!animate && !showHotspotEnabled) {
-            forceNextShowFade = true
-        }
         navBarView?.let { bar ->
             bar.clearAnimation()
             bar.animate().cancel()
@@ -466,7 +420,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             if (!animate) {
                 bar.visibility = View.GONE
                 backgroundView?.visibility = View.GONE
-                updateOverlayHeightForVisibility(showing = false, showHotspot = showHotspotEnabled)
             } else {
                 val slideDown = TranslateAnimation(0f, 0f, 0f, bar.height.toFloat()).apply {
                     duration = ANIMATION_DURATION
@@ -475,10 +428,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         override fun onAnimationEnd(animation: Animation?) {
                             bar.visibility = View.GONE
                             backgroundView?.visibility = View.GONE
-                            updateOverlayHeightForVisibility(
-                                showing = false,
-                                showHotspot = showHotspotEnabled
-                            )
                         }
                         override fun onAnimationRepeat(animation: Animation?) {}
                     })
@@ -486,8 +435,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 bar.startAnimation(slideDown)
             }
 
-            hotspotView?.visibility = if (showHotspotEnabled) View.VISIBLE else View.GONE
-            isHotspotActive = showHotspotEnabled
+            hotspotView?.visibility =
+                if (showHotspot && settings.hotspotEnabled) View.VISIBLE else View.GONE
 
             isShowing = false
             Log.d(TAG, "Overlay hidden (animate=$animate)")
@@ -510,20 +459,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         updateNavBarBackground()
         updatePanelButtonState(isOpen = isPanelOpenUi)
-
-        if (isShowing) {
-            backgroundView?.visibility = View.VISIBLE
-            navBarView?.visibility = View.VISIBLE
-            hotspotView?.visibility = View.GONE
-            isHotspotActive = false
-        } else {
-            val showHotspotEnabled = isHotspotActive && settings.hotspotEnabled
-            backgroundView?.visibility = View.GONE
-            navBarView?.visibility = View.GONE
-            hotspotView?.visibility = if (showHotspotEnabled) View.VISIBLE else View.GONE
-            isHotspotActive = showHotspotEnabled
-        }
-        updateOverlayHeightForVisibility(showing = isShowing, showHotspot = isHotspotActive)
     }
 
     fun handleOrientationChange(newOrientation: Int) {
@@ -538,7 +473,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         )
 
         // 높이가 바뀔 수 있으므로 레이아웃 파라미터 갱신
-        updateOverlayHeightForVisibility(showing = isShowing, showHotspot = isHotspotActive)
+        rootView?.let { root ->
+            val params = createLayoutParams()
+            windowManager.updateViewLayout(root, params)
+        }
 
         updateNavBarBackground()
     }
@@ -623,21 +561,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         updateNavBarBackground()
     }
 
-    fun setFullscreenState(isFullscreen: Boolean) {
-        isFullscreenActive = isFullscreen
-    }
-
-    fun markNextShowInstant() {
-        forceNextShowInstant = true
-    }
-
-    fun prepareForUnlockHomeInstant() {
-        forceNextShowInstant = true
-        forceNextShowFade = false
-        skipNextBackgroundFade = true
-        suppressBackgroundDuringHomeFade = false
-    }
-
     /**
      * 알림 패널 버튼 상태 업데이트
      * - 서비스가 감지한 "실제 패널 상태"로 이 메서드를 호출해 UI를 맞추는 용도
@@ -706,57 +629,21 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
                     // 검은 배경에서 이미지 배경으로 전환: 페이드 인
                     val needsFade = currentBg is ColorDrawable || currentBg?.alpha == 0
-                    val suppressBackground = suppressBackgroundDuringHomeFade && needsFade
-                    if (suppressBackground) {
-                        backgroundView?.visibility = View.GONE
-                    }
-                    val skipFade = skipNextBackgroundFade
-                    if (needsFade && !skipFade) {
+                    if (needsFade) {
                         bgDrawable.alpha = 0
                         bar.background = bgDrawable
-                        if (suppressBackground) {
-                            animateBackgroundAlpha(bgDrawable, 0, 255) {
-                                backgroundView?.visibility = View.VISIBLE
-                                suppressBackgroundDuringHomeFade = false
-                            }
-                        } else {
-                            animateBackgroundAlpha(bgDrawable, 0, 255)
-                        }
+                        animateBackgroundAlpha(bgDrawable, 0, 255)
                     } else {
-                        if (skipFade) {
-                            bgDrawable.alpha = 255
-                        }
                         bar.background = bgDrawable
-                        suppressBackgroundDuringHomeFade = false
-                        skipNextBackgroundFade = false
-                        if (isShowing) {
-                            backgroundView?.visibility = View.VISIBLE
-                        }
                     }
-                } else if (suppressBackgroundDuringHomeFade) {
-                    suppressBackgroundDuringHomeFade = false
-                    backgroundView?.visibility = View.VISIBLE
-                    skipNextBackgroundFade = false
                 }
             } else {
-                suppressBackgroundDuringHomeFade = false
-                skipNextBackgroundFade = false
-                if (isShowing) {
-                    backgroundView?.visibility = View.VISIBLE
-                }
                 if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
                     Log.d(TAG, "Fallback to black background (pre-cropped image not loaded).")
                     bar.background = ColorDrawable(Color.BLACK)
                 }
             }
         } else {
-            if (suppressBackgroundDuringHomeFade) {
-                suppressBackgroundDuringHomeFade = false
-                if (isShowing) {
-                    backgroundView?.visibility = View.VISIBLE
-                }
-            }
-            skipNextBackgroundFade = false
             val isCurrentlyImage = currentBg is BitmapDrawable && currentBg.alpha > 0
             if (isCurrentlyImage) {
                 Log.d(TAG, "Applying black background for app/recents view.")
