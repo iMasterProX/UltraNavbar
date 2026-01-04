@@ -81,6 +81,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var hotspotTouchStartY: Float = 0f
     private val SWIPE_THRESHOLD_DP = 30  // 스와이프로 인식하는 최소 거리 (dp)
 
+    // 네비바 스와이프 다운 감지용 변수
+    private var navBarTouchStartY: Float = 0f
+    private var isGestureShown: Boolean = false  // 제스처로 보여진 상태인지
+
     @SuppressLint("ClickableViewAccessibility")
     fun create() {
         if (isCreated) return
@@ -212,6 +216,34 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         bar.addView(rightGroup, rightParams)
 
         navBarView = bar
+
+        // 네비바에서 아래로 스와이프하면 숨기기 (제스처로 보여진 경우에만)
+        val swipeThresholdPx = dpToPx(SWIPE_THRESHOLD_DP)
+        bar.setOnTouchListener { _, event ->
+            if (!isGestureShown) {
+                return@setOnTouchListener false
+            }
+
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    navBarTouchStartY = event.rawY
+                    false  // 버튼 클릭 이벤트 전달을 위해 false 반환
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val deltaY = event.rawY - navBarTouchStartY
+                    if (deltaY >= swipeThresholdPx) {
+                        Log.d(TAG, "Navbar swipe down detected, hiding overlay")
+                        isGestureShown = false
+                        hide(animate = true, showHotspot = true)
+                        true
+                    } else {
+                        false
+                    }
+                }
+                else -> false
+            }
+        }
+
         rootView?.addView(navBarView)
 
         // 배경 재적용(홈화면 + 옵션일 때)
@@ -362,15 +394,26 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun show(fade: Boolean = false, fromGesture: Boolean = false) {
         if (fromGesture) {
             gestureShowTime = android.os.SystemClock.elapsedRealtime()
+            isGestureShown = true
         }
 
         // 이미 보이는 상태에서 fade 요청이 오면 fade 애니메이션만 적용
         if (isShowing) {
             if (fade) {
+                // 잠금화면→홈화면 페이드 시에는 서브 검은배경 숨김
+                backgroundView?.visibility = View.GONE
                 navBarView?.let { bar ->
                     bar.clearAnimation()
                     val alphaAnim = AlphaAnimation(0f, 1f).apply {
                         duration = ANIMATION_DURATION
+                        setAnimationListener(object : Animation.AnimationListener {
+                            override fun onAnimationStart(animation: Animation?) {}
+                            override fun onAnimationEnd(animation: Animation?) {
+                                // 페이드 완료 후 서브 검은배경 다시 보이게
+                                backgroundView?.visibility = View.VISIBLE
+                            }
+                            override fun onAnimationRepeat(animation: Animation?) {}
+                        })
                     }
                     bar.startAnimation(alphaAnim)
                 }
@@ -378,7 +421,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return
         }
 
-        backgroundView?.visibility = View.VISIBLE
+        // fade 전환 시에는 서브 검은배경을 숨겨서 자연스럽게 보이도록
+        if (fade) {
+            backgroundView?.visibility = View.GONE
+        } else {
+            backgroundView?.visibility = View.VISIBLE
+        }
+
         navBarView?.let { bar ->
             bar.clearAnimation()
             bar.visibility = View.VISIBLE
@@ -388,6 +437,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 bar.animate()
                     .alpha(1f)
                     .setDuration(ANIMATION_DURATION)
+                    .withEndAction {
+                        // 페이드 완료 후 서브 검은배경 다시 보이게
+                        backgroundView?.visibility = View.VISIBLE
+                    }
                     .start()
             } else {
                 val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
@@ -439,6 +492,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 if (showHotspot && settings.hotspotEnabled) View.VISIBLE else View.GONE
 
             isShowing = false
+            isGestureShown = false  // 제스처 상태 리셋
             Log.d(TAG, "Overlay hidden (animate=$animate)")
         }
     }
