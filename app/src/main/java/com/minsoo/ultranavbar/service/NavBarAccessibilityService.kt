@@ -231,6 +231,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         super.onConfigurationChanged(newConfig)
         Log.d(TAG, "Configuration changed: orientation=${newConfig.orientation}")
         overlay?.handleOrientationChange(newConfig.orientation)
+        overlay?.updateDarkMode()  // 다크 모드 변경 감지
 
         // 회전 시 기준값 재계산
         calculateNavBarHeight()
