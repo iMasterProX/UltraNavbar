@@ -732,6 +732,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val currentBg = bar.background
         val defaultBgColor = getDefaultBackgroundColor()
 
+        // 실제 시스템 방향과 캐시된 방향이 다르면 동기화 및 비트맵 새로 로드
+        val actualOrientation = context.resources.configuration.orientation
+        if (currentOrientation != actualOrientation) {
+            Log.w(TAG, "Orientation mismatch detected! cached=$currentOrientation, actual=$actualOrientation - resyncing")
+            currentOrientation = actualOrientation
+            loadBackgroundBitmaps()
+        }
+
         val shouldUseImageBackground =
             isOnHomeScreen && settings.homeBgEnabled && !isRecentsVisible
 
