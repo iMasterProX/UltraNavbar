@@ -131,12 +131,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun loadBackgroundBitmaps() {
         if (!settings.homeBgEnabled) return
 
+        // 기존 비트맵 참조 해제 후 새로 로드
+        landscapeBgBitmap = null
+        portraitBgBitmap = null
+
         landscapeBgBitmap = ImageCropUtil.loadBackgroundBitmap(context, true)
         portraitBgBitmap = ImageCropUtil.loadBackgroundBitmap(context, false)
 
         Log.d(
             TAG,
-            "Background bitmaps loaded: landscape=${landscapeBgBitmap != null}, portrait=${portraitBgBitmap != null}"
+            "Background bitmaps loaded: landscape=${landscapeBgBitmap?.hashCode()}, portrait=${portraitBgBitmap?.hashCode()}"
         )
     }
 
@@ -569,12 +573,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (currentOrientation == newOrientation) return
         currentOrientation = newOrientation
 
-        Log.d(
-            TAG,
-            "Orientation changed to: ${
-                if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
-            }"
-        )
+        val orientationName = if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+        Log.d(TAG, "Orientation changed to: $orientationName")
 
         // 높이가 바뀔 수 있으므로 레이아웃 파라미터 갱신
         rootView?.let { root ->
@@ -582,6 +582,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             windowManager.updateViewLayout(root, params)
         }
 
+        // 배경 이미지 다시 로드 (회전 시 올바른 이미지 보장)
+        loadBackgroundBitmaps()
         updateNavBarBackground()
     }
 
@@ -725,10 +727,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
             val targetBitmap = if (isLandscape) landscapeBgBitmap else portraitBgBitmap
 
+            Log.d(TAG, "updateNavBarBackground: orientation=$currentOrientation, isLandscape=$isLandscape, " +
+                    "targetHash=${targetBitmap?.hashCode()}, landscapeHash=${landscapeBgBitmap?.hashCode()}, portraitHash=${portraitBgBitmap?.hashCode()}")
+
             if (targetBitmap != null) {
                 val currentBitmap = (currentBg as? BitmapDrawable)?.bitmap
                 if (currentBitmap !== targetBitmap) {
-                    Log.d(TAG, "Applying new pre-cropped background image. Landscape: $isLandscape")
+                    Log.d(TAG, "Applying new background image. isLandscape=$isLandscape, currentHash=${currentBitmap?.hashCode()}, targetHash=${targetBitmap.hashCode()}")
 
                     val bgDrawable = BitmapDrawable(context.resources, targetBitmap).apply {
                         gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
