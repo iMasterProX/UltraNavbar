@@ -128,6 +128,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 hide(animate = true, showHotspot = true)
             }
         }
+
+        override fun onGestureOverlayTapped() {
+            // 탭 시 제스처 오버레이 숨겨서 버튼 클릭 가능하게 함
+            hideGestureOverlay()
+        }
     }
 
     // ===== 생성/파괴 =====
@@ -496,6 +501,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      * 다크 모드 전환 중이거나 제스처로 표시된 직후에는 차단
      */
     fun canAutoHide(): Boolean {
+        // 다크 모드 상태 변경 여부를 먼저 체크 (onConfigurationChanged보다 먼저 호출될 수 있음)
+        checkDarkModeChange()
+
         // 다크 모드 전환 중에는 차단
         val darkModeElapsed = SystemClock.elapsedRealtime() - darkModeTransitionTime
         if (darkModeElapsed < Constants.Timing.DARK_MODE_DEBOUNCE_MS) {
@@ -509,6 +517,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         return true
+    }
+
+    /**
+     * 다크 모드 변경 여부 체크 (조기 감지)
+     */
+    private fun checkDarkModeChange() {
+        if (backgroundManager.updateDarkMode()) {
+            darkModeTransitionTime = SystemClock.elapsedRealtime()
+            Log.d(TAG, "Dark mode change detected early: ${backgroundManager.isDarkMode}")
+        }
     }
 
     // ===== 상태 업데이트 =====
@@ -609,11 +627,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     // ===== 다크 모드 =====
 
     fun updateDarkMode() {
-        if (backgroundManager.updateDarkMode()) {
-            darkModeTransitionTime = SystemClock.elapsedRealtime()
-            Log.d(TAG, "Dark mode changed: ${backgroundManager.isDarkMode}")
-            updateNavBarBackground()
-        }
+        checkDarkModeChange()
+        // 다크 모드 변경 시 배경 업데이트
+        updateNavBarBackground()
     }
 
     // ===== 배경 업데이트 =====
@@ -621,8 +637,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun updateNavBarBackground() {
         val bar = navBarView ?: return
 
-        // 방향 동기화 확인
-        backgroundManager.syncOrientationWithSystem()
+        // 방향 동기화 확인 - NavBarOverlay의 currentOrientation도 함께 동기화
+        if (backgroundManager.syncOrientationWithSystem()) {
+            val actualOrientation = context.resources.configuration.orientation
+            if (currentOrientation != actualOrientation) {
+                Log.d(TAG, "Syncing NavBarOverlay orientation: $currentOrientation -> $actualOrientation")
+                currentOrientation = actualOrientation
+            }
+        }
 
         val shouldUseCustom = backgroundManager.shouldUseCustomBackground(isOnHomeScreen, isRecentsVisible)
         backgroundManager.applyBackground(bar, shouldUseCustom)

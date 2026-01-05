@@ -49,6 +49,7 @@ class GestureHandler(
         fun onSwipeUpDetected()
         fun onSwipeDownDetected()
         fun onGestureAutoHide()
+        fun onGestureOverlayTapped()  // 탭으로 오버레이 숨김 요청
     }
 
     // ===== 핫스팟 터치 처리 =====
@@ -119,9 +120,10 @@ class GestureHandler(
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val deltaY = event.rawY - touchStartY
-                // 스와이프가 아닌 탭이면 버튼 클릭 허용을 위해 오버레이 숨김
+                // 스와이프가 아닌 탭이면 버튼 클릭 허용을 위해 오버레이 숨김 요청
                 if (deltaY < swipeThresholdPx) {
-                    hideGestureOverlay()
+                    Log.d(TAG, "Gesture overlay tapped, requesting hide")
+                    listener.onGestureOverlayTapped()
                 }
                 return true
             }
