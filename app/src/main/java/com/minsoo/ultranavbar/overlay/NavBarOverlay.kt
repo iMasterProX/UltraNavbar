@@ -492,7 +492,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 자동 숨김 가능 여부 - Android 12 기준 4초 후 자동 숨김 허용
+     * 자동 숨김 가능 여부 - 3초 후 자동 숨김 허용
      * 다크 모드 전환 중에도 자동 숨김 차단 (1초)
      */
     fun canAutoHide(): Boolean {
@@ -505,7 +505,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         if (!isGestureShown) return true
         val elapsed = android.os.SystemClock.elapsedRealtime() - gestureShowTime
-        return elapsed > 4000  // Android 12 기준 4초
+        return elapsed > 3000  // 3초
     }
 
     fun hide(animate: Boolean = true, showHotspot: Boolean = true) {
@@ -833,17 +833,17 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 제스처로 표시된 네비바 4초 후 자동 숨김 예약
+     * 제스처로 표시된 네비바 3초 후 자동 숨김 예약
      */
     private fun scheduleGestureAutoHide() {
         cancelGestureAutoHide()  // 기존 타이머 취소
         gestureAutoHideRunnable = Runnable {
             if (isShowing && isGestureShown) {
-                Log.d(TAG, "Gesture auto-hide triggered after 4 seconds")
+                Log.d(TAG, "Gesture auto-hide triggered after 3 seconds")
                 hide(animate = true, showHotspot = true)
             }
         }
-        handler.postDelayed(gestureAutoHideRunnable!!, 4000)  // 4초 후 자동 숨김
+        handler.postDelayed(gestureAutoHideRunnable!!, 3000)  // 3초 후 자동 숨김
     }
 
     /**
