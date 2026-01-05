@@ -1,4 +1,4 @@
-$repo = "iMasterProX/UltraNavbar"
+﻿$repo = "iMasterProX/UltraNavbar"
 $root = $PSScriptRoot
 
 # GitHub CLI 확인
