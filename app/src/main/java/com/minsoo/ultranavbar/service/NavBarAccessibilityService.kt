@@ -46,6 +46,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private lateinit var settings: SettingsManager
 
     private var currentPackage: String = ""
+    private var currentOrientation: Int = Configuration.ORIENTATION_UNDEFINED  // 회전 상태 추적
     private var isFullscreen: Boolean = false
     private var isOnHomeScreen: Boolean = false
     private var isRecentsVisible: Boolean = false
@@ -127,6 +128,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         startForegroundService()
         loadLauncherPackages()
+        currentOrientation = resources.configuration.orientation  // 현재 회전 상태 초기화
         createOverlay()
         updateOverlayVisibility(forceFade = false)
 
@@ -226,13 +228,19 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        Log.d(TAG, "Configuration changed: orientation=${newConfig.orientation}")
+        val orientationChanged = currentOrientation != newConfig.orientation
+        currentOrientation = newConfig.orientation
+
+        Log.d(TAG, "Configuration changed: orientation=${newConfig.orientation}, orientationChanged=$orientationChanged")
+
         overlay?.handleOrientationChange(newConfig.orientation)
         overlay?.updateDarkMode()  // 다크 모드 변경 감지
 
-        // 회전 시 기준값 재계산
-        calculateNavBarHeight()
-        scheduleStateCheck()
+        // 회전이 실제로 발생한 경우에만 상태 체크 (다크모드 전환 시 불필요한 숨김 방지)
+        if (orientationChanged) {
+            calculateNavBarHeight()
+            scheduleStateCheck()
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
