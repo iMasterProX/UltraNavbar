@@ -1,4 +1,3 @@
-$ErrorActionPreference = "Stop"
 $repo = "iMasterProX/UltraNavbar"
 $root = $PSScriptRoot
 
@@ -64,17 +63,20 @@ if ($apk.FullName -ne $tempApk) {
 }
 
 try {
-    # 릴리즈 존재 여부 확인
-    $releaseExists = $false
-    gh release view $version --repo $repo 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $releaseExists = $true
+    # 릴리즈 존재 여부 확인 (에러 무시)
+    $ErrorActionPreference = "SilentlyContinue"
+    $null = gh release view $version --repo $repo 2>&1
+    $releaseExists = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = "Stop"
+
+    if ($releaseExists) {
         Write-Host "기존 릴리즈 $version 에 업로드합니다..." -ForegroundColor Yellow
     } else {
         Write-Host "새 릴리즈 $version 을 생성합니다..." -ForegroundColor Green
         gh release create $version --repo $repo --title $version --generate-notes
         if ($LASTEXITCODE -ne 0) {
-            throw "릴리즈 생성 실패"
+            Write-Host "릴리즈 생성 실패" -ForegroundColor Red
+            exit 1
         }
     }
 
@@ -82,7 +84,8 @@ try {
     Write-Host "APK 업로드 중..." -ForegroundColor Cyan
     gh release upload $version $tempApk --repo $repo --clobber
     if ($LASTEXITCODE -ne 0) {
-        throw "업로드 실패"
+        Write-Host "업로드 실패" -ForegroundColor Red
+        exit 1
     }
 
     Write-Host ""
