@@ -2,9 +2,6 @@ package com.minsoo.ultranavbar.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -16,8 +13,6 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import androidx.core.app.NotificationCompat
-import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.core.Constants
 import com.minsoo.ultranavbar.core.WindowAnalyzer
 import com.minsoo.ultranavbar.model.NavAction
@@ -119,7 +114,6 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         initializeComponents()
         setupServiceInfo()
-        startForegroundService()
         registerReceivers()
 
         windowAnalyzer.loadLauncherPackages()
@@ -176,7 +170,6 @@ class NavBarAccessibilityService : AccessibilityService() {
         unregisterReceivers()
         destroyOverlay()
 
-        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
@@ -193,28 +186,6 @@ class NavBarAccessibilityService : AccessibilityService() {
         } catch (e: Exception) {
             Log.w(TAG, "Receiver not registered", e)
         }
-    }
-
-    // ===== 포그라운드 서비스 =====
-
-    private fun startForegroundService() {
-        val channel = NotificationChannel(
-            Constants.Notification.CHANNEL_ID,
-            "UltraNavBar Service",
-            NotificationManager.IMPORTANCE_MIN
-        )
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(channel)
-
-        val notification: Notification = NotificationCompat.Builder(this, Constants.Notification.CHANNEL_ID)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText(getString(R.string.service_running_notification))
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .build()
-
-        startForeground(Constants.Notification.ID, notification)
-        Log.i(TAG, "Service started in foreground")
     }
 
     // ===== 설정 변경 =====

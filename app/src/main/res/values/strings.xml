@@ -55,7 +55,6 @@
 
     <string name="image_crop_success">Background image saved.</string>
     <string name="image_crop_failed">Failed to process image.</string>
-    <string name="service_running_notification">Navigation bar is running.</string>
     <string name="stability_settings">Stability settings</string>
     <string name="battery_optimization">Battery optimization</string>
     <string name="battery_optimization_summary">Exclude UltraNavbar from battery optimizations to prevent it from being stopped.</string>

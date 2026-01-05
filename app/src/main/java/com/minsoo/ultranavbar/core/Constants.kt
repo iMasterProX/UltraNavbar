@@ -61,12 +61,6 @@ object Constants {
         const val SETTINGS_CHANGED = "com.minsoo.ultranavbar.SETTINGS_CHANGED"
         const val RELOAD_BACKGROUND = "com.minsoo.ultranavbar.RELOAD_BACKGROUND"
     }
-
-    // ===== 알림 =====
-    object Notification {
-        const val CHANNEL_ID = "nav_service_channel"
-        const val ID = 1
-    }
 }
 
 /**
