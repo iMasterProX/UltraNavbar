@@ -82,6 +82,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var isDarkMode: Boolean = false
     private var currentButtonColor: Int = Color.WHITE  // 현재 버튼 색상
     private val allButtons = mutableListOf<ImageButton>()  // 모든 버튼 참조
+    private var darkModeTransitionTime: Long = 0  // 다크 모드 전환 시간 (자동숨김 방지용)
 
     // 핫스팟 스와이프 감지용 변수
     private var hotspotTouchStartY: Float = 0f
@@ -490,8 +491,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     /**
      * 자동 숨김 가능 여부 - Android 12 기준 4초 후 자동 숨김 허용
+     * 다크 모드 전환 중에도 자동 숨김 차단 (1초)
      */
     fun canAutoHide(): Boolean {
+        // 다크 모드 전환 중에는 자동 숨김 차단 (시스템 UI 일시적 변화로 인한 오동작 방지)
+        val darkModeElapsed = android.os.SystemClock.elapsedRealtime() - darkModeTransitionTime
+        if (darkModeElapsed < 1000) {
+            Log.d(TAG, "Auto-hide blocked: dark mode transition in progress")
+            return false
+        }
+
         if (!isGestureShown) return true
         val elapsed = android.os.SystemClock.elapsedRealtime() - gestureShowTime
         return elapsed > 4000  // Android 12 기준 4초
@@ -915,6 +924,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val newDarkMode = isSystemDarkMode()
         if (isDarkMode != newDarkMode) {
             isDarkMode = newDarkMode
+            darkModeTransitionTime = android.os.SystemClock.elapsedRealtime()  // 전환 시간 기록
             Log.d(TAG, "Dark mode changed: $isDarkMode")
 
             // 배경 및 버튼 색상 업데이트
