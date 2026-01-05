@@ -78,6 +78,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var pendingHomeState: Runnable? = null
     private var pendingRecentsState: Runnable? = null
 
+    // 다크 모드 관련 색상
+    private var isDarkMode: Boolean = false
+    private var currentButtonColor: Int = Color.WHITE  // 현재 버튼 색상
+    private val allButtons = mutableListOf<ImageButton>()  // 모든 버튼 참조
+
     // 핫스팟 스와이프 감지용 변수
     private var hotspotTouchStartY: Float = 0f
     private val SWIPE_THRESHOLD_DP = 30  // 스와이프로 인식하는 최소 거리 (dp)
@@ -92,6 +97,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         try {
             currentOrientation = context.resources.configuration.orientation
+            isDarkMode = isSystemDarkMode()  // 다크 모드 초기화
+            currentButtonColor = getDefaultButtonColor()  // 초기 버튼 색상
 
             rootView = FrameLayout(context).apply {
                 layoutParams = FrameLayout.LayoutParams(
@@ -149,7 +156,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val buttonSizePx = dpToPx(DEFAULT_NAV_BUTTON_DP)
         val buttonSpacingPx = dpToPx(8)
 
-        // 항상 검은색인 배경 레이어 (시스템 네비바 가리기용)
+        // 배경 레이어 (시스템 네비바 가리기용) - 다크 모드에 따라 색상 변경
+        val defaultBgColor = getDefaultBackgroundColor()
         backgroundView = View(context).apply {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -157,7 +165,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             ).apply {
                 gravity = Gravity.BOTTOM
             }
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(defaultBgColor)
         }
         rootView?.addView(backgroundView)
 
@@ -169,7 +177,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 gravity = Gravity.BOTTOM
             }
 
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(defaultBgColor)
             setPadding(dpToPx(16), 0, dpToPx(16), 0)
             clipChildren = false
         }
@@ -329,11 +337,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         return ImageButton(context).apply {
             layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
 
-            val rippleColor = ColorStateList.valueOf(Color.WHITE)
+            val rippleColor = ColorStateList.valueOf(currentButtonColor)
             val maskDrawable = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = sizePx / 2f
-                setColor(Color.WHITE)
+                setColor(currentButtonColor)
             }
             background = RippleDrawable(rippleColor, null, maskDrawable)
 
@@ -343,7 +351,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             setPadding(0, 0, 0, 0)
             setImageResource(iconResId)
+            setColorFilter(currentButtonColor)  // 초기 버튼 색상 적용
             contentDescription = action.displayName
+
+            // 버튼 리스트에 추가
+            allButtons.add(this)
 
             setOnTouchListener { _, event ->
                 if (settings.ignoreStylus && event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS) {
@@ -589,6 +601,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             hotspotView = null
             panelButton = null
             backButton = null
+            allButtons.clear()  // 버튼 리스트 정리
             isCreated = false
             Log.i(TAG, "Overlay destroyed")
         } catch (e: Exception) {
@@ -703,6 +716,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun updateNavBarBackground() {
         val bar = navBarView ?: return
         val currentBg = bar.background
+        val defaultBgColor = getDefaultBackgroundColor()
 
         val shouldUseImageBackground =
             isOnHomeScreen && settings.homeBgEnabled && !isRecentsVisible
@@ -720,7 +734,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
                     }
 
-                    // 검은 배경에서 이미지 배경으로 전환: 페이드 인
+                    // 커스텀 배경일 때는 이미지 밝기에 따라 버튼 색상 결정 (다크모드 무관)
+                    val buttonColor = calculateButtonColorForBitmap(targetBitmap)
+                    updateAllButtonColors(buttonColor)
+
+                    // 배경에서 이미지 배경으로 전환: 페이드 인
                     val needsFade = currentBg is ColorDrawable || currentBg?.alpha == 0
                     if (needsFade) {
                         bgDrawable.alpha = 0
@@ -731,21 +749,27 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     }
                 }
             } else {
-                if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
-                    Log.d(TAG, "Fallback to black background (pre-cropped image not loaded).")
-                    bar.background = ColorDrawable(Color.BLACK)
+                if ((currentBg as? ColorDrawable)?.color != defaultBgColor) {
+                    Log.d(TAG, "Fallback to default background (pre-cropped image not loaded).")
+                    bar.background = ColorDrawable(defaultBgColor)
                 }
+                updateAllButtonColors(getDefaultButtonColor())
             }
         } else {
+            // 기본 배경: 다크 모드에 따라 흰색/검은색 배경 + 회색/흰색 버튼
+            updateAllButtonColors(getDefaultButtonColor())
+
             val isCurrentlyImage = currentBg is BitmapDrawable && currentBg.alpha > 0
             if (isCurrentlyImage) {
-                Log.d(TAG, "Applying black background for app/recents view.")
-                // 이미지 배경에서 검은 배경으로: 페이드 아웃 후 검은 배경으로 설정
+                Log.d(TAG, "Applying default background for app/recents view. DarkMode: $isDarkMode")
+                // 이미지 배경에서 기본 배경으로: 페이드 아웃 후 기본 배경으로 설정
                 animateBackgroundAlpha(currentBg as BitmapDrawable, 255, 0) {
-                    bar.background = ColorDrawable(Color.BLACK)
+                    bar.background = ColorDrawable(defaultBgColor)
+                    backgroundView?.setBackgroundColor(defaultBgColor)
                 }
-            } else if ((currentBg as? ColorDrawable)?.color != Color.BLACK) {
-                bar.background = ColorDrawable(Color.BLACK)
+            } else if ((currentBg as? ColorDrawable)?.color != defaultBgColor) {
+                bar.background = ColorDrawable(defaultBgColor)
+                backgroundView?.setBackgroundColor(defaultBgColor)
             }
         }
     }
@@ -803,5 +827,93 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun reloadBackgroundImages() {
         loadBackgroundBitmaps()
         updateNavBarBackground()
+    }
+
+    /**
+     * 시스템 다크 모드 여부 확인
+     */
+    private fun isSystemDarkMode(): Boolean {
+        val uiMode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        return uiMode == Configuration.UI_MODE_NIGHT_YES
+    }
+
+    /**
+     * 다크 모드에 따른 기본 배경 색상
+     */
+    private fun getDefaultBackgroundColor(): Int {
+        return if (isDarkMode) Color.BLACK else Color.WHITE
+    }
+
+    /**
+     * 다크 모드에 따른 기본 버튼 색상 (앱/잠금화면 등 검은/흰 배경용)
+     */
+    private fun getDefaultButtonColor(): Int {
+        return if (isDarkMode) Color.WHITE else Color.DKGRAY
+    }
+
+    /**
+     * 비트맵의 평균 밝기를 계산하여 버튼 색상 결정 (Android 12 스타일)
+     * 밝은 이미지 -> 검은 버튼, 어두운 이미지 -> 흰 버튼
+     */
+    private fun calculateButtonColorForBitmap(bitmap: Bitmap): Int {
+        // 성능을 위해 작은 샘플 영역만 분석
+        val sampleSize = 10
+        val width = bitmap.width
+        val height = bitmap.height
+
+        var totalLuminance = 0.0
+        var sampleCount = 0
+
+        val stepX = maxOf(1, width / sampleSize)
+        val stepY = maxOf(1, height / sampleSize)
+
+        var x = 0
+        while (x < width) {
+            var y = 0
+            while (y < height) {
+                val pixel = bitmap.getPixel(x, y)
+                val r = Color.red(pixel)
+                val g = Color.green(pixel)
+                val b = Color.blue(pixel)
+                // 상대 휘도 공식 (ITU-R BT.709)
+                val luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+                totalLuminance += luminance
+                sampleCount++
+                y += stepY
+            }
+            x += stepX
+        }
+
+        val avgLuminance = if (sampleCount > 0) totalLuminance / sampleCount else 128.0
+
+        // 밝기 임계값 128 (0-255 범위의 중간값)
+        return if (avgLuminance > 128) Color.BLACK else Color.WHITE
+    }
+
+    /**
+     * 모든 버튼의 아이콘 색상 업데이트
+     */
+    private fun updateAllButtonColors(color: Int) {
+        if (currentButtonColor == color) return
+        currentButtonColor = color
+
+        allButtons.forEach { button ->
+            button.setColorFilter(color)
+        }
+        Log.d(TAG, "Button colors updated to ${if (color == Color.WHITE) "WHITE" else if (color == Color.BLACK) "BLACK" else "GRAY"}")
+    }
+
+    /**
+     * 다크 모드 변경 시 호출
+     */
+    fun updateDarkMode() {
+        val newDarkMode = isSystemDarkMode()
+        if (isDarkMode != newDarkMode) {
+            isDarkMode = newDarkMode
+            Log.d(TAG, "Dark mode changed: $isDarkMode")
+
+            // 배경 및 버튼 색상 업데이트
+            updateNavBarBackground()
+        }
     }
 }
