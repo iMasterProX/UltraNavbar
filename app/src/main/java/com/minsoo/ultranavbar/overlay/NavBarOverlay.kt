@@ -91,6 +91,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     // 네비바 스와이프 다운 감지용 변수
     private var navBarTouchStartY: Float = 0f
     private var isGestureShown: Boolean = false  // 제스처로 보여진 상태인지
+    private var gestureAutoHideRunnable: Runnable? = null  // 제스처 자동 숨김 타이머
 
     @SuppressLint("ClickableViewAccessibility")
     fun create() {
@@ -426,6 +427,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (fromGesture) {
             gestureShowTime = android.os.SystemClock.elapsedRealtime()
             showGestureOverlay()  // 스와이프 다운 감지 활성화
+            scheduleGestureAutoHide()  // 4초 후 자동 숨김 예약
         }
 
         // 윈도우 높이를 네비바 높이로 복원 (핫스팟만 보이던 상태에서 복원)
@@ -604,6 +606,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             pendingHomeState = null
             pendingRecentsState?.let { handler.removeCallbacks(it) }
             pendingRecentsState = null
+            cancelGestureAutoHide()  // 자동 숨김 타이머 정리
             windowManager.removeView(rootView)
             rootView = null
             backgroundView = null
@@ -826,6 +829,29 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun hideGestureOverlay() {
         gestureOverlayView?.visibility = View.GONE
         isGestureShown = false
+        cancelGestureAutoHide()  // 자동 숨김 타이머 취소
+    }
+
+    /**
+     * 제스처로 표시된 네비바 4초 후 자동 숨김 예약
+     */
+    private fun scheduleGestureAutoHide() {
+        cancelGestureAutoHide()  // 기존 타이머 취소
+        gestureAutoHideRunnable = Runnable {
+            if (isShowing && isGestureShown) {
+                Log.d(TAG, "Gesture auto-hide triggered after 4 seconds")
+                hide(animate = true, showHotspot = true)
+            }
+        }
+        handler.postDelayed(gestureAutoHideRunnable!!, 4000)  // 4초 후 자동 숨김
+    }
+
+    /**
+     * 제스처 자동 숨김 타이머 취소
+     */
+    private fun cancelGestureAutoHide() {
+        gestureAutoHideRunnable?.let { handler.removeCallbacks(it) }
+        gestureAutoHideRunnable = null
     }
 
     /**
