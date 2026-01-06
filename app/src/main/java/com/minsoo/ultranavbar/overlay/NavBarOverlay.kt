@@ -578,6 +578,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             bar.visibility = View.VISIBLE
         }
         backgroundView?.visibility = View.VISIBLE
+        // 진행 중인 배경 페이드 전환을 중단해 홈 진입 시 즉시 커스텀 배경을 복구
+        backgroundManager.cancelBackgroundTransition()
 
         if (isShowing) {
             updateWindowHeight(getSystemNavigationBarHeightPx())

@@ -346,7 +346,10 @@ class BackgroundManager(
         toAlpha: Int,
         onEnd: (() -> Unit)? = null
     ) {
-        bgAnimator?.cancel()
+        bgAnimator?.let { animator ->
+            animator.removeAllListeners()
+            animator.cancel()
+        }
         bgAnimator = ValueAnimator.ofInt(fromAlpha, toAlpha).apply {
             duration = Constants.Timing.BG_TRANSITION_DURATION_MS
             interpolator = android12Interpolator
@@ -355,13 +358,32 @@ class BackgroundManager(
             }
             if (onEnd != null) {
                 addListener(object : AnimatorListenerAdapter() {
+                    private var wasCancelled = false
+
+                    override fun onAnimationCancel(animation: Animator) {
+                        wasCancelled = true
+                    }
+
                     override fun onAnimationEnd(animation: Animator) {
-                        onEnd()
+                        if (!wasCancelled) {
+                            onEnd()
+                        }
                     }
                 })
             }
             start()
         }
+    }
+
+    /**
+     * 진행 중인 배경 전환 애니메이션 취소
+     */
+    fun cancelBackgroundTransition() {
+        bgAnimator?.let { animator ->
+            animator.removeAllListeners()
+            animator.cancel()
+        }
+        bgAnimator = null
     }
 
     // ===== 정리 =====
