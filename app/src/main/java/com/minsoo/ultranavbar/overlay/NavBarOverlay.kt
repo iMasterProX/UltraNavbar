@@ -544,6 +544,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             if (isOnHomeScreen) return
             isOnHomeScreen = true
             Log.d(TAG, "Home screen state: true")
+
+            // 진행 중인 애니메이션 취소 및 상태 복원
+            cancelAnimationsAndRestoreState()
+
             // 홈 화면 복귀 시 방향 동기화 (전체화면 앱 종료 후 필수)
             syncOrientationAndBackground()
             return
@@ -560,6 +564,26 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
         pendingHomeState = task
         handler.postDelayed(task, Constants.Timing.HOME_STATE_DEBOUNCE_MS)
+    }
+
+    /**
+     * 진행 중인 애니메이션 취소 및 뷰 상태 복원
+     * 페이드 애니메이션 중간에 홈 화면 복귀 시 어중간한 상태 방지
+     */
+    private fun cancelAnimationsAndRestoreState() {
+        navBarView?.let { bar ->
+            bar.clearAnimation()
+            bar.animate().cancel()
+            bar.alpha = 1f
+            bar.visibility = View.VISIBLE
+        }
+        backgroundView?.visibility = View.VISIBLE
+
+        if (isShowing) {
+            updateWindowHeight(getSystemNavigationBarHeightPx())
+        }
+
+        Log.d(TAG, "Animations cancelled and state restored")
     }
 
     fun setRecentsState(isRecents: Boolean) {
