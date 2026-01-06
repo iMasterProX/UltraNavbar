@@ -103,7 +103,9 @@ class BackgroundManager(
      */
     fun getCurrentBitmap(): Bitmap? {
         val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
-        return if (isLandscape) landscapeBitmap else portraitBitmap
+        val bitmap = if (isLandscape) landscapeBitmap else portraitBitmap
+        Log.d(TAG, "getCurrentBitmap: orientation=${getOrientationName(currentOrientation)}, returning ${if (isLandscape) "landscape" else "portrait"} bitmap (hash=${bitmap?.hashCode()})")
+        return bitmap
     }
 
     /**

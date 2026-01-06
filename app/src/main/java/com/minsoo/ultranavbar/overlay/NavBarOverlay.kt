@@ -544,7 +544,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             if (isOnHomeScreen) return
             isOnHomeScreen = true
             Log.d(TAG, "Home screen state: true")
-            updateNavBarBackground()
+            // 홈 화면 복귀 시 방향 동기화 (전체화면 앱 종료 후 필수)
+            syncOrientationAndBackground()
             return
         }
 
@@ -642,24 +643,24 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     /**
      * 방향 및 배경 강제 동기화
-     * 전체화면 모드 복귀 시 호출하여 올바른 방향의 배경이 표시되도록 함
+     * 전체화면 모드 복귀 시 또는 홈 화면 복귀 시 호출
      */
     private fun syncOrientationAndBackground() {
         val actualOrientation = context.resources.configuration.orientation
+        val actualOrientationName = if (actualOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+        val cachedOrientationName = if (currentOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
 
-        // NavBarOverlay와 BackgroundManager 모두 실제 시스템 방향으로 강제 동기화
+        Log.d(TAG, "syncOrientationAndBackground: cached=$cachedOrientationName, actual=$actualOrientationName")
+
+        // 항상 실제 시스템 방향으로 동기화
         if (currentOrientation != actualOrientation) {
-            Log.d(TAG, "Force syncing orientation on show: $currentOrientation -> $actualOrientation")
+            Log.d(TAG, "Orientation mismatch detected, forcing sync")
             currentOrientation = actualOrientation
             backgroundManager.forceOrientationSync(actualOrientation)
-            backgroundManager.loadBackgroundBitmaps()
-        } else {
-            // 방향이 같아도 BackgroundManager 내부 상태가 다를 수 있으므로 확인
-            if (backgroundManager.syncOrientationWithSystem()) {
-                Log.d(TAG, "BackgroundManager orientation was out of sync, reloaded bitmaps")
-            }
         }
 
+        // 비트맵 항상 다시 로드 (캐시 문제 방지)
+        backgroundManager.loadBackgroundBitmaps()
         updateNavBarBackground()
     }
 
