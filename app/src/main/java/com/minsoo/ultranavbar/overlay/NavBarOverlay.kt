@@ -378,6 +378,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             showGestureOverlay()
         }
 
+        // 숨겨진 상태에서 다시 보일 때 방향 및 배경 동기화 (전체화면 후 복귀 시 필수)
+        val wasHidden = !isShowing
+        if (wasHidden) {
+            syncOrientationAndBackground()
+        }
+
         updateWindowHeight(getSystemNavigationBarHeightPx())
 
         if (isShowing) {
@@ -633,6 +639,29 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     // ===== 배경 업데이트 =====
+
+    /**
+     * 방향 및 배경 강제 동기화
+     * 전체화면 모드 복귀 시 호출하여 올바른 방향의 배경이 표시되도록 함
+     */
+    private fun syncOrientationAndBackground() {
+        val actualOrientation = context.resources.configuration.orientation
+
+        // NavBarOverlay와 BackgroundManager 모두 실제 시스템 방향으로 강제 동기화
+        if (currentOrientation != actualOrientation) {
+            Log.d(TAG, "Force syncing orientation on show: $currentOrientation -> $actualOrientation")
+            currentOrientation = actualOrientation
+            backgroundManager.forceOrientationSync(actualOrientation)
+            backgroundManager.loadBackgroundBitmaps()
+        } else {
+            // 방향이 같아도 BackgroundManager 내부 상태가 다를 수 있으므로 확인
+            if (backgroundManager.syncOrientationWithSystem()) {
+                Log.d(TAG, "BackgroundManager orientation was out of sync, reloaded bitmaps")
+            }
+        }
+
+        updateNavBarBackground()
+    }
 
     private fun updateNavBarBackground() {
         val bar = navBarView ?: return

@@ -142,6 +142,15 @@ class BackgroundManager(
         return false
     }
 
+    /**
+     * 방향 강제 동기화 (조건 없이 지정된 방향으로 설정)
+     * 전체화면 모드 복귀 시 사용
+     */
+    fun forceOrientationSync(orientation: Int) {
+        Log.d(TAG, "Force orientation sync: ${getOrientationName(currentOrientation)} -> ${getOrientationName(orientation)}")
+        currentOrientation = orientation
+    }
+
     private fun getOrientationName(orientation: Int): String {
         return if (orientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
     }
