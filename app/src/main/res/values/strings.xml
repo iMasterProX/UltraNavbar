@@ -61,8 +61,11 @@
 
     <string name="long_press_action_title">Home long-press action</string>
     <string name="long_press_action_default">Default (Google Assistant)</string>
-    <string name="long_press_action_change">Change</string>
+    <string name="long_press_action_app">App</string>
+    <string name="long_press_action_shortcut">Shortcut</string>
     <string name="long_press_action_reset">Reset</string>
+    <string name="shortcut_selected">Shortcut selected: %s</string>
+    <string name="shortcut_not_available">Shortcut not available.</string>
     <string name="ignore_stylus_title">Ignore stylus input</string>
     <string name="ignore_stylus_summary">Prevents pen input from triggering navigation bar actions.</string>
     <string name="auto_button_label">Auto</string>

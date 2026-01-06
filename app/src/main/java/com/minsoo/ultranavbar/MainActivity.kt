@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity() {
     // 롱프레스 설정
     private lateinit var txtLongPressAction: TextView
     private lateinit var btnChangeLongPressAction: MaterialButton
+    private lateinit var btnSelectShortcut: MaterialButton
     private lateinit var btnResetLongPressAction: MaterialButton
 
     private lateinit var radioBlacklist: RadioButton
@@ -76,6 +77,28 @@ class MainActivity : AppCompatActivity() {
             val packageName = result.data?.getStringExtra(AppListActivity.EXTRA_SELECTED_PACKAGE)
             settings.longPressAction = packageName
             updateLongPressActionUI()
+        }
+    }
+
+    // 바로가기 선택 런처
+    @Suppress("DEPRECATION")
+    private val shortcutPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            if (data != null) {
+                val shortcutIntent = data.getParcelableExtra<Intent>(Intent.EXTRA_SHORTCUT_INTENT)
+                val shortcutName = data.getStringExtra(Intent.EXTRA_SHORTCUT_NAME)
+                if (shortcutIntent != null) {
+                    // shortcut: 접두사와 함께 인텐트 URI 저장
+                    val intentUri = shortcutIntent.toUri(Intent.URI_INTENT_SCHEME)
+                    settings.longPressAction = "shortcut:$intentUri"
+                    settings.shortcutName = shortcutName ?: "Shortcut"
+                    updateLongPressActionUI()
+                    Toast.makeText(this, getString(R.string.shortcut_selected, shortcutName), Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -128,12 +151,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateLongPressActionUI() {
-        val packageName = settings.longPressAction
-        if (packageName == null) {
+        val action = settings.longPressAction
+        if (action == null) {
             txtLongPressAction.text = getString(R.string.long_press_action_default)
+        } else if (action.startsWith("shortcut:")) {
+            // 바로가기인 경우 저장된 이름 표시
+            val shortcutName = settings.shortcutName ?: "Shortcut"
+            txtLongPressAction.text = shortcutName
         } else {
+            // 앱인 경우
             try {
-                val appInfo = packageManager.getApplicationInfo(packageName, 0)
+                val appInfo = packageManager.getApplicationInfo(action, 0)
                 val appLabel = packageManager.getApplicationLabel(appInfo)
                 txtLongPressAction.text = appLabel
             } catch (e: PackageManager.NameNotFoundException) {
@@ -141,6 +169,17 @@ class MainActivity : AppCompatActivity() {
                 // 앱이 제거된 경우, 설정을 기본값으로 리셋
                 settings.longPressAction = null
             }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun launchShortcutPicker() {
+        val intent = Intent(Intent.ACTION_CREATE_SHORTCUT)
+        val chooserIntent = Intent.createChooser(intent, getString(R.string.long_press_action_shortcut))
+        try {
+            shortcutPickerLauncher.launch(chooserIntent)
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.shortcut_not_available, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -160,9 +199,15 @@ class MainActivity : AppCompatActivity() {
                 longPressActionPickerLauncher.launch(intent)
             }
         }
+        btnSelectShortcut = findViewById<MaterialButton>(R.id.btnSelectShortcut).apply {
+            setOnClickListener {
+                launchShortcutPicker()
+            }
+        }
         btnResetLongPressAction = findViewById<MaterialButton>(R.id.btnResetLongPressAction).apply {
             setOnClickListener {
                 settings.longPressAction = null
+                settings.shortcutName = null
                 updateLongPressActionUI()
                 Toast.makeText(this@MainActivity, R.string.default_action_set, Toast.LENGTH_SHORT).show()
             }

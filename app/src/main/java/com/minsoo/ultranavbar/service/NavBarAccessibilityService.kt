@@ -481,28 +481,86 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     private fun executeAssistAction(): Boolean {
         try {
-            val customActionPackage = settings.longPressAction
-            if (customActionPackage == null) {
-                val intent = Intent(Intent.ACTION_ASSIST).apply {
-                    setPackage("com.google.android.googlequicksearchbox")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivity(intent)
-                Log.d(TAG, "Executing default long-press: Google Assistant")
+            val customAction = settings.longPressAction
+            if (customAction == null) {
+                // 음성 어시스턴트 모드로 실행 (마이크 활성화 상태)
+                return executeVoiceAssistant()
+            } else if (customAction.startsWith("shortcut:")) {
+                // 바로가기 실행
+                return executeShortcut(customAction.removePrefix("shortcut:"))
             } else {
-                val intent = packageManager.getLaunchIntentForPackage(customActionPackage)
+                // 앱 실행
+                val intent = packageManager.getLaunchIntentForPackage(customAction)
                 if (intent != null) {
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     startActivity(intent)
-                    Log.d(TAG, "Executing custom long-press: $customActionPackage")
+                    Log.d(TAG, "Executing custom long-press: $customAction")
+                    return true
                 } else {
-                    Log.w(TAG, "Could not launch: $customActionPackage")
+                    Log.w(TAG, "Could not launch: $customAction")
                     return false
                 }
             }
-            return true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to execute ASSIST action", e)
+            return false
+        }
+    }
+
+    private fun executeVoiceAssistant(): Boolean {
+        // 방법 1: ACTION_VOICE_ASSIST (음성 대기 모드로 실행)
+        try {
+            val voiceIntent = Intent("android.intent.action.VOICE_ASSIST").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (voiceIntent.resolveActivity(packageManager) != null) {
+                startActivity(voiceIntent)
+                Log.d(TAG, "Executing voice assistant via VOICE_ASSIST")
+                return true
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "VOICE_ASSIST failed: ${e.message}")
+        }
+
+        // 방법 2: ACTION_VOICE_COMMAND (음성 명령 모드)
+        try {
+            val voiceCommandIntent = Intent(Intent.ACTION_VOICE_COMMAND).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (voiceCommandIntent.resolveActivity(packageManager) != null) {
+                startActivity(voiceCommandIntent)
+                Log.d(TAG, "Executing voice assistant via ACTION_VOICE_COMMAND")
+                return true
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "ACTION_VOICE_COMMAND failed: ${e.message}")
+        }
+
+        // 방법 3: Google Assistant 직접 호출 (폴백)
+        try {
+            val assistIntent = Intent(Intent.ACTION_ASSIST).apply {
+                setPackage("com.google.android.googlequicksearchbox")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(assistIntent)
+            Log.d(TAG, "Executing Google Assistant via ACTION_ASSIST (fallback)")
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "All assistant methods failed", e)
+            return false
+        }
+    }
+
+    private fun executeShortcut(shortcutUri: String): Boolean {
+        try {
+            val intent = Intent.parseUri(shortcutUri, Intent.URI_INTENT_SCHEME).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            Log.d(TAG, "Executing shortcut: $shortcutUri")
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to execute shortcut: $shortcutUri", e)
             return false
         }
     }

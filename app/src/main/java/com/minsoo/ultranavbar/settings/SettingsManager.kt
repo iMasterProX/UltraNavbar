@@ -18,6 +18,7 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_HOME_BG_ENABLED = "home_bg_enabled"
         private const val KEY_IGNORE_STYLUS = "ignore_stylus"
         private const val KEY_LONG_PRESS_ACTION = "long_press_action"
+        private const val KEY_SHORTCUT_NAME = "shortcut_name"
         private const val KEY_BATTERY_OPT_REQUESTED = "battery_opt_requested"
         private const val KEY_PREVIEW_FILTER_OPACITY = "preview_filter_opacity"
         private const val KEY_APP_LIST = "app_list" // 저장된 앱 목록 (패키지명 set)
@@ -72,6 +73,10 @@ class SettingsManager private constructor(context: Context) {
     var longPressAction: String?
         get() = prefs.getString(KEY_LONG_PRESS_ACTION, null)
         set(value) = prefs.edit().putString(KEY_LONG_PRESS_ACTION, value).apply()
+
+    var shortcutName: String?
+        get() = prefs.getString(KEY_SHORTCUT_NAME, null)
+        set(value) = prefs.edit().putString(KEY_SHORTCUT_NAME, value).apply()
 
     var batteryOptRequested: Boolean
         get() = prefs.getBoolean(KEY_BATTERY_OPT_REQUESTED, false)
