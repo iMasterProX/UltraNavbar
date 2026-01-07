@@ -670,13 +670,22 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 bar.visibility = View.VISIBLE
                 // 슬라이드 애니메이션에서 남은 translation 초기화
                 bar.translationY = 0f
+
+                // 버튼 색상도 현재 배경에 맞게 복원
+                val currentBg = bar.background
+                val buttonColor = if (currentBg is BitmapDrawable && currentBg.bitmap != null) {
+                    backgroundManager.calculateButtonColorForBitmap(currentBg.bitmap)
+                } else {
+                    backgroundManager.getDefaultButtonColor()
+                }
+                buttonManager.updateAllButtonColors(buttonColor, force = true)
             }
             backgroundView?.alpha = 1f
             backgroundView?.visibility = View.VISIBLE
             hotspotView?.visibility = View.GONE
             updateWindowHeight(getSystemNavigationBarHeightPx())
             isShowing = true
-            Log.d(TAG, "Animations cancelled and state restored to showing")
+            Log.d(TAG, "Animations cancelled and state restored to showing (including button color)")
         } else {
             Log.d(TAG, "Animations cancelled, keeping hidden state (for lock screen unlock fade)")
         }

@@ -294,8 +294,17 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         // 포그라운드 앱 변경
         if (currentPackage != packageName) {
+            val previousPackage = currentPackage
             currentPackage = packageName
             Log.d(TAG, "Foreground app: $packageName")
+
+            // 비활성화된 앱에서 다른 앱으로 전환 시 오버레이 가시성 즉시 업데이트
+            val wasDisabled = previousPackage.isNotEmpty() && settings.isAppDisabled(previousPackage)
+            val isDisabled = settings.isAppDisabled(packageName)
+            if (wasDisabled || isDisabled) {
+                Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
+                handler.post { updateOverlayVisibility() }
+            }
         }
 
         // 홈 화면 상태 업데이트
