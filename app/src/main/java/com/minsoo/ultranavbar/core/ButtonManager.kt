@@ -68,12 +68,12 @@ class ButtonManager(
         return ImageButton(context).apply {
             layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
 
-            // 리플 효과 설정
-            val rippleColor = ColorStateList.valueOf(initialColor)
+            // 리플 효과 설정 - 반투명 흰색으로 통일 (다크/라이트 모드 동일)
+            val rippleColor = ColorStateList.valueOf(0x40FFFFFF) // 25% 불투명 흰색
             val maskDrawable = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = sizePx / 2f
-                setColor(initialColor)
+                setColor(Color.WHITE)
             }
             background = RippleDrawable(rippleColor, null, maskDrawable)
 
