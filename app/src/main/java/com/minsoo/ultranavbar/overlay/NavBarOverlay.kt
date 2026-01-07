@@ -653,7 +653,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             windowManager.updateViewLayout(root, params)
         }
 
-        backgroundManager.loadBackgroundBitmaps()
+        // 비트맵이 없는 경우에만 로드 (이미 로드되어 있으면 스킵)
+        backgroundManager.loadBackgroundBitmaps(forceReload = false)
         updateNavBarBackground()
     }
 
@@ -685,8 +686,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             backgroundManager.forceOrientationSync(actualOrientation)
         }
 
-        // 비트맵 항상 다시 로드 (캐시 문제 방지)
-        backgroundManager.loadBackgroundBitmaps()
+        // 비트맵이 없는 경우에만 로드 (불필요한 재로드 방지)
+        backgroundManager.loadBackgroundBitmaps(forceReload = false)
         updateNavBarBackground()
     }
 
@@ -741,7 +742,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun refreshSettings() {
         if (!isCreated) return
 
-        backgroundManager.loadBackgroundBitmaps()
+        // 설정 새로고침 시 강제 리로드
+        backgroundManager.loadBackgroundBitmaps(forceReload = true)
 
         rootView?.let { root ->
             root.removeAllViews()
@@ -758,7 +760,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     fun reloadBackgroundImages() {
-        backgroundManager.loadBackgroundBitmaps()
+        // 배경 이미지 변경 시 강제 리로드
+        backgroundManager.loadBackgroundBitmaps(forceReload = true)
         updateNavBarBackground()
     }
 

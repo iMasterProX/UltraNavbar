@@ -81,21 +81,46 @@ class BackgroundManager(
     /**
      * 배경 비트맵 로드
      * 설정이 활성화된 경우에만 로드
+     * @param forceReload 강제 리로드 여부 (기본값 false)
      */
-    fun loadBackgroundBitmaps() {
+    fun loadBackgroundBitmaps(forceReload: Boolean = false) {
         if (!settings.homeBgEnabled) {
-            landscapeBitmap = null
-            portraitBitmap = null
+            recycleBitmaps()
             return
         }
 
-        landscapeBitmap = null
-        portraitBitmap = null
+        // 이미 로드된 비트맵이 있고 강제 리로드가 아니면 스킵
+        if (!forceReload && landscapeBitmap != null && portraitBitmap != null) {
+            Log.d(TAG, "Background bitmaps already loaded, skipping reload")
+            return
+        }
+
+        // 기존 비트맵 리사이클
+        recycleBitmaps()
 
         landscapeBitmap = ImageCropUtil.loadBackgroundBitmap(context, true)
         portraitBitmap = ImageCropUtil.loadBackgroundBitmap(context, false)
 
         Log.d(TAG, "Background bitmaps loaded: landscape=${landscapeBitmap?.hashCode()}, portrait=${portraitBitmap?.hashCode()}")
+    }
+
+    /**
+     * 비트맵 리사이클 (메모리 누수 방지)
+     */
+    private fun recycleBitmaps() {
+        landscapeBitmap?.let { bitmap ->
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+        }
+        landscapeBitmap = null
+
+        portraitBitmap?.let { bitmap ->
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+        }
+        portraitBitmap = null
     }
 
     /**
@@ -138,7 +163,7 @@ class BackgroundManager(
         if (currentOrientation != actualOrientation) {
             Log.w(TAG, "Orientation mismatch! cached=$currentOrientation, actual=$actualOrientation - resyncing")
             currentOrientation = actualOrientation
-            loadBackgroundBitmaps()
+            // 방향이 바뀌었으므로 비트맵 리로드 필요 없음 (이미 로드되어 있음)
             return true
         }
         return false
@@ -394,7 +419,6 @@ class BackgroundManager(
     fun cleanup() {
         bgAnimator?.cancel()
         bgAnimator = null
-        landscapeBitmap = null
-        portraitBitmap = null
+        recycleBitmaps()
     }
 }

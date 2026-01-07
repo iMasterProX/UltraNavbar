@@ -28,8 +28,8 @@ object Constants {
         const val GESTURE_AUTO_HIDE_MS = 3000L
         const val DARK_MODE_DEBOUNCE_MS = 1000L
         const val STATE_CHECK_DELAY_MS = 50L
-        const val HOME_STATE_DEBOUNCE_MS = 200L
-        const val RECENTS_STATE_DEBOUNCE_MS = 100L
+        const val HOME_STATE_DEBOUNCE_MS = 350L  // 증가: 빠른 상태 토글 방지 (200 -> 350)
+        const val RECENTS_STATE_DEBOUNCE_MS = 150L  // 증가: 빠른 상태 토글 방지 (100 -> 150)
         const val FULLSCREEN_POLLING_MS = 300L
         const val IME_VISIBILITY_DELAY_MS = 500L
     }
