@@ -303,7 +303,12 @@ class NavBarAccessibilityService : AccessibilityService() {
             val isDisabled = settings.isAppDisabled(packageName)
             if (wasDisabled || isDisabled) {
                 Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
-                handler.post { updateOverlayVisibility() }
+                // 전체화면 상태를 먼저 업데이트한 후 가시성 업데이트
+                // (isFullscreen이 잘못된 상태로 남아 있으면 shouldAutoHide가 true 반환)
+                handler.post {
+                    checkFullscreenState()
+                    updateOverlayVisibility()
+                }
             }
         }
 
