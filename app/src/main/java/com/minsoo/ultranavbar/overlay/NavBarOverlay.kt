@@ -402,13 +402,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             syncOrientationAndBackground()
         }
 
-        updateWindowHeight(getSystemNavigationBarHeightPx())
-
+        // 이미 표시 중인 경우
         if (isShowing) {
+            updateWindowHeight(getSystemNavigationBarHeightPx())
             if (shouldFade) {
                 navBarView?.let { bar ->
                     bar.clearAnimation()
-                    // 둘 다 알파 애니메이션
                     bar.alpha = 0f
                     backgroundView?.alpha = 0f
                     ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
@@ -426,42 +425,49 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return
         }
 
+        // 숨겨진 상태에서 표시
         navBarView?.let { bar ->
             bar.clearAnimation()
 
             if (shouldFade) {
-                // 페이드: backgroundView와 navBarView 모두 알파 애니메이션
-                // 먼저 둘 다 투명하게 만들고 보이게 설정
+                // 페이드: 먼저 뷰를 투명하게 만들고 VISIBLE로 설정
+                // 윈도우 크기 변경 전에 미리 설정하여 크기 변경 시 슬라이드처럼 보이지 않도록 함
                 bar.alpha = 0f
                 bar.visibility = View.VISIBLE
                 backgroundView?.alpha = 0f
                 backgroundView?.visibility = View.VISIBLE
+                hotspotView?.visibility = View.GONE
 
-                // navBarView 페이드 인
-                ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
-                    duration = Constants.Timing.ANIMATION_DURATION_MS
-                    start()
-                }
-                // backgroundView도 함께 페이드 인
-                backgroundView?.let { bg ->
-                    ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
+                // 윈도우 높이 변경
+                updateWindowHeight(getSystemNavigationBarHeightPx())
+
+                // 레이아웃 완료 후 페이드 애니메이션 시작
+                bar.post {
+                    ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
                         start()
                     }
+                    backgroundView?.let { bg ->
+                        ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
+                            duration = Constants.Timing.ANIMATION_DURATION_MS
+                            start()
+                        }
+                    }
                 }
             } else {
-                // 슬라이드: 기존 동작
+                // 슬라이드: 윈도우 높이 먼저 변경 후 애니메이션
+                updateWindowHeight(getSystemNavigationBarHeightPx())
                 backgroundView?.alpha = 1f
                 backgroundView?.visibility = View.VISIBLE
                 bar.alpha = 1f
                 bar.visibility = View.VISIBLE
+                hotspotView?.visibility = View.GONE
                 val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                     duration = Constants.Timing.ANIMATION_DURATION_MS
                 }
                 bar.startAnimation(slideUp)
             }
 
-            hotspotView?.visibility = View.GONE
             isShowing = true
             Log.d(TAG, "Overlay shown (fade=$shouldFade, fromGesture=$fromGesture)")
         }
