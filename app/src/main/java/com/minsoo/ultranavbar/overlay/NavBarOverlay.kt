@@ -391,6 +391,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         // 잠금화면 해제 시 pendingFadeShow가 설정되어 있으면 페이드 사용
         val shouldFade = fade || pendingFadeShow
+        val wasPreparedForFade = pendingFadeShow
         if (pendingFadeShow) {
             pendingFadeShow = false
             Log.d(TAG, "Using pending fade animation (from lock screen unlock)")
@@ -398,7 +399,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         // 숨겨진 상태에서 다시 보일 때 방향 및 배경 동기화 (전체화면 후 복귀 시 필수)
         val wasHidden = !isShowing
-        if (wasHidden) {
+        if (wasHidden && !wasPreparedForFade) {
             syncOrientationAndBackground()
         }
 
@@ -430,28 +431,28 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             bar.clearAnimation()
 
             if (shouldFade) {
-                // 페이드: 먼저 뷰를 투명하게 만들고 VISIBLE로 설정
-                // 윈도우 크기 변경 전에 미리 설정하여 크기 변경 시 슬라이드처럼 보이지 않도록 함
-                bar.alpha = 0f
-                bar.visibility = View.VISIBLE
-                backgroundView?.alpha = 0f
-                backgroundView?.visibility = View.VISIBLE
-                hotspotView?.visibility = View.GONE
+                // 페이드: prepareForUnlockFade()에서 이미 윈도우가 확장되고 뷰가 투명하게 설정됨
+                // 여기서는 윈도우 리사이즈 없이 알파 애니메이션만 시작
+                if (!wasPreparedForFade) {
+                    // 준비되지 않은 경우 (일반 페이드) - 뷰 설정
+                    bar.alpha = 0f
+                    bar.visibility = View.VISIBLE
+                    backgroundView?.alpha = 0f
+                    backgroundView?.visibility = View.VISIBLE
+                    hotspotView?.visibility = View.GONE
+                    updateWindowHeight(getSystemNavigationBarHeightPx())
+                }
+                // else: wasPreparedForFade=true면 prepareForUnlockFade()에서 이미 설정됨
 
-                // 윈도우 높이 변경
-                updateWindowHeight(getSystemNavigationBarHeightPx())
-
-                // 레이아웃 완료 후 페이드 애니메이션 시작
-                bar.post {
-                    ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
+                // 알파 애니메이션만 시작 (윈도우 리사이즈 없음)
+                ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
+                    duration = Constants.Timing.ANIMATION_DURATION_MS
+                    start()
+                }
+                backgroundView?.let { bg ->
+                    ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
                         start()
-                    }
-                    backgroundView?.let { bg ->
-                        ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
-                            duration = Constants.Timing.ANIMATION_DURATION_MS
-                            start()
-                        }
                     }
                 }
             } else {
@@ -469,7 +470,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             }
 
             isShowing = true
-            Log.d(TAG, "Overlay shown (fade=$shouldFade, fromGesture=$fromGesture)")
+            Log.d(TAG, "Overlay shown (fade=$shouldFade, fromGesture=$fromGesture, prepared=$wasPreparedForFade)")
         }
     }
 
@@ -837,11 +838,24 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     /**
      * 잠금화면 해제 시 페이드 애니메이션 준비
-     * 화면 켜질 때 잠금화면이 활성화된 경우 호출되어 다음 show()에서 페이드 사용
+     * 화면 켜질 때 잠금화면이 활성화된 경우 호출
+     *
+     * 핵심: 윈도우 높이를 미리 설정하여 show() 시 윈도우 리사이즈가 없도록 함
+     * 윈도우 리사이즈가 슬라이드처럼 보이는 현상을 방지
      */
     fun prepareForUnlockFade() {
         pendingFadeShow = true
-        Log.d(TAG, "Prepared for unlock fade animation")
+
+        // 윈도우 높이를 미리 네비바 높이로 설정 (show 시 리사이즈 방지)
+        // 뷰는 투명하게 유지하여 보이지 않음
+        navBarView?.alpha = 0f
+        navBarView?.visibility = View.VISIBLE
+        backgroundView?.alpha = 0f
+        backgroundView?.visibility = View.VISIBLE
+        hotspotView?.visibility = View.GONE
+        updateWindowHeight(getSystemNavigationBarHeightPx())
+
+        Log.d(TAG, "Prepared for unlock fade animation (window pre-expanded)")
     }
     fun markNextShowInstant() { /* no-op */ }
 }
