@@ -489,6 +489,19 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     fun hide(animate: Boolean = true, showHotspot: Boolean = true) {
+        val shouldShowHotspot = showHotspot && settings.hotspotEnabled
+
+        // 비활성화된 앱용 완전 숨김 (showHotspot = false)
+        // 이미 숨겨진 상태여도 윈도우 높이를 0으로 강제 설정하여 터치 통과
+        if (!showHotspot && !isShowing) {
+            navBarView?.visibility = View.GONE
+            backgroundView?.visibility = View.GONE
+            hotspotView?.visibility = View.GONE
+            updateWindowHeight(0)
+            Log.d(TAG, "Force hiding for disabled app (window height = 0)")
+            return
+        }
+
         if (!isShowing) return
 
         // 숨길 때 pendingFadeShow 초기화
@@ -497,8 +510,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         navBarView?.let { bar ->
             bar.clearAnimation()
             bar.animate().cancel()
-
-            val shouldShowHotspot = showHotspot && settings.hotspotEnabled
 
             if (!animate) {
                 bar.visibility = View.GONE
