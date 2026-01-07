@@ -88,7 +88,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private val backgroundListener = object : BackgroundManager.BackgroundChangeListener {
         override fun onButtonColorChanged(color: Int) {
-            buttonManager.updateAllButtonColors(color)
+            // 명시적 색상 변경 요청이므로 강제 업데이트
+            buttonManager.updateAllButtonColors(color, force = true)
         }
 
         override fun onBackgroundApplied(drawable: Drawable) {

@@ -40,8 +40,8 @@ class ButtonManager(
     private var _backButton: ImageButton? = null
     val backButton: ImageButton? get() = _backButton
 
-    // 현재 버튼 색상
-    private var currentColor: Int = Color.WHITE
+    // 현재 버튼 색상 (-1은 초기화되지 않음을 의미)
+    private var currentColor: Int = -1
 
     /**
      * 버튼 액션 리스너
@@ -136,16 +136,18 @@ class ButtonManager(
 
     /**
      * 모든 버튼의 아이콘 색상 업데이트
+     * @param color 새 색상
+     * @param force true면 현재 색상과 같아도 강제 업데이트
      */
-    fun updateAllButtonColors(color: Int) {
-        if (currentColor == color) return
+    fun updateAllButtonColors(color: Int, force: Boolean = false) {
+        if (!force && currentColor == color) return
         currentColor = color
 
         _allButtons.forEach { button ->
             button.setColorFilter(color)
         }
 
-        Log.d(TAG, "All button colors updated to ${getColorName(color)}")
+        Log.d(TAG, "All button colors updated to ${getColorName(color)} (force=$force, buttons=${_allButtons.size})")
     }
 
     private fun getColorName(color: Int): String {
@@ -218,5 +220,7 @@ class ButtonManager(
         _allButtons.clear()
         _panelButton = null
         _backButton = null
+        // 색상 초기화하여 다음 업데이트 시 강제 적용되도록 함
+        currentColor = -1
     }
 }
