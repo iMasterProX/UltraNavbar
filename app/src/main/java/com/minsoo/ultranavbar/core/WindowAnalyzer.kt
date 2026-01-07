@@ -302,31 +302,25 @@ class WindowAnalyzer(
     // ===== 숨김 여부 판단 =====
 
     /**
-     * 오버레이를 숨겨야 하는지 판단
+     * 오버레이를 자동 숨김해야 하는지 판단
+     * (자동 숨김은 항상 활성화, 제스처로 재호출 가능)
      * @param currentPackage 현재 포그라운드 패키지
      * @param isFullscreen 전체화면 상태
      * @param isOnHomeScreen 홈 화면 여부
      * @param isWallpaperPreviewVisible 배경화면 미리보기 여부
-     * @param autoHideOnVideo 비디오 자동 숨김 설정
-     * @param shouldHideForPackage 패키지별 숨김 판단 함수
      * @return 숨겨야 하면 true
      */
-    fun shouldHideOverlay(
+    fun shouldAutoHideOverlay(
         currentPackage: String,
         isFullscreen: Boolean,
         isOnHomeScreen: Boolean,
-        isWallpaperPreviewVisible: Boolean,
-        autoHideOnVideo: Boolean,
-        shouldHideForPackage: (String) -> Boolean
+        isWallpaperPreviewVisible: Boolean
     ): Boolean {
         if (isLockScreenActive()) return true
         if (isWallpaperPreviewVisible) return true
 
-        // 전체화면이면 숨김 (런처는 예외)
-        if (autoHideOnVideo && isFullscreen && !isOnHomeScreen && currentPackage.isNotEmpty()) return true
-
-        // 앱별 숨김 설정
-        if (currentPackage.isNotEmpty() && shouldHideForPackage(currentPackage)) return true
+        // 전체화면이면 자동 숨김 (런처는 예외)
+        if (isFullscreen && !isOnHomeScreen && currentPackage.isNotEmpty()) return true
 
         return false
     }

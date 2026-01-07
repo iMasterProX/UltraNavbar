@@ -420,18 +420,25 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     private fun updateOverlayVisibility(forceFade: Boolean = false) {
         val lockScreenActive = windowAnalyzer.isLockScreenActive()
-        val shouldHide = windowAnalyzer.shouldHideOverlay(
+
+        // 1. 비활성화된 앱 체크 - 오버레이를 완전히 숨김 (핫스팟 없음, 재호출 불가)
+        if (currentPackage.isNotEmpty() && settings.isAppDisabled(currentPackage)) {
+            Log.d(TAG, "App disabled: $currentPackage - hiding overlay completely")
+            overlay?.hide(animate = false, showHotspot = false)
+            return
+        }
+
+        // 2. 자동 숨김 체크 - 전체화면 등에서 숨김 (핫스팟으로 재호출 가능)
+        val shouldAutoHide = windowAnalyzer.shouldAutoHideOverlay(
             currentPackage = currentPackage,
             isFullscreen = isFullscreen,
             isOnHomeScreen = isOnHomeScreen,
-            isWallpaperPreviewVisible = isWallpaperPreviewVisible,
-            autoHideOnVideo = settings.autoHideOnVideo,
-            shouldHideForPackage = { settings.shouldHideForPackage(it) }
+            isWallpaperPreviewVisible = isWallpaperPreviewVisible
         )
 
-        Log.d(TAG, "Update visibility: shouldHide=$shouldHide, lock=$lockScreenActive, pkg=$currentPackage, fullscreen=$isFullscreen")
+        Log.d(TAG, "Update visibility: shouldAutoHide=$shouldAutoHide, lock=$lockScreenActive, pkg=$currentPackage, fullscreen=$isFullscreen")
 
-        if (shouldHide) {
+        if (shouldAutoHide) {
             if (!lockScreenActive && overlay?.canAutoHide() == false) {
                 Log.d(TAG, "Auto-hide blocked: recently shown by gesture")
                 return

@@ -11,7 +11,6 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.view.View
-import android.widget.RadioButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,7 +20,6 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.switchmaterial.SwitchMaterial
-import com.minsoo.ultranavbar.model.HideMode
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.ui.AppListActivity
@@ -46,11 +44,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSelectShortcut: MaterialButton
     private lateinit var btnResetLongPressAction: MaterialButton
 
-    private lateinit var radioBlacklist: RadioButton
-    private lateinit var radioWhitelist: RadioButton
     private lateinit var switchHotspot: SwitchMaterial
     private lateinit var switchIgnoreStylus: SwitchMaterial
-    private lateinit var switchAutoHideVideo: SwitchMaterial
 
     // 홈 배경 관련
     private lateinit var switchHomeBg: SwitchMaterial
@@ -218,14 +213,12 @@ class MainActivity : AppCompatActivity() {
             openAccessibilitySettings()
         }
 
-        // 자동 숨김 설정
-        switchAutoHideVideo = findViewById(R.id.switchAutoHideVideo)
-        radioBlacklist = findViewById(R.id.radioBlacklist)
-        radioWhitelist = findViewById(R.id.radioWhitelist)
-
-        // 앱 목록 관리 버튼
-        findViewById<MaterialButton>(R.id.btnManageApps).setOnClickListener {
-            startActivity(Intent(this, AppListActivity::class.java))
+        // 비활성화 앱 관리 버튼
+        findViewById<MaterialButton>(R.id.btnManageDisabledApps).setOnClickListener {
+            val intent = Intent(this, AppListActivity::class.java).apply {
+                putExtra(AppListActivity.EXTRA_SELECTION_MODE, AppListActivity.MODE_DISABLED_APPS)
+            }
+            startActivity(intent)
         }
 
         // 재호출 설정
@@ -261,13 +254,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadSettings() {
-        // 자동 숨김 설정 로드
-        switchAutoHideVideo.isChecked = settings.autoHideOnVideo
-        when (settings.hideMode) {
-            HideMode.BLACKLIST -> radioBlacklist.isChecked = true
-            HideMode.WHITELIST -> radioWhitelist.isChecked = true
-        }
-
         // 재호출 설정 로드
         switchHotspot.isChecked = settings.hotspotEnabled
         switchIgnoreStylus.isChecked = settings.ignoreStylus
@@ -276,25 +262,7 @@ class MainActivity : AppCompatActivity() {
         switchHomeBg.isChecked = settings.homeBgEnabled
     }
 
-            private fun setupListeners() {
-        // 영상 자동 숨김
-        switchAutoHideVideo.setOnCheckedChangeListener { _, isChecked ->
-            settings.autoHideOnVideo = isChecked
-        }
-
-        // 숨김 모드
-        radioBlacklist.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                settings.hideMode = HideMode.BLACKLIST
-            }
-        }
-
-        radioWhitelist.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                settings.hideMode = HideMode.WHITELIST
-            }
-        }
-
+    private fun setupListeners() {
         // 재호출 핫스팟
         switchHotspot.setOnCheckedChangeListener { _, isChecked ->
             settings.hotspotEnabled = isChecked

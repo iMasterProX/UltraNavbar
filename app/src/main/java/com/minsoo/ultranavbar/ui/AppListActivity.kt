@@ -30,6 +30,7 @@ class AppListActivity : AppCompatActivity() {
         const val EXTRA_SELECTED_PACKAGE = "selected_package"
         const val MODE_SINGLE = "single"
         const val MODE_MULTIPLE = "multiple"
+        const val MODE_DISABLED_APPS = "disabled_apps"
     }
 
     private lateinit var settings: SettingsManager
@@ -48,10 +49,11 @@ class AppListActivity : AppCompatActivity() {
         setContentView(R.layout.activity_app_list)
 
         settings = SettingsManager.getInstance(this)
-        selectionMode = intent.getStringExtra(EXTRA_SELECTION_MODE) ?: MODE_MULTIPLE
-        
-        if (selectionMode == MODE_MULTIPLE) {
-            selectedPackages = settings.appList.toMutableSet()
+        selectionMode = intent.getStringExtra(EXTRA_SELECTION_MODE) ?: MODE_DISABLED_APPS
+
+        // MODE_DISABLED_APPS 모드에서 비활성화된 앱 목록 로드
+        if (selectionMode == MODE_DISABLED_APPS) {
+            selectedPackages = settings.disabledApps.toMutableSet()
         }
 
         initViews()
@@ -105,9 +107,8 @@ class AppListActivity : AppCompatActivity() {
             saveAndFinish()
         }
         
-        if (selectionMode == MODE_SINGLE) {
-            btnSave.visibility = View.GONE
-        }
+        // MODE_SINGLE에서만 저장 버튼 숨기기
+        btnSave.visibility = if (selectionMode == MODE_SINGLE) View.GONE else View.VISIBLE
     }
 
     private fun loadApps() {
@@ -173,7 +174,10 @@ class AppListActivity : AppCompatActivity() {
     }
 
     private fun saveAndFinish() {
-        settings.appList = selectedPackages
+        // MODE_DISABLED_APPS 모드에서 비활성화된 앱 목록 저장
+        if (selectionMode == MODE_DISABLED_APPS) {
+            settings.disabledApps = selectedPackages
+        }
         finish()
     }
 

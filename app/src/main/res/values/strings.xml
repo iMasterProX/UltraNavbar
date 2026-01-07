@@ -17,13 +17,9 @@
     <string name="bar_opacity">Bar opacity</string>
     <string name="bar_color">Bar background color</string>
 
-    <string name="auto_hide_settings">Auto-hide settings</string>
-    <string name="auto_hide_video">Auto-hide in fullscreen</string>
-    <string name="auto_hide_video_summary">Hide the bar automatically in fullscreen video or games.</string>
-    <string name="hide_mode">Hide mode</string>
-    <string name="hide_mode_blacklist">Blacklist (hide in selected apps)</string>
-    <string name="hide_mode_whitelist">Whitelist (show only in selected apps)</string>
-    <string name="manage_app_list">Manage app list</string>
+    <string name="disabled_apps_settings">Disabled apps</string>
+    <string name="disabled_apps_summary">Select apps where the custom navigation bar will be completely disabled. In these apps, only the default navigation bar will be used.</string>
+    <string name="manage_disabled_apps">Manage disabled apps</string>
 
     <string name="app_list_title">App list</string>
     <string name="select_apps">Select apps</string>

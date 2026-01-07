@@ -225,7 +225,7 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 자동 숨김 설정 -->
+        <!-- 비활성화 앱 설정 -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -242,78 +242,25 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/auto_hide_settings"
+                    android:text="@string/disabled_apps_settings"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
-                <!-- 영상 재생 시 자동 숨김 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="16dp"
-                    android:gravity="center_vertical">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/auto_hide_video"
-                            android:textSize="14sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/auto_hide_video_summary"
-                            android:textSize="12sp"
-                            android:textColor="?android:textColorSecondary" />
-                    </LinearLayout>
-
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/switchAutoHideVideo"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
-                </LinearLayout>
-
-                <!-- 숨김 모드 -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:text="@string/hide_mode"
-                    android:textSize="14sp" />
+                    android:layout_marginTop="8dp"
+                    android:text="@string/disabled_apps_summary"
+                    android:textSize="12sp"
+                    android:textColor="?android:textColorSecondary" />
 
-                <RadioGroup
-                    android:id="@+id/radioHideMode"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp">
-
-                    <RadioButton
-                        android:id="@+id/radioBlacklist"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/hide_mode_blacklist" />
-
-                    <RadioButton
-                        android:id="@+id/radioWhitelist"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/hide_mode_whitelist" />
-                </RadioGroup>
-
-                <!-- 앱 목록 관리 -->
+                <!-- 비활성화 앱 관리 버튼 -->
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnManageApps"
+                    android:id="@+id/btnManageDisabledApps"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="@string/manage_app_list"
+                    android:text="@string/manage_disabled_apps"
                     style="@style/Widget.Material3.Button.TonalButton" />
 
             </LinearLayout>

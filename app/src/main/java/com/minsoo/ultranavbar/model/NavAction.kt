@@ -38,11 +38,3 @@ enum class NavAction(
             entries.find { it.name == name } ?: NONE
     }
 }
-
-/**
- * 숨김 모드 정의
- */
-enum class HideMode {
-    BLACKLIST, // 선택한 앱에서만 숨김
-    WHITELIST  // 선택한 앱에서만 표시
-}
