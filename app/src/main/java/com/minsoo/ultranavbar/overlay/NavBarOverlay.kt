@@ -406,48 +406,54 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         if (isShowing) {
             if (shouldFade) {
-                backgroundView?.visibility = View.GONE
                 navBarView?.let { bar ->
                     bar.clearAnimation()
-                    // ObjectAnimator로 실제 alpha 속성 애니메이션
+                    // 둘 다 알파 애니메이션
                     bar.alpha = 0f
+                    backgroundView?.alpha = 0f
                     ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
-                        addListener(object : AnimatorListenerAdapter() {
-                            override fun onAnimationEnd(animation: Animator) {
-                                backgroundView?.visibility = View.VISIBLE
-                            }
-                        })
                         start()
+                    }
+                    backgroundView?.let { bg ->
+                        ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
+                            duration = Constants.Timing.ANIMATION_DURATION_MS
+                            start()
+                        }
                     }
                 }
             }
             return
         }
 
-        if (shouldFade) {
-            backgroundView?.visibility = View.GONE
-        } else {
-            backgroundView?.visibility = View.VISIBLE
-        }
-
         navBarView?.let { bar ->
             bar.clearAnimation()
 
             if (shouldFade) {
-                // ObjectAnimator로 실제 alpha 속성 애니메이션
+                // 페이드: backgroundView와 navBarView 모두 알파 애니메이션
+                // 먼저 둘 다 투명하게 만들고 보이게 설정
                 bar.alpha = 0f
                 bar.visibility = View.VISIBLE
+                backgroundView?.alpha = 0f
+                backgroundView?.visibility = View.VISIBLE
+
+                // navBarView 페이드 인
                 ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                     duration = Constants.Timing.ANIMATION_DURATION_MS
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) {
-                            backgroundView?.visibility = View.VISIBLE
-                        }
-                    })
                     start()
                 }
+                // backgroundView도 함께 페이드 인
+                backgroundView?.let { bg ->
+                    ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
+                        duration = Constants.Timing.ANIMATION_DURATION_MS
+                        start()
+                    }
+                }
             } else {
+                // 슬라이드: 기존 동작
+                backgroundView?.alpha = 1f
+                backgroundView?.visibility = View.VISIBLE
+                bar.alpha = 1f
                 bar.visibility = View.VISIBLE
                 val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                     duration = Constants.Timing.ANIMATION_DURATION_MS
@@ -633,6 +639,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 // 슬라이드 애니메이션에서 남은 translation 초기화
                 bar.translationY = 0f
             }
+            backgroundView?.alpha = 1f
             backgroundView?.visibility = View.VISIBLE
             hotspotView?.visibility = View.GONE
             updateWindowHeight(getSystemNavigationBarHeightPx())
