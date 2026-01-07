@@ -441,17 +441,31 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     backgroundView?.visibility = View.VISIBLE
                     hotspotView?.visibility = View.GONE
                     updateWindowHeight(getSystemNavigationBarHeightPx())
-                }
-                // else: wasPreparedForFade=true면 prepareForUnlockFade()에서 이미 설정됨
 
-                // 알파 애니메이션만 시작 (윈도우 리사이즈 없음)
-                ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
-                    duration = Constants.Timing.ANIMATION_DURATION_MS
-                    start()
-                }
-                backgroundView?.let { bg ->
-                    ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
+                    // 일반 페이드: navBarView와 backgroundView 둘 다 페이드
+                    ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
+                        start()
+                    }
+                    backgroundView?.let { bg ->
+                        ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
+                            duration = Constants.Timing.ANIMATION_DURATION_MS
+                            start()
+                        }
+                    }
+                } else {
+                    // 잠금화면 해제 페이드: navBarView만 페이드 (커스텀 배경 적용됨)
+                    // backgroundView는 GONE 상태 유지하여 기본 배경색이 보이지 않도록 함
+                    // 페이드 완료 후 backgroundView 표시
+                    ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
+                        duration = Constants.Timing.ANIMATION_DURATION_MS
+                        addListener(object : AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: Animator) {
+                                // 페이드 완료 후 backgroundView 표시
+                                backgroundView?.alpha = 1f
+                                backgroundView?.visibility = View.VISIBLE
+                            }
+                        })
                         start()
                     }
                 }
@@ -846,16 +860,22 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun prepareForUnlockFade() {
         pendingFadeShow = true
 
+        // 먼저 배경을 적용 (커스텀 배경이 준비되도록)
+        navBarView?.let { bar ->
+            val shouldUseCustom = backgroundManager.shouldUseCustomBackground(isOnHomeScreen = true, isRecentsVisible = false)
+            backgroundManager.applyBackground(bar, shouldUseCustom)
+        }
+
         // 윈도우 높이를 미리 네비바 높이로 설정 (show 시 리사이즈 방지)
-        // 뷰는 투명하게 유지하여 보이지 않음
+        // navBarView만 투명하게 설정하고 VISIBLE (커스텀 배경이 페이드로 나타남)
+        // backgroundView는 GONE으로 유지 - 페이드 중에 기본 배경색이 보이지 않도록
         navBarView?.alpha = 0f
         navBarView?.visibility = View.VISIBLE
-        backgroundView?.alpha = 0f
-        backgroundView?.visibility = View.VISIBLE
+        backgroundView?.visibility = View.GONE  // 기본 배경색 숨김
         hotspotView?.visibility = View.GONE
         updateWindowHeight(getSystemNavigationBarHeightPx())
 
-        Log.d(TAG, "Prepared for unlock fade animation (window pre-expanded)")
+        Log.d(TAG, "Prepared for unlock fade animation (window pre-expanded, custom background applied)")
     }
     fun markNextShowInstant() { /* no-op */ }
 }
