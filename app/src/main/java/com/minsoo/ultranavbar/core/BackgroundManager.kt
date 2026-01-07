@@ -200,8 +200,11 @@ class BackgroundManager(
         val newDarkMode = isSystemDarkMode()
         if (_isDarkMode != newDarkMode) {
             _isDarkMode = newDarkMode
-            _currentButtonColor = getDefaultButtonColor()
-            Log.d(TAG, "Dark mode changed: $_isDarkMode")
+            val newButtonColor = getDefaultButtonColor()
+            _currentButtonColor = newButtonColor
+            // 다크 모드 전환 시 버튼 색상 즉시 업데이트
+            listener.onButtonColorChanged(newButtonColor)
+            Log.d(TAG, "Dark mode changed: $_isDarkMode, button color: ${getColorName(newButtonColor)}")
             return true
         }
         return false
