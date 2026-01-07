@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.os.Handler
@@ -83,6 +84,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     // 디바운스용 Runnable
     private var pendingHomeState: Runnable? = null
     private var pendingRecentsState: Runnable? = null
+
+    // 숨김 애니메이션 진행 중 추적 (홈 화면 복귀 시 복원 여부 결정)
+    private var hideAnimationInProgress: Boolean = false
 
     // ===== 컴포넌트 콜백 구현 =====
 
@@ -458,12 +462,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     // 핫스팟 없이 숨길 때는 윈도우 높이를 0으로 설정하여 터치 차단 방지
                     updateWindowHeight(0)
                 }
+                hideAnimationInProgress = false
             } else {
+                // 숨김 애니메이션 시작 표시
+                hideAnimationInProgress = true
                 val slideDown = TranslateAnimation(0f, 0f, 0f, bar.height.toFloat()).apply {
                     duration = Constants.Timing.ANIMATION_DURATION_MS
                     setAnimationListener(object : Animation.AnimationListener {
                         override fun onAnimationStart(animation: Animation?) {}
                         override fun onAnimationEnd(animation: Animation?) {
+                            hideAnimationInProgress = false
                             bar.visibility = View.GONE
                             backgroundView?.visibility = View.GONE
                             if (shouldShowHotspot) {
@@ -576,24 +584,43 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     /**
      * 진행 중인 애니메이션 취소 및 뷰 상태 복원
      * 페이드 애니메이션 중간에 홈 화면 복귀 시 어중간한 상태 방지
+     *
+     * 숨김 애니메이션 진행 중이면: 취소 후 표시 상태로 복원
+     * 의도적으로 숨겨진 상태면 (잠금화면 등): 취소만 하고 숨김 유지
      */
     private fun cancelAnimationsAndRestoreState() {
+        // 애니메이션 취소
         navBarView?.let { bar ->
             bar.clearAnimation()
             bar.animate().cancel()
-            bar.alpha = 1f
-            bar.visibility = View.VISIBLE
         }
-        backgroundView?.visibility = View.VISIBLE
-        hotspotView?.visibility = View.GONE
-        // 진행 중인 배경 페이드 전환을 중단해 홈 진입 시 즉시 커스텀 배경을 복구
+
+        // 진행 중인 배경 페이드 전환 중단
         backgroundManager.cancelBackgroundTransition()
 
-        // 항상 윈도우 높이를 네비바 높이로 복원하고 표시 상태로 설정
-        updateWindowHeight(getSystemNavigationBarHeightPx())
-        isShowing = true
+        // 배경 드로어블 알파 복원 (페이드 중단 시 부분 투명 방지)
+        (navBarView?.background as? BitmapDrawable)?.alpha = 255
 
-        Log.d(TAG, "Animations cancelled and state restored (isShowing=true)")
+        // 숨김 애니메이션 진행 중이었다면 표시 상태로 복원
+        // 그렇지 않으면 (의도적으로 숨겨진 상태) 현재 상태 유지
+        val shouldRestoreToShowing = hideAnimationInProgress || isShowing
+        hideAnimationInProgress = false
+
+        if (shouldRestoreToShowing) {
+            navBarView?.let { bar ->
+                bar.alpha = 1f
+                bar.visibility = View.VISIBLE
+                // 슬라이드 애니메이션에서 남은 translation 초기화
+                bar.translationY = 0f
+            }
+            backgroundView?.visibility = View.VISIBLE
+            hotspotView?.visibility = View.GONE
+            updateWindowHeight(getSystemNavigationBarHeightPx())
+            isShowing = true
+            Log.d(TAG, "Animations cancelled and state restored to showing")
+        } else {
+            Log.d(TAG, "Animations cancelled, keeping hidden state (for lock screen unlock fade)")
+        }
     }
 
     fun setRecentsState(isRecents: Boolean) {
