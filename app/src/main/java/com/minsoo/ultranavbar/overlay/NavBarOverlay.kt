@@ -672,13 +672,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 bar.translationY = 0f
 
                 // 버튼 색상도 현재 배경에 맞게 복원
+                // backgroundManager.updateButtonColor()를 통해 _currentButtonColor도 함께 업데이트
                 val currentBg = bar.background
                 val buttonColor = if (currentBg is BitmapDrawable && currentBg.bitmap != null) {
                     backgroundManager.calculateButtonColorForBitmap(currentBg.bitmap)
                 } else {
                     backgroundManager.getDefaultButtonColor()
                 }
-                buttonManager.updateAllButtonColors(buttonColor, force = true)
+                backgroundManager.updateButtonColor(buttonColor)
             }
             backgroundView?.alpha = 1f
             backgroundView?.visibility = View.VISIBLE
