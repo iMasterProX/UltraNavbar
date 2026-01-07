@@ -157,19 +157,32 @@ class AppListActivity : AppCompatActivity() {
             }
         }
 
-        // 이름순 정렬
-        return apps.sortedBy { it.name.lowercase() }
+        // 선택된 앱을 상단에, 그 외는 이름순 정렬
+        return sortAppsWithSelectedFirst(apps)
+    }
+
+    /**
+     * 선택된 앱을 상단에 배치하고, 나머지는 이름순 정렬
+     */
+    private fun sortAppsWithSelectedFirst(apps: List<AppInfo>): List<AppInfo> {
+        val selected = apps.filter { selectedPackages.contains(it.packageName) }
+            .sortedBy { it.name.lowercase() }
+        val notSelected = apps.filter { !selectedPackages.contains(it.packageName) }
+            .sortedBy { it.name.lowercase() }
+        return selected + notSelected
     }
 
     private fun filterApps(query: String) {
         if (query.isEmpty()) {
-            adapter.submitList(allApps, selectedPackages)
+            // 선택된 앱 상단 정렬 적용
+            adapter.submitList(sortAppsWithSelectedFirst(allApps), selectedPackages)
         } else {
             val filtered = allApps.filter {
                 it.name.contains(query, ignoreCase = true) ||
                         it.packageName.contains(query, ignoreCase = true)
             }
-            adapter.submitList(filtered, selectedPackages)
+            // 검색 결과에도 선택된 앱 상단 정렬 적용
+            adapter.submitList(sortAppsWithSelectedFirst(filtered), selectedPackages)
         }
     }
 

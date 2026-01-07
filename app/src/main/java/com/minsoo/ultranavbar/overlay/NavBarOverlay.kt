@@ -453,6 +453,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 backgroundView?.visibility = View.GONE
                 if (shouldShowHotspot) {
                     updateWindowHeight(context.dpToPx(settings.hotspotHeight))
+                } else {
+                    // 핫스팟 없이 숨길 때는 윈도우 높이를 0으로 설정하여 터치 차단 방지
+                    updateWindowHeight(0)
                 }
             } else {
                 val slideDown = TranslateAnimation(0f, 0f, 0f, bar.height.toFloat()).apply {
@@ -464,6 +467,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                             backgroundView?.visibility = View.GONE
                             if (shouldShowHotspot) {
                                 updateWindowHeight(context.dpToPx(settings.hotspotHeight))
+                            } else {
+                                // 핫스팟 없이 숨길 때는 윈도우 높이를 0으로 설정하여 터치 차단 방지
+                                updateWindowHeight(0)
                             }
                         }
                         override fun onAnimationRepeat(animation: Animation?) {}
@@ -475,7 +481,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             hotspotView?.visibility = if (shouldShowHotspot) View.VISIBLE else View.GONE
             isShowing = false
             hideGestureOverlay()
-            Log.d(TAG, "Overlay hidden (animate=$animate)")
+            Log.d(TAG, "Overlay hidden (animate=$animate, showHotspot=$showHotspot)")
         }
     }
 
