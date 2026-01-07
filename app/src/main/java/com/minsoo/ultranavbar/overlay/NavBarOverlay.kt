@@ -1,5 +1,8 @@
 package com.minsoo.ultranavbar.overlay
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
@@ -406,17 +409,17 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 backgroundView?.visibility = View.GONE
                 navBarView?.let { bar ->
                     bar.clearAnimation()
-                    val alphaAnim = AlphaAnimation(0f, 1f).apply {
+                    // ObjectAnimator로 실제 alpha 속성 애니메이션
+                    bar.alpha = 0f
+                    ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
-                        setAnimationListener(object : Animation.AnimationListener {
-                            override fun onAnimationStart(animation: Animation?) {}
-                            override fun onAnimationEnd(animation: Animation?) {
+                        addListener(object : AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: Animator) {
                                 backgroundView?.visibility = View.VISIBLE
                             }
-                            override fun onAnimationRepeat(animation: Animation?) {}
                         })
+                        start()
                     }
-                    bar.startAnimation(alphaAnim)
                 }
             }
             return
@@ -430,22 +433,22 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         navBarView?.let { bar ->
             bar.clearAnimation()
-            bar.visibility = View.VISIBLE
 
             if (shouldFade) {
-                // AlphaAnimation 사용 (ViewPropertyAnimator 대신)
-                val alphaAnim = AlphaAnimation(0f, 1f).apply {
+                // ObjectAnimator로 실제 alpha 속성 애니메이션
+                bar.alpha = 0f
+                bar.visibility = View.VISIBLE
+                ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                     duration = Constants.Timing.ANIMATION_DURATION_MS
-                    setAnimationListener(object : Animation.AnimationListener {
-                        override fun onAnimationStart(animation: Animation?) {}
-                        override fun onAnimationEnd(animation: Animation?) {
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
                             backgroundView?.visibility = View.VISIBLE
                         }
-                        override fun onAnimationRepeat(animation: Animation?) {}
                     })
+                    start()
                 }
-                bar.startAnimation(alphaAnim)
             } else {
+                bar.visibility = View.VISIBLE
                 val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                     duration = Constants.Timing.ANIMATION_DURATION_MS
                 }
