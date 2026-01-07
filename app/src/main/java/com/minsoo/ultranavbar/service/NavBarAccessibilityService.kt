@@ -87,10 +87,16 @@ class NavBarAccessibilityService : AccessibilityService() {
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     Log.d(TAG, "Screen on, updating visibility")
+                    // 잠금화면이 활성화된 상태에서 화면이 켜지면 해제 시 페이드 애니메이션 준비
+                    if (windowAnalyzer.isLockScreenActive()) {
+                        overlay?.prepareForUnlockFade()
+                    }
                     updateOverlayVisibility(forceFade = false)
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     Log.d(TAG, "User present, showing with fade")
+                    // 안전을 위해 여기서도 플래그 설정
+                    overlay?.prepareForUnlockFade()
                     handler.postDelayed({
                         updateOverlayVisibility(forceFade = true)
                     }, Constants.Timing.HOME_STATE_DEBOUNCE_MS)

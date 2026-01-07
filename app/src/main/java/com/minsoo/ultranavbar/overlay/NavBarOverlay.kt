@@ -88,6 +88,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     // 숨김 애니메이션 진행 중 추적 (홈 화면 복귀 시 복원 여부 결정)
     private var hideAnimationInProgress: Boolean = false
 
+    // 잠금화면 해제 시 페이드 애니메이션 사용 플래그
+    private var pendingFadeShow: Boolean = false
+
     // ===== 컴포넌트 콜백 구현 =====
 
     private val backgroundListener = object : BackgroundManager.BackgroundChangeListener {
@@ -383,6 +386,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             showGestureOverlay()
         }
 
+        // 잠금화면 해제 시 pendingFadeShow가 설정되어 있으면 페이드 사용
+        val shouldFade = fade || pendingFadeShow
+        if (pendingFadeShow) {
+            pendingFadeShow = false
+            Log.d(TAG, "Using pending fade animation (from lock screen unlock)")
+        }
+
         // 숨겨진 상태에서 다시 보일 때 방향 및 배경 동기화 (전체화면 후 복귀 시 필수)
         val wasHidden = !isShowing
         if (wasHidden) {
@@ -392,7 +402,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         updateWindowHeight(getSystemNavigationBarHeightPx())
 
         if (isShowing) {
-            if (fade) {
+            if (shouldFade) {
                 backgroundView?.visibility = View.GONE
                 navBarView?.let { bar ->
                     bar.clearAnimation()
@@ -412,7 +422,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return
         }
 
-        if (fade) {
+        if (shouldFade) {
             backgroundView?.visibility = View.GONE
         } else {
             backgroundView?.visibility = View.VISIBLE
@@ -422,7 +432,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             bar.clearAnimation()
             bar.visibility = View.VISIBLE
 
-            if (fade) {
+            if (shouldFade) {
                 bar.alpha = 0f
                 bar.animate()
                     .alpha(1f)
@@ -440,12 +450,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             hotspotView?.visibility = View.GONE
             isShowing = true
-            Log.d(TAG, "Overlay shown (fade=$fade, fromGesture=$fromGesture)")
+            Log.d(TAG, "Overlay shown (fade=$shouldFade, fromGesture=$fromGesture)")
         }
     }
 
     fun hide(animate: Boolean = true, showHotspot: Boolean = true) {
         if (!isShowing) return
+
+        // 숨길 때 pendingFadeShow 초기화
+        pendingFadeShow = false
 
         navBarView?.let { bar ->
             bar.clearAnimation()
@@ -802,6 +815,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     // ===== 유틸리티 =====
 
-    fun prepareForUnlockHomeInstant() { /* no-op */ }
+    /**
+     * 잠금화면 해제 시 페이드 애니메이션 준비
+     * 화면 켜질 때 잠금화면이 활성화된 경우 호출되어 다음 show()에서 페이드 사용
+     */
+    fun prepareForUnlockFade() {
+        pendingFadeShow = true
+        Log.d(TAG, "Prepared for unlock fade animation")
+    }
     fun markNextShowInstant() { /* no-op */ }
 }
