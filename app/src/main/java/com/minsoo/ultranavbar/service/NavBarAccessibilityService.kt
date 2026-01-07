@@ -330,6 +330,8 @@ class NavBarAccessibilityService : AccessibilityService() {
             checkNotificationPanelState()
             checkImeVisibility()
             updateHomeAndRecentsFromWindows()
+            // 상태 체크 후 항상 가시성 업데이트 (비활성화된 앱 전환 등)
+            updateOverlayVisibility()
         }
         handler.postDelayed(pendingStateCheck!!, Constants.Timing.STATE_CHECK_DELAY_MS)
     }
