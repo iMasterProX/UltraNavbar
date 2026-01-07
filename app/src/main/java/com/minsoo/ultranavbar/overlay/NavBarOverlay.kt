@@ -433,14 +433,18 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             bar.visibility = View.VISIBLE
 
             if (shouldFade) {
-                bar.alpha = 0f
-                bar.animate()
-                    .alpha(1f)
-                    .setDuration(Constants.Timing.ANIMATION_DURATION_MS)
-                    .withEndAction {
-                        backgroundView?.visibility = View.VISIBLE
-                    }
-                    .start()
+                // AlphaAnimation 사용 (ViewPropertyAnimator 대신)
+                val alphaAnim = AlphaAnimation(0f, 1f).apply {
+                    duration = Constants.Timing.ANIMATION_DURATION_MS
+                    setAnimationListener(object : Animation.AnimationListener {
+                        override fun onAnimationStart(animation: Animation?) {}
+                        override fun onAnimationEnd(animation: Animation?) {
+                            backgroundView?.visibility = View.VISIBLE
+                        }
+                        override fun onAnimationRepeat(animation: Animation?) {}
+                    })
+                }
+                bar.startAnimation(alphaAnim)
             } else {
                 val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                     duration = Constants.Timing.ANIMATION_DURATION_MS
