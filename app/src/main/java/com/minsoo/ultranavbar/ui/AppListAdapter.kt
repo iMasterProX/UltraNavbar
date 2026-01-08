@@ -49,13 +49,15 @@ class AppListAdapter(
 
             appName.text = app.name
             appPackage.text = app.packageName
-            
+
+            // 리스너를 먼저 제거하여 isChecked 설정 시 잘못된 콜백 방지
+            checkBox.setOnCheckedChangeListener(null)
+
             if (selectionMode == AppListActivity.MODE_SINGLE) {
                 checkBox.visibility = View.GONE
                 itemView.setOnClickListener {
                     onItemClick(app.packageName)
                 }
-                checkBox.setOnCheckedChangeListener(null)
             } else {
                 checkBox.visibility = View.VISIBLE
                 checkBox.isChecked = isSelected

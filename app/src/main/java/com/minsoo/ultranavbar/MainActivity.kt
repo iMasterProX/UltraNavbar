@@ -11,7 +11,6 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.view.View
-import android.widget.RadioButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,7 +20,6 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.switchmaterial.SwitchMaterial
-import com.minsoo.ultranavbar.model.HideMode
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.ui.AppListActivity
@@ -43,13 +41,11 @@ class MainActivity : AppCompatActivity() {
     // 롱프레스 설정
     private lateinit var txtLongPressAction: TextView
     private lateinit var btnChangeLongPressAction: MaterialButton
+    private lateinit var btnSelectShortcut: MaterialButton
     private lateinit var btnResetLongPressAction: MaterialButton
 
-    private lateinit var radioBlacklist: RadioButton
-    private lateinit var radioWhitelist: RadioButton
     private lateinit var switchHotspot: SwitchMaterial
     private lateinit var switchIgnoreStylus: SwitchMaterial
-    private lateinit var switchAutoHideVideo: SwitchMaterial
 
     // 홈 배경 관련
     private lateinit var switchHomeBg: SwitchMaterial
@@ -76,6 +72,28 @@ class MainActivity : AppCompatActivity() {
             val packageName = result.data?.getStringExtra(AppListActivity.EXTRA_SELECTED_PACKAGE)
             settings.longPressAction = packageName
             updateLongPressActionUI()
+        }
+    }
+
+    // 바로가기 선택 런처
+    @Suppress("DEPRECATION")
+    private val shortcutPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            if (data != null) {
+                val shortcutIntent = data.getParcelableExtra<Intent>(Intent.EXTRA_SHORTCUT_INTENT)
+                val shortcutName = data.getStringExtra(Intent.EXTRA_SHORTCUT_NAME)
+                if (shortcutIntent != null) {
+                    // shortcut: 접두사와 함께 인텐트 URI 저장
+                    val intentUri = shortcutIntent.toUri(Intent.URI_INTENT_SCHEME)
+                    settings.longPressAction = "shortcut:$intentUri"
+                    settings.shortcutName = shortcutName ?: "Shortcut"
+                    updateLongPressActionUI()
+                    Toast.makeText(this, getString(R.string.shortcut_selected, shortcutName), Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -128,12 +146,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateLongPressActionUI() {
-        val packageName = settings.longPressAction
-        if (packageName == null) {
+        val action = settings.longPressAction
+        if (action == null) {
             txtLongPressAction.text = getString(R.string.long_press_action_default)
+        } else if (action.startsWith("shortcut:")) {
+            // 바로가기인 경우 저장된 이름 표시
+            val shortcutName = settings.shortcutName ?: "Shortcut"
+            txtLongPressAction.text = shortcutName
         } else {
+            // 앱인 경우
             try {
-                val appInfo = packageManager.getApplicationInfo(packageName, 0)
+                val appInfo = packageManager.getApplicationInfo(action, 0)
                 val appLabel = packageManager.getApplicationLabel(appInfo)
                 txtLongPressAction.text = appLabel
             } catch (e: PackageManager.NameNotFoundException) {
@@ -141,6 +164,17 @@ class MainActivity : AppCompatActivity() {
                 // 앱이 제거된 경우, 설정을 기본값으로 리셋
                 settings.longPressAction = null
             }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun launchShortcutPicker() {
+        val intent = Intent(Intent.ACTION_CREATE_SHORTCUT)
+        val chooserIntent = Intent.createChooser(intent, getString(R.string.long_press_action_shortcut))
+        try {
+            shortcutPickerLauncher.launch(chooserIntent)
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.shortcut_not_available, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -160,9 +194,15 @@ class MainActivity : AppCompatActivity() {
                 longPressActionPickerLauncher.launch(intent)
             }
         }
+        btnSelectShortcut = findViewById<MaterialButton>(R.id.btnSelectShortcut).apply {
+            setOnClickListener {
+                launchShortcutPicker()
+            }
+        }
         btnResetLongPressAction = findViewById<MaterialButton>(R.id.btnResetLongPressAction).apply {
             setOnClickListener {
                 settings.longPressAction = null
+                settings.shortcutName = null
                 updateLongPressActionUI()
                 Toast.makeText(this@MainActivity, R.string.default_action_set, Toast.LENGTH_SHORT).show()
             }
@@ -173,14 +213,12 @@ class MainActivity : AppCompatActivity() {
             openAccessibilitySettings()
         }
 
-        // 자동 숨김 설정
-        switchAutoHideVideo = findViewById(R.id.switchAutoHideVideo)
-        radioBlacklist = findViewById(R.id.radioBlacklist)
-        radioWhitelist = findViewById(R.id.radioWhitelist)
-
-        // 앱 목록 관리 버튼
-        findViewById<MaterialButton>(R.id.btnManageApps).setOnClickListener {
-            startActivity(Intent(this, AppListActivity::class.java))
+        // 비활성화 앱 관리 버튼
+        findViewById<MaterialButton>(R.id.btnManageDisabledApps).setOnClickListener {
+            val intent = Intent(this, AppListActivity::class.java).apply {
+                putExtra(AppListActivity.EXTRA_SELECTION_MODE, AppListActivity.MODE_DISABLED_APPS)
+            }
+            startActivity(intent)
         }
 
         // 재호출 설정
@@ -216,13 +254,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadSettings() {
-        // 자동 숨김 설정 로드
-        switchAutoHideVideo.isChecked = settings.autoHideOnVideo
-        when (settings.hideMode) {
-            HideMode.BLACKLIST -> radioBlacklist.isChecked = true
-            HideMode.WHITELIST -> radioWhitelist.isChecked = true
-        }
-
         // 재호출 설정 로드
         switchHotspot.isChecked = settings.hotspotEnabled
         switchIgnoreStylus.isChecked = settings.ignoreStylus
@@ -231,25 +262,7 @@ class MainActivity : AppCompatActivity() {
         switchHomeBg.isChecked = settings.homeBgEnabled
     }
 
-            private fun setupListeners() {
-        // 영상 자동 숨김
-        switchAutoHideVideo.setOnCheckedChangeListener { _, isChecked ->
-            settings.autoHideOnVideo = isChecked
-        }
-
-        // 숨김 모드
-        radioBlacklist.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                settings.hideMode = HideMode.BLACKLIST
-            }
-        }
-
-        radioWhitelist.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                settings.hideMode = HideMode.WHITELIST
-            }
-        }
-
+    private fun setupListeners() {
         // 재호출 핫스팟
         switchHotspot.setOnCheckedChangeListener { _, isChecked ->
             settings.hotspotEnabled = isChecked
