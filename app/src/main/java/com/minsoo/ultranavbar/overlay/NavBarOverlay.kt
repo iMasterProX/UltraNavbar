@@ -406,17 +406,21 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         // 이미 표시 중인 경우
         if (isShowing) {
             updateWindowHeight(getSystemNavigationBarHeightPx())
+            // 이미 완전히 표시된 상태면 페이드 건너뛰기 (중복 페이드로 인한 깜빡임 방지)
+            val currentAlpha = navBarView?.alpha ?: 1f
+            if (currentAlpha >= 1f) {
+                return
+            }
+            // 아직 페이드 중이면 (알파 < 1) 계속 진행
             if (shouldFade) {
                 navBarView?.let { bar ->
                     bar.clearAnimation()
-                    bar.alpha = 0f
-                    backgroundView?.alpha = 0f
-                    ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
+                    ObjectAnimator.ofFloat(bar, "alpha", bar.alpha, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
                         start()
                     }
                     backgroundView?.let { bg ->
-                        ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
+                        ObjectAnimator.ofFloat(bg, "alpha", bg.alpha, 1f).apply {
                             duration = Constants.Timing.ANIMATION_DURATION_MS
                             start()
                         }
