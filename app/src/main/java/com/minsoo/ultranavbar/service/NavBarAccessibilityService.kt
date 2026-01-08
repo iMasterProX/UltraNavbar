@@ -303,12 +303,11 @@ class NavBarAccessibilityService : AccessibilityService() {
             val isDisabled = settings.isAppDisabled(packageName)
             if (wasDisabled || isDisabled) {
                 Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
-                // 전체화면 상태를 먼저 업데이트한 후 가시성 업데이트
-                // (isFullscreen이 잘못된 상태로 남아 있으면 shouldAutoHide가 true 반환)
-                handler.post {
-                    checkFullscreenState()
-                    updateOverlayVisibility()
-                }
+            }
+            // 포그라운드 앱이 바뀔 때마다 가시성 재평가(윈도우 이벤트 경로에서도 누락되지 않도록)
+            handler.post {
+                checkFullscreenState()
+                updateOverlayVisibility()
             }
         }
 
@@ -379,6 +378,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         val packageName = root.packageName?.toString() ?: return
         val className = root.className?.toString() ?: ""
         val isRecents = windowAnalyzer.isRecentsClassName(className)
+        var packageChanged = false
 
         if (isRecentsVisible != isRecents) {
             isRecentsVisible = isRecents
@@ -398,6 +398,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         if (currentPackage != packageName) {
             currentPackage = packageName
+            packageChanged = true
             Log.d(TAG, "Foreground app (windows): $packageName")
         }
 
@@ -406,6 +407,11 @@ class NavBarAccessibilityService : AccessibilityService() {
             isOnHomeScreen = newOnHomeScreen
             Log.d(TAG, "Home screen state (windows): $isOnHomeScreen")
             overlay?.setHomeScreenState(isOnHomeScreen)
+        }
+
+        if (packageChanged) {
+            // 윈도우 스냅샷 경로에서도 앱 전환 시 가시성을 즉시 재평가해 비활성화 목록 전환을 놓치지 않음
+            updateOverlayVisibility()
         }
     }
 
