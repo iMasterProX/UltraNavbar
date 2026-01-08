@@ -125,11 +125,22 @@ class BackgroundManager(
 
     /**
      * 현재 방향에 맞는 비트맵 가져오기
+     * 중요: 캐시된 currentOrientation이 아닌 실제 시스템 방향을 직접 확인하여
+     * 방향 동기화 문제로 인한 잘못된 배경 적용 방지
      */
     fun getCurrentBitmap(): Bitmap? {
-        val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
+        // 캐시된 값 대신 실제 시스템 방향 직접 확인
+        val actualOrientation = context.resources.configuration.orientation
+
+        // 불일치 시 자동 동기화
+        if (currentOrientation != actualOrientation) {
+            Log.w(TAG, "getCurrentBitmap: orientation mismatch! cached=${getOrientationName(currentOrientation)}, actual=${getOrientationName(actualOrientation)} - auto-syncing")
+            currentOrientation = actualOrientation
+        }
+
+        val isLandscape = actualOrientation == Configuration.ORIENTATION_LANDSCAPE
         val bitmap = if (isLandscape) landscapeBitmap else portraitBitmap
-        Log.d(TAG, "getCurrentBitmap: orientation=${getOrientationName(currentOrientation)}, returning ${if (isLandscape) "landscape" else "portrait"} bitmap (hash=${bitmap?.hashCode()})")
+        Log.d(TAG, "getCurrentBitmap: orientation=${getOrientationName(actualOrientation)}, returning ${if (isLandscape) "landscape" else "portrait"} bitmap (hash=${bitmap?.hashCode()})")
         return bitmap
     }
 

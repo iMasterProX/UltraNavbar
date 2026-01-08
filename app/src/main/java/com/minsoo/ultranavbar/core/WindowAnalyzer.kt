@@ -36,8 +36,9 @@ class WindowAnalyzer(
     // 런처 패키지 목록
     private var launcherPackages: Set<String> = emptySet()
 
-    // 네비바 높이 (px)
-    private var navBarHeightPx: Int = 0
+    // 네비바 높이 (px) - 가로/세로 모드별
+    private var navBarHeightLandscapePx: Int = 0
+    private var navBarHeightPortraitPx: Int = 0
 
     // IME 추적
     private var lastImeEventAt: Long = 0
@@ -71,15 +72,38 @@ class WindowAnalyzer(
     }
 
     /**
-     * 네비바 높이 계산
+     * 네비바 높이 계산 (가로/세로 모드별)
+     * 세로 모드에서는 navigation_bar_height, 가로 모드에서는 navigation_bar_height_landscape 사용
      */
     fun calculateNavBarHeight() {
-        val resId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
-        navBarHeightPx = if (resId > 0) {
-            context.resources.getDimensionPixelSize(resId)
+        val defaultHeight = context.dpToPx(Constants.Dimension.NAV_BUTTON_SIZE_DP)
+
+        // 세로 모드 네비바 높이
+        val portraitResId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        navBarHeightPortraitPx = if (portraitResId > 0) {
+            context.resources.getDimensionPixelSize(portraitResId)
         } else {
-            context.dpToPx(Constants.Dimension.NAV_BUTTON_SIZE_DP)
+            defaultHeight
         }
+
+        // 가로 모드 네비바 높이
+        val landscapeResId = context.resources.getIdentifier("navigation_bar_height_landscape", "dimen", "android")
+        navBarHeightLandscapePx = if (landscapeResId > 0) {
+            context.resources.getDimensionPixelSize(landscapeResId)
+        } else {
+            // 가로 모드용 리소스가 없으면 세로 모드와 동일하게 사용
+            navBarHeightPortraitPx
+        }
+
+        Log.d(TAG, "Nav bar heights calculated: portrait=${navBarHeightPortraitPx}px, landscape=${navBarHeightLandscapePx}px")
+    }
+
+    /**
+     * 현재 방향에 맞는 네비바 높이 반환
+     */
+    private fun getCurrentNavBarHeight(): Int {
+        val isLandscape = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        return if (isLandscape) navBarHeightLandscapePx else navBarHeightPortraitPx
     }
 
     // ===== 화면 정보 =====
@@ -126,9 +150,12 @@ class WindowAnalyzer(
             }
         }
 
+        // 현재 방향에 맞는 네비바 높이 사용
+        val currentNavBarHeight = getCurrentNavBarHeight()
+
         // "네비바가 보임" 기준: navBarHeight의 70% 이상
         val navVisibleThreshold = maxOf(
-            (navBarHeightPx * Constants.Threshold.NAV_BAR_VISIBLE_RATIO).toInt(),
+            (currentNavBarHeight * Constants.Threshold.NAV_BAR_VISIBLE_RATIO).toInt(),
             context.dpToPx(Constants.Dimension.MIN_NAV_BAR_HEIGHT_DP)
         )
         val gestureOnlyThreshold = context.dpToPx(Constants.Threshold.GESTURE_ONLY_HEIGHT_DP)
@@ -186,7 +213,7 @@ class WindowAnalyzer(
             }
 
             val tallEnough = r.height() >= minImeHeight
-            val bottomThreshold = screen.bottom - maxOf(navBarHeightPx, context.dpToPx(24))
+            val bottomThreshold = screen.bottom - maxOf(getCurrentNavBarHeight(), context.dpToPx(24))
             val touchesBottom = r.bottom >= bottomThreshold
 
             if (tallEnough && touchesBottom) {

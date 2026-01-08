@@ -397,14 +397,27 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             showGestureOverlay()
         }
 
+        // 중요: 먼저 윈도우 높이와 backgroundView를 설정하여 시스템 네비바 가림
+        // 이렇게 해야 애니메이션 시작 전에 시스템 네비바가 보이지 않음
+        val navBarHeight = getSystemNavigationBarHeightPx()
+        updateWindowHeight(navBarHeight)
+
         rootView?.visibility = View.VISIBLE
         setWindowTouchable(true)
+
+        // 페이드 여부 결정: 파라미터로 요청되었거나 잠금 해제 후 페이드가 준비된 경우
+        val shouldFade = fade || unlockFadePrepared
+        val wasPreparedForFade = unlockFadePrepared
+
+        // 준비되지 않은 상태에서 표시할 때는 방향/배경 동기화
+        if (!wasPreparedForFade) {
+            syncOrientationAndBackground()
+        }
 
         // 이미 표시 중이고 완전히 보이는 상태면 아무것도 하지 않음
         if (isShowing) {
             val currentAlpha = navBarView?.alpha ?: 1f
             if (currentAlpha >= 1f) {
-                updateWindowHeight(getSystemNavigationBarHeightPx())
                 return
             }
             // 부분적으로 표시 중이면 완전히 표시되도록 페이드
@@ -418,37 +431,30 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return
         }
 
-        // 페이드 여부 결정: 파라미터로 요청되었거나 잠금 해제 후 페이드가 준비된 경우
-        val shouldFade = fade || unlockFadePrepared
-        val wasPreparedForFade = unlockFadePrepared
-
-        // 준비되지 않은 상태에서 표시할 때는 방향/배경 동기화
-        if (!wasPreparedForFade) {
-            syncOrientationAndBackground()
-        }
-
         navBarView?.let { bar ->
             bar.clearAnimation()
             bar.animate().cancel()
             bar.translationY = 0f
-            updateWindowHeight(getSystemNavigationBarHeightPx())
             hotspotView?.visibility = View.GONE
+
+            // 중요: 애니메이션 시작 전에 backgroundView를 먼저 보이도록 설정
+            // 시스템 네비바를 즉시 가리기 위함
+            if (!isCustomBackgroundActive) {
+                backgroundView?.alpha = 1f
+                backgroundView?.visibility = View.VISIBLE
+            } else {
+                backgroundView?.visibility = View.GONE
+            }
 
             if (shouldFade) {
                 // 페이드 애니메이션
                 if (wasPreparedForFade) {
                     // prepareForUnlockFade()에서 이미 준비됨 - navBarView만 페이드
-                    // backgroundView는 커스텀 배경이면 GONE 유지
                     ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
                         addListener(object : AnimatorListenerAdapter() {
                             override fun onAnimationEnd(animation: Animator) {
                                 unlockFadePrepared = false
-                                // 커스텀 배경 아니면 backgroundView 복원
-                                if (!isCustomBackgroundActive) {
-                                    backgroundView?.alpha = 1f
-                                    backgroundView?.visibility = View.VISIBLE
-                                }
                             }
                             override fun onAnimationCancel(animation: Animator) {
                                 unlockFadePrepared = false
@@ -457,21 +463,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         start()
                     }
                 } else {
-                    // 일반 페이드 (준비 없이) - navBarView와 backgroundView 모두 페이드
+                    // 일반 페이드 - navBarView만 페이드 (backgroundView는 이미 보임)
                     bar.alpha = 0f
                     bar.visibility = View.VISIBLE
-                    if (!isCustomBackgroundActive) {
-                        backgroundView?.alpha = 0f
-                        backgroundView?.visibility = View.VISIBLE
-                        backgroundView?.let { bg ->
-                            ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
-                                duration = Constants.Timing.ANIMATION_DURATION_MS
-                                start()
-                            }
-                        }
-                    } else {
-                        backgroundView?.visibility = View.GONE
-                    }
                     ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
                         start()
@@ -481,12 +475,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 // 슬라이드 애니메이션
                 bar.alpha = 1f
                 bar.visibility = View.VISIBLE
-                if (!isCustomBackgroundActive) {
-                    backgroundView?.alpha = 1f
-                    backgroundView?.visibility = View.VISIBLE
-                } else {
-                    backgroundView?.visibility = View.GONE
-                }
                 val slideUp = TranslateAnimation(0f, 0f, bar.height.toFloat(), 0f).apply {
                     duration = Constants.Timing.ANIMATION_DURATION_MS
                 }
