@@ -93,6 +93,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     // 잠금화면 해제 시 페이드 애니메이션 사용 플래그
     private var pendingFadeShow: Boolean = false
+    private var unlockFadePrepared: Boolean = false
+    private var unlockFadeUntil: Long = 0
+    private var isLockScreenActive: Boolean = false
 
     // ===== 컴포넌트 콜백 구현 =====
 
@@ -389,29 +392,42 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             showGestureOverlay()
         }
 
-        // 잠금화면 해제 시 pendingFadeShow가 설정되어 있으면 페이드 사용
-        val shouldFade = fade || pendingFadeShow
-        val wasPreparedForFade = pendingFadeShow
+        rootView?.visibility = View.VISIBLE
+        setWindowTouchable(true)
+
+        val now = SystemClock.elapsedRealtime()
+        if (unlockFadeUntil > 0 && now > unlockFadeUntil) {
+            unlockFadeUntil = 0
+        }
+        val unlockFadeWindowActive = unlockFadeUntil > 0
+
+        if (!isShowing && unlockFadeWindowActive && !unlockFadePrepared && !pendingFadeShow) {
+            prepareForUnlockFade()
+        }
+
+        // ???? ?? ? pendingFadeShow? ???? ??? ??? ??
+        val shouldFade = fade || pendingFadeShow || unlockFadeWindowActive || unlockFadePrepared
+        val wasPreparedForFade = pendingFadeShow || unlockFadePrepared
         if (pendingFadeShow) {
             pendingFadeShow = false
             Log.d(TAG, "Using pending fade animation (from lock screen unlock)")
         }
 
-        // 숨겨진 상태에서 다시 보일 때 방향 및 배경 동기화 (전체화면 후 복귀 시 필수)
+        // ??? ???? ?? ?? ? ?? ? ?? ??? (???? ? ?? ? ??)
         val wasHidden = !isShowing
         if (wasHidden && !wasPreparedForFade) {
             syncOrientationAndBackground()
         }
 
-        // 이미 표시 중인 경우
+        // ?? ?? ?? ??
         if (isShowing) {
             updateWindowHeight(getSystemNavigationBarHeightPx())
-            // 이미 완전히 표시된 상태면 페이드 건너뛰기 (중복 페이드로 인한 깜빡임 방지)
+            // ?? ??? ??? ??? ??? ???? (?? ????? ??)
             val currentAlpha = navBarView?.alpha ?: 1f
             if (currentAlpha >= 1f) {
                 return
             }
-            // 아직 페이드 중이면 (알파 < 1) 계속 진행
+            // ?? ??? ??? ?? ??
             if (shouldFade) {
                 navBarView?.let { bar ->
                     bar.clearAnimation()
@@ -430,15 +446,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return
         }
 
-        // 숨겨진 상태에서 표시
+        // ??? ???? ??
         navBarView?.let { bar ->
             bar.clearAnimation()
 
             if (shouldFade) {
-                // 페이드: prepareForUnlockFade()에서 이미 윈도우가 확장되고 뷰가 투명하게 설정됨
-                // 여기서는 윈도우 리사이즈 없이 알파 애니메이션만 시작
+                // ???: prepareForUnlockFade()?? ?? ???? ???? ?? ???? ???
+                // ???? ??? ???? ?? ?? ?????? ??
                 if (!wasPreparedForFade) {
-                    // 준비되지 않은 경우 (일반 페이드) - 뷰 설정
+                    // ???? ?? ?? (?? ??? - ?? ??)
                     bar.alpha = 0f
                     bar.visibility = View.VISIBLE
                     backgroundView?.alpha = 0f
@@ -446,7 +462,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     hotspotView?.visibility = View.GONE
                     updateWindowHeight(getSystemNavigationBarHeightPx())
 
-                    // 일반 페이드: navBarView와 backgroundView 둘 다 페이드
+                    // ?? ???: navBarView? backgroundView ?? ???
                     ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
                         start()
@@ -458,23 +474,27 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         }
                     }
                 } else {
-                    // 잠금화면 해제 페이드: navBarView만 페이드 (커스텀 배경 적용됨)
-                    // backgroundView는 GONE 상태 유지하여 기본 배경색이 보이지 않도록 함
-                    // 페이드 완료 후 backgroundView 표시
+                    // ???? ?? ???: navBarView? ??? (??? ?? ???)
+                    // backgroundView? GONE ?? ?? - ?? ???? ??? ???
                     ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
                         addListener(object : AnimatorListenerAdapter() {
+                            override fun onAnimationCancel(animation: Animator) {
+                                unlockFadePrepared = false
+                            }
+
                             override fun onAnimationEnd(animation: Animator) {
-                                // 페이드 완료 후 backgroundView 표시
+                                // ??? ?? ? backgroundView ??
                                 backgroundView?.alpha = 1f
                                 backgroundView?.visibility = View.VISIBLE
+                                unlockFadePrepared = false
                             }
                         })
                         start()
                     }
                 }
             } else {
-                // 슬라이드: 윈도우 높이 먼저 변경 후 애니메이션
+                // ????: ??? ??? ?? ??? ? ?????
                 updateWindowHeight(getSystemNavigationBarHeightPx())
                 backgroundView?.alpha = 1f
                 backgroundView?.visibility = View.VISIBLE
@@ -495,8 +515,23 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun hide(animate: Boolean = true, showHotspot: Boolean = true) {
         val shouldShowHotspot = showHotspot && settings.hotspotEnabled
 
-        // 비활성화된 앱용 완전 숨김 (showHotspot = false)
-        // 이미 숨겨진 상태여도 윈도우 높이를 0으로 강제 설정하여 터치 통과
+        if (!showHotspot && isLockScreenActive) {
+            navBarView?.visibility = View.GONE
+            backgroundView?.visibility = View.GONE
+            gestureOverlayView?.visibility = View.GONE
+            hotspotView?.visibility = View.GONE
+            rootView?.visibility = View.GONE
+            setWindowTouchable(false)
+            updateWindowHeight(getSystemNavigationBarHeightPx())
+            hideAnimationInProgress = false
+            isShowing = false
+            hideGestureOverlay()
+            Log.d(TAG, "Hidden for lock screen (window height kept)")
+            return
+        }
+
+        // ????? ? ?? ? ?? ?? (showHotspot = false)
+        // ?? ??? ???? ??? ??? 0?? ???? ?? ??
         if (!showHotspot && !isShowing) {
             navBarView?.visibility = View.GONE
             backgroundView?.visibility = View.GONE
@@ -508,8 +543,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         if (!isShowing) return
 
-        // 숨길 때 pendingFadeShow 초기화
+        // ?? ? pendingFadeShow ???
         pendingFadeShow = false
+        unlockFadePrepared = false
 
         navBarView?.let { bar ->
             bar.clearAnimation()
@@ -521,12 +557,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 if (shouldShowHotspot) {
                     updateWindowHeight(context.dpToPx(settings.hotspotHeight))
                 } else {
-                    // 핫스팟 없이 숨길 때는 윈도우 높이를 0으로 설정하여 터치 차단 방지
+                    // ???? ??? ?? ?? ??? ??? 0?? ???? ?? ??
                     updateWindowHeight(0)
                 }
                 hideAnimationInProgress = false
             } else {
-                // 숨김 애니메이션 시작 표시
+                // ?? ????? ?? ?
                 hideAnimationInProgress = true
                 val slideDown = TranslateAnimation(0f, 0f, 0f, bar.height.toFloat()).apply {
                     duration = Constants.Timing.ANIMATION_DURATION_MS
@@ -539,7 +575,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                             if (shouldShowHotspot) {
                                 updateWindowHeight(context.dpToPx(settings.hotspotHeight))
                             } else {
-                                // 핫스팟 없이 숨길 때는 윈도우 높이를 0으로 설정하여 터치 차단 방지
+                                // ???? ??? ?? ?? ??? ??? 0?? ???? ?? ??
                                 updateWindowHeight(0)
                             }
                         }
@@ -553,6 +589,22 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             isShowing = false
             hideGestureOverlay()
             Log.d(TAG, "Overlay hidden (animate=$animate, showHotspot=$showHotspot)")
+        }
+    }
+
+    private fun setWindowTouchable(touchable: Boolean) {
+        try {
+            val params = rootView?.layoutParams as? WindowManager.LayoutParams ?: return
+            val newFlags = if (touchable) {
+                params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            } else {
+                params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            }
+            if (params.flags == newFlags) return
+            params.flags = newFlags
+            windowManager.updateViewLayout(rootView, params)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update window touchable flag", e)
         }
     }
 
@@ -622,10 +674,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             isOnHomeScreen = true
             Log.d(TAG, "Home screen state: true")
 
-            // 진행 중인 애니메이션 취소 및 상태 복원
+            // ?? ?? ????? ?? ? ?? ??
             cancelAnimationsAndRestoreState()
 
-            // 홈 화면 복귀 시 방향 동기화 (전체화면 앱 종료 후 필수)
+            // ? ?? ?? ? ?? ??? (???? ? ?? ? ??)
             syncOrientationAndBackground()
             return
         }
@@ -644,27 +696,27 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 진행 중인 애니메이션 취소 및 뷰 상태 복원
-     * 페이드 애니메이션 중간에 홈 화면 복귀 시 어중간한 상태 방지
+     * ?? ?? ????? ?? ? ? ?? ??
+     * ??? ????? ??? ? ?? ?? ? ???? ?? ??
      *
-     * 숨김 애니메이션 진행 중이면: 취소 후 표시 상태로 복원
-     * 의도적으로 숨겨진 상태면 (잠금화면 등): 취소만 하고 숨김 유지
+     * ?? ????? ?? ???: ?? ? ?? ??? ??
+     * ????? ??? ??? (???? ?): ??? ?? ?? ??
      */
     private fun cancelAnimationsAndRestoreState() {
-        // 애니메이션 취소
+        // ????? ??
         navBarView?.let { bar ->
             bar.clearAnimation()
             bar.animate().cancel()
         }
 
-        // 진행 중인 배경 페이드 전환 중단
+        // ?? ?? ?? ??? ?? ??
         backgroundManager.cancelBackgroundTransition()
 
-        // 배경 드로어블 알파 복원 (페이드 중단 시 부분 투명 방지)
+        // ?? ???? ?? ?? (??? ?? ? ?? ?? ??)
         (navBarView?.background as? BitmapDrawable)?.alpha = 255
 
-        // 숨김 애니메이션 진행 중이었다면 표시 상태로 복원
-        // 그렇지 않으면 (의도적으로 숨겨진 상태) 현재 상태 유지
+        // ?? ????? ?? ????? ?? ??? ??
+        // ??? ??? (????? ??? ??) ?? ?? ??
         val shouldRestoreToShowing = hideAnimationInProgress || isShowing
         hideAnimationInProgress = false
 
@@ -672,11 +724,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             navBarView?.let { bar ->
                 bar.alpha = 1f
                 bar.visibility = View.VISIBLE
-                // 슬라이드 애니메이션에서 남은 translation 초기화
+                // ???? ??????? ?? translation ???
                 bar.translationY = 0f
 
-                // 버튼 색상도 현재 배경에 맞게 복원
-                // backgroundManager.updateButtonColor()를 통해 _currentButtonColor도 함께 업데이트
+                // ?? ??? ?? ??? ?? ??
+                // backgroundManager.updateButtonColor()? ?? _currentButtonColor? ?? ????
                 val currentBg = bar.background
                 val buttonColor = if (currentBg is BitmapDrawable && currentBg.bitmap != null) {
                     backgroundManager.calculateButtonColorForBitmap(currentBg.bitmap)
@@ -742,6 +794,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         )
     }
 
+    fun setLockScreenActive(active: Boolean) {
+        isLockScreenActive = active
+    }
+
     fun setFullscreenState(fullscreen: Boolean) {
         // no-op: canAutoHide()로 처리
     }
@@ -802,7 +858,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun updateNavBarBackground() {
         val bar = navBarView ?: return
 
-        // 방향 동기화 확인 - NavBarOverlay의 currentOrientation도 함께 동기화
+        // ?? ??? ?? - NavBarOverlay? currentOrientation? ?? ???
         if (backgroundManager.syncOrientationWithSystem()) {
             val actualOrientation = context.resources.configuration.orientation
             if (currentOrientation != actualOrientation) {
@@ -814,13 +870,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val shouldUseCustom = backgroundManager.shouldUseCustomBackground(isOnHomeScreen, isRecentsVisible)
         backgroundManager.applyBackground(bar, shouldUseCustom)
 
-        // backgroundView도 동기화
+        // backgroundView? ???
         if (!shouldUseCustom) {
             backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
         }
     }
-
-    // ===== 버튼 액션 처리 =====
 
     private fun handleButtonClick(action: NavAction) {
         if (action == NavAction.NOTIFICATIONS) {
@@ -883,20 +937,31 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      * 윈도우 리사이즈가 슬라이드처럼 보이는 현상을 방지
      */
     fun prepareForUnlockFade() {
-        pendingFadeShow = true
-
-        // 먼저 배경을 적용 (커스텀 배경이 준비되도록)
-        navBarView?.let { bar ->
-            val shouldUseCustom = backgroundManager.shouldUseCustomBackground(isOnHomeScreen = true, isRecentsVisible = false)
-            backgroundManager.applyBackground(bar, shouldUseCustom)
+        unlockFadeUntil = SystemClock.elapsedRealtime() + Constants.Timing.UNLOCK_FADE_WINDOW_MS
+        if (isShowing) {
+            return
         }
 
-        // 윈도우 높이를 미리 네비바 높이로 설정 (show 시 리사이즈 방지)
-        // navBarView만 투명하게 설정하고 VISIBLE (커스텀 배경이 페이드로 나타남)
-        // backgroundView는 GONE으로 유지 - 페이드 중에 기본 배경색이 보이지 않도록
+        pendingFadeShow = true
+        unlockFadePrepared = true
+
+        navBarView?.clearAnimation()
+        navBarView?.animate()?.cancel()
+        navBarView?.translationY = 0f
+
+        // ?? ??? ?? (??? ??? ?????)
+        navBarView?.let { bar ->
+            val shouldUseCustom = backgroundManager.shouldUseCustomBackground(isOnHomeScreen = true, isRecentsVisible = false)
+            backgroundManager.applyBackground(bar, shouldUseCustom, forceUpdate = true)
+            bar.background?.alpha = 255
+        }
+
+        // ??? ??? ?? ??? ??? ?? (show ? ???? ??)
+        // navBarView? ???? ???? VISIBLE (??? ??? ???? ???)
+        // backgroundView? GONE?? ?? - ??? ?? ?? ???? ??? ???
         navBarView?.alpha = 0f
         navBarView?.visibility = View.VISIBLE
-        backgroundView?.visibility = View.GONE  // 기본 배경색 숨김
+        backgroundView?.visibility = View.GONE  // ?? ?? ??
         hotspotView?.visibility = View.GONE
         updateWindowHeight(getSystemNavigationBarHeightPx())
 

@@ -56,6 +56,9 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isWallpaperPreviewVisible: Boolean = false
     private var isImeVisible: Boolean = false
     private var lastImeEventAt: Long = 0
+    private var wasLockScreenActive: Boolean = false
+    private var unlockFadeUntil: Long = 0
+    private var pendingUnlockFade: Boolean = false
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
@@ -83,20 +86,20 @@ class NavBarAccessibilityService : AccessibilityService() {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     Log.d(TAG, "Screen off, hiding overlay")
+                    overlay?.setLockScreenActive(true)
+                    pendingUnlockFade = false
+                    unlockFadeUntil = 0
                     overlay?.hide(animate = false, showHotspot = false)
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     Log.d(TAG, "Screen on, updating visibility")
-                    // 잠금화면이 활성화된 상태에서 화면이 켜지면 해제 시 페이드 애니메이션 준비
-                    if (windowAnalyzer.isLockScreenActive()) {
-                        overlay?.prepareForUnlockFade()
-                    }
+                    pendingUnlockFade = windowAnalyzer.isLockScreenActive()
                     updateOverlayVisibility(forceFade = false)
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     Log.d(TAG, "User present, showing with fade")
-                    // 안전을 위해 여기서도 플래그 설정
-                    overlay?.prepareForUnlockFade()
+                    pendingUnlockFade = true
+                    unlockFadeUntil = SystemClock.elapsedRealtime() + Constants.Timing.UNLOCK_FADE_WINDOW_MS
                     handler.postDelayed({
                         updateOverlayVisibility(forceFade = true)
                     }, Constants.Timing.HOME_STATE_DEBOUNCE_MS)
@@ -125,6 +128,8 @@ class NavBarAccessibilityService : AccessibilityService() {
         windowAnalyzer.loadLauncherPackages()
         windowAnalyzer.calculateNavBarHeight()
         currentOrientation = resources.configuration.orientation
+        wasLockScreenActive = windowAnalyzer.isLockScreenActive()
+        pendingUnlockFade = wasLockScreenActive
 
         createOverlay()
         updateOverlayVisibility(forceFade = false)
@@ -445,16 +450,33 @@ class NavBarAccessibilityService : AccessibilityService() {
     // ===== 오버레이 가시성 =====
 
     private fun updateOverlayVisibility(forceFade: Boolean = false) {
+        val now = SystemClock.elapsedRealtime()
         val lockScreenActive = windowAnalyzer.isLockScreenActive()
+        overlay?.setLockScreenActive(lockScreenActive)
 
-        // 1. 비활성화된 앱 체크 - 오버레이를 완전히 숨김 (핫스팟 없음, 재호출 불가)
+        if (lockScreenActive) {
+            pendingUnlockFade = true
+        }
+
+        if (lockScreenActive != wasLockScreenActive) {
+            if (wasLockScreenActive && !lockScreenActive) {
+                unlockFadeUntil = now + Constants.Timing.UNLOCK_FADE_WINDOW_MS
+            }
+            wasLockScreenActive = lockScreenActive
+        }
+
+        if (unlockFadeUntil > 0 && now > unlockFadeUntil) {
+            unlockFadeUntil = 0
+        }
+
+        val unlockFadeActive = pendingUnlockFade || unlockFadeUntil > 0
+
         if (currentPackage.isNotEmpty() && settings.isAppDisabled(currentPackage)) {
             Log.d(TAG, "App disabled: $currentPackage - hiding overlay completely")
             overlay?.hide(animate = false, showHotspot = false)
             return
         }
 
-        // 2. 자동 숨김 체크 - 전체화면 등에서 숨김 (핫스팟으로 재호출 가능)
         val shouldAutoHide = windowAnalyzer.shouldAutoHideOverlay(
             currentPackage = currentPackage,
             isFullscreen = isFullscreen,
@@ -471,11 +493,14 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
             overlay?.hide(animate = !lockScreenActive, showHotspot = !lockScreenActive)
         } else {
-            overlay?.show(fade = forceFade)
+            if (unlockFadeActive) {
+                overlay?.prepareForUnlockFade()
+                pendingUnlockFade = false
+                unlockFadeUntil = 0
+            }
+            overlay?.show(fade = forceFade || unlockFadeActive)
         }
     }
-
-    // ===== 오버레이 생성/파괴 =====
 
     private fun createOverlay() {
         if (overlay == null) {

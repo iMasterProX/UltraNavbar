@@ -302,44 +302,54 @@ class BackgroundManager(
         val currentBg = targetView.background
         val defaultBgColor = getDefaultBackgroundColor()
 
+        if (forceUpdate) {
+            cancelBackgroundTransition()
+        }
+
         if (useCustom) {
-            applyCustomBackground(targetView, currentBg, defaultBgColor)
+            applyCustomBackground(targetView, currentBg, defaultBgColor, forceUpdate)
         } else {
-            applyDefaultBackground(targetView, currentBg, defaultBgColor)
+            applyDefaultBackground(targetView, currentBg, defaultBgColor, forceUpdate)
         }
     }
 
-    private fun applyCustomBackground(targetView: View, currentBg: Drawable?, defaultBgColor: Int) {
+    private fun applyCustomBackground(
+        targetView: View,
+        currentBg: Drawable?,
+        defaultBgColor: Int,
+        forceUpdate: Boolean
+    ) {
         val targetBitmap = getCurrentBitmap()
 
         if (targetBitmap != null) {
             val currentBitmap = (currentBg as? BitmapDrawable)?.bitmap
-            if (currentBitmap !== targetBitmap) {
+            if (forceUpdate || currentBitmap !== targetBitmap) {
                 Log.d(TAG, "Applying custom background image")
 
                 val bgDrawable = BitmapDrawable(context.resources, targetBitmap).apply {
                     gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
                 }
 
-                // 이미지 밝기에 따라 버튼 색상 결정
+                // ??? ??? ?? ?? ?? ??
                 val buttonColor = calculateButtonColorForBitmap(targetBitmap)
                 updateButtonColor(buttonColor)
 
-                // 색상 배경에서 이미지로 전환 시 페이드 인
-                val needsFade = currentBg is ColorDrawable || currentBg?.alpha == 0
+                // ?? ???? ???? ?? ? ??? ?
+                val needsFade = !forceUpdate && (currentBg is ColorDrawable || currentBg?.alpha == 0)
                 if (needsFade) {
                     bgDrawable.alpha = 0
                     targetView.background = bgDrawable
                     animateBackgroundAlpha(bgDrawable, 0, 255)
                 } else {
+                    bgDrawable.alpha = 255
                     targetView.background = bgDrawable
                 }
 
                 listener.onBackgroundApplied(bgDrawable)
             }
         } else {
-            // 비트맵이 없으면 기본 배경 사용
-            if ((currentBg as? ColorDrawable)?.color != defaultBgColor) {
+            // ???? ??? ?? ?? ??
+            if (forceUpdate || (currentBg as? ColorDrawable)?.color != defaultBgColor) {
                 Log.d(TAG, "Fallback to default background (bitmap not loaded)")
                 targetView.background = ColorDrawable(defaultBgColor)
                 updateButtonColor(getDefaultButtonColor())
@@ -347,26 +357,24 @@ class BackgroundManager(
         }
     }
 
-    private fun applyDefaultBackground(targetView: View, currentBg: Drawable?, defaultBgColor: Int) {
+    private fun applyDefaultBackground(targetView: View, currentBg: Drawable?, defaultBgColor: Int, forceUpdate: Boolean) {
         updateButtonColor(getDefaultButtonColor())
 
         val isCurrentlyImage = currentBg is BitmapDrawable && currentBg.alpha > 0
-        if (isCurrentlyImage) {
+        if (isCurrentlyImage && !forceUpdate) {
             Log.d(TAG, "Transitioning from image to default background")
-            // 이미지에서 기본 배경으로 페이드 아웃
+            // ????? ?? ???? ??? ??
             animateBackgroundAlpha(currentBg as BitmapDrawable, 255, 0) {
                 val defaultDrawable = ColorDrawable(defaultBgColor)
                 targetView.background = defaultDrawable
                 listener.onBackgroundApplied(defaultDrawable)
             }
-        } else if ((currentBg as? ColorDrawable)?.color != defaultBgColor) {
+        } else if (forceUpdate || (currentBg as? ColorDrawable)?.color != defaultBgColor) {
             val defaultDrawable = ColorDrawable(defaultBgColor)
             targetView.background = defaultDrawable
             listener.onBackgroundApplied(defaultDrawable)
         }
     }
-
-    // ===== 애니메이션 =====
 
     private fun animateBackgroundAlpha(
         drawable: BitmapDrawable,
