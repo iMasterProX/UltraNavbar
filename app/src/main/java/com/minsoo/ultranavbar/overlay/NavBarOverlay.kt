@@ -96,6 +96,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var unlockFadePrepared: Boolean = false
     private var unlockFadeUntil: Long = 0
     private var isLockScreenActive: Boolean = false
+    private var isCustomBackgroundActive: Boolean = false
 
     // ===== 컴포넌트 콜백 구현 =====
 
@@ -457,8 +458,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     // ???? ?? ?? (?? ??? - ?? ??)
                     bar.alpha = 0f
                     bar.visibility = View.VISIBLE
-                    backgroundView?.alpha = 0f
-                    backgroundView?.visibility = View.VISIBLE
+                    if (!isCustomBackgroundActive) {
+                        backgroundView?.alpha = 0f
+                        backgroundView?.visibility = View.VISIBLE
+                    } else {
+                        backgroundView?.visibility = View.GONE
+                    }
                     hotspotView?.visibility = View.GONE
                     updateWindowHeight(getSystemNavigationBarHeightPx())
 
@@ -467,15 +472,19 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
                         start()
                     }
-                    backgroundView?.let { bg ->
-                        ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
-                            duration = Constants.Timing.ANIMATION_DURATION_MS
-                            start()
+                    if (!isCustomBackgroundActive) {
+                        backgroundView?.let { bg ->
+                            ObjectAnimator.ofFloat(bg, "alpha", 0f, 1f).apply {
+                                duration = Constants.Timing.ANIMATION_DURATION_MS
+                                start()
+                            }
                         }
                     }
                 } else {
                     // ???? ?? ???: navBarView? ??? (??? ?? ???)
                     // backgroundView? GONE ?? ?? - ?? ???? ??? ???
+                    backgroundView?.alpha = 0f
+                    backgroundView?.visibility = View.GONE
                     ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                         duration = Constants.Timing.ANIMATION_DURATION_MS
                         addListener(object : AnimatorListenerAdapter() {
@@ -484,9 +493,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                             }
 
                             override fun onAnimationEnd(animation: Animator) {
-                                // ??? ?? ? backgroundView ??
-                                backgroundView?.alpha = 1f
-                                backgroundView?.visibility = View.VISIBLE
+                                if (!isCustomBackgroundActive) {
+                                    backgroundView?.alpha = 1f
+                                    backgroundView?.visibility = View.VISIBLE
+                                }
                                 unlockFadePrepared = false
                             }
                         })
@@ -496,8 +506,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             } else {
                 // ????: ??? ??? ?? ??? ? ?????
                 updateWindowHeight(getSystemNavigationBarHeightPx())
-                backgroundView?.alpha = 1f
-                backgroundView?.visibility = View.VISIBLE
+                if (!isCustomBackgroundActive) {
+                    backgroundView?.alpha = 1f
+                    backgroundView?.visibility = View.VISIBLE
+                } else {
+                    backgroundView?.visibility = View.GONE
+                }
                 bar.alpha = 1f
                 bar.visibility = View.VISIBLE
                 hotspotView?.visibility = View.GONE
@@ -737,8 +751,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 }
                 backgroundManager.updateButtonColor(buttonColor)
             }
-            backgroundView?.alpha = 1f
-            backgroundView?.visibility = View.VISIBLE
+            if (!isCustomBackgroundActive) {
+                backgroundView?.alpha = 1f
+                backgroundView?.visibility = View.VISIBLE
+            } else {
+                backgroundView?.visibility = View.GONE
+            }
             hotspotView?.visibility = View.GONE
             updateWindowHeight(getSystemNavigationBarHeightPx())
             isShowing = true
@@ -868,11 +886,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         val shouldUseCustom = backgroundManager.shouldUseCustomBackground(isOnHomeScreen, isRecentsVisible)
+        isCustomBackgroundActive = shouldUseCustom
         backgroundManager.applyBackground(bar, shouldUseCustom)
 
         // backgroundView? ???
-        if (!shouldUseCustom) {
+        if (shouldUseCustom) {
+            backgroundView?.visibility = View.GONE
+        } else {
             backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+            backgroundView?.visibility = View.VISIBLE
         }
     }
 
@@ -952,6 +974,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         // ?? ??? ?? (??? ??? ?????)
         navBarView?.let { bar ->
             val shouldUseCustom = backgroundManager.shouldUseCustomBackground(isOnHomeScreen = true, isRecentsVisible = false)
+            isCustomBackgroundActive = shouldUseCustom
             backgroundManager.applyBackground(bar, shouldUseCustom, forceUpdate = true)
             bar.background?.alpha = 255
         }
