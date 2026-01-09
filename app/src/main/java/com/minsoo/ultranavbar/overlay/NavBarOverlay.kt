@@ -680,9 +680,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private fun maybeFinishUnlockFadeSuppression() {
         if (!isUnlockFadeSuppressionActive()) return
+        // 페이드 애니메이션이 아직 시작되지 않았으면 완료 처리하지 않음
+        // (잠금화면 hide 후 navBarView alpha가 1.0f로 남아있을 수 있음)
+        if (!unlockFadeInProgress) return
         val barAlpha = navBarView?.alpha ?: 1f
         // navBarView가 완전히 보일 때까지 backgroundView 숨김 유지
-        // unlockFadeInProgress 상관없이 alpha 검사 - 애니메이션 시작 전에도 보호
         if (barAlpha < 1f) return
         if (!isCustomBackgroundReady()) return
         endUnlockFadeSuppression()
