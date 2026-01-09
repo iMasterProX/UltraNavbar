@@ -125,22 +125,11 @@ class BackgroundManager(
 
     /**
      * 현재 방향에 맞는 비트맵 가져오기
-     * 중요: 캐시된 currentOrientation이 아닌 실제 시스템 방향을 직접 확인하여
-     * 방향 동기화 문제로 인한 잘못된 배경 적용 방지
      */
     fun getCurrentBitmap(): Bitmap? {
-        // 캐시된 값 대신 실제 시스템 방향 직접 확인
-        val actualOrientation = context.resources.configuration.orientation
-
-        // 불일치 시 자동 동기화
-        if (currentOrientation != actualOrientation) {
-            Log.w(TAG, "getCurrentBitmap: orientation mismatch! cached=${getOrientationName(currentOrientation)}, actual=${getOrientationName(actualOrientation)} - auto-syncing")
-            currentOrientation = actualOrientation
-        }
-
-        val isLandscape = actualOrientation == Configuration.ORIENTATION_LANDSCAPE
+        val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
         val bitmap = if (isLandscape) landscapeBitmap else portraitBitmap
-        Log.d(TAG, "getCurrentBitmap: orientation=${getOrientationName(actualOrientation)}, returning ${if (isLandscape) "landscape" else "portrait"} bitmap (hash=${bitmap?.hashCode()})")
+        Log.d(TAG, "getCurrentBitmap: orientation=${getOrientationName(currentOrientation)}, returning ${if (isLandscape) "landscape" else "portrait"} bitmap (hash=${bitmap?.hashCode()})")
         return bitmap
     }
 
@@ -211,21 +200,14 @@ class BackgroundManager(
         val newDarkMode = isSystemDarkMode()
         if (_isDarkMode != newDarkMode) {
             _isDarkMode = newDarkMode
-            Log.d(TAG, "Dark mode changed: $_isDarkMode")
+            val newButtonColor = getDefaultButtonColor()
+            _currentButtonColor = newButtonColor
+            // 다크 모드 전환 시 버튼 색상 즉시 업데이트
+            listener.onButtonColorChanged(newButtonColor)
+            Log.d(TAG, "Dark mode changed: $_isDarkMode, button color: ${getColorName(newButtonColor)}")
             return true
         }
         return false
-    }
-
-    /**
-     * 다크 모드에 맞춰 기본 버튼 색상 강제 업데이트
-     * 커스텀 배경이 아닌 경우에만 호출
-     */
-    fun forceUpdateDefaultButtonColor() {
-        val newButtonColor = getDefaultButtonColor()
-        _currentButtonColor = newButtonColor
-        listener.onButtonColorChanged(newButtonColor)
-        Log.d(TAG, "Forced button color update for dark mode: ${getColorName(newButtonColor)}")
     }
 
     // ===== 색상 계산 =====
@@ -348,11 +330,11 @@ class BackgroundManager(
                     gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
                 }
 
-                // 이미지 밝기 기반 버튼 색상 계산
+                // ??? ??? ?? ?? ?? ??
                 val buttonColor = calculateButtonColorForBitmap(targetBitmap)
                 updateButtonColor(buttonColor)
 
-                // 기본 배경에서 이미지로 전환 시 페이드 효과
+                // ?? ???? ???? ?? ? ??? ?
                 val needsFade = !forceUpdate && (currentBg is ColorDrawable || currentBg?.alpha == 0)
                 if (needsFade) {
                     bgDrawable.alpha = 0
@@ -366,7 +348,7 @@ class BackgroundManager(
                 listener.onBackgroundApplied(bgDrawable)
             }
         } else {
-            // 비트맵이 없으면 기본 배경 사용
+            // ???? ??? ?? ?? ??
             if (forceUpdate || (currentBg as? ColorDrawable)?.color != defaultBgColor) {
                 Log.d(TAG, "Fallback to default background (bitmap not loaded)")
                 targetView.background = ColorDrawable(defaultBgColor)
@@ -381,7 +363,7 @@ class BackgroundManager(
         val isCurrentlyImage = currentBg is BitmapDrawable && currentBg.alpha > 0
         if (isCurrentlyImage && !forceUpdate) {
             Log.d(TAG, "Transitioning from image to default background")
-            // 이미지에서 기본 배경으로 전환 시 페이드 아웃
+            // ????? ?? ???? ??? ??
             animateBackgroundAlpha(currentBg as BitmapDrawable, 255, 0) {
                 val defaultDrawable = ColorDrawable(defaultBgColor)
                 targetView.background = defaultDrawable

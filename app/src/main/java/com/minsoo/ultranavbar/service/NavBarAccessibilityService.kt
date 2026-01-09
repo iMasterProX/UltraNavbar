@@ -93,7 +93,7 @@ class NavBarAccessibilityService : AccessibilityService() {
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     Log.d(TAG, "Screen on, updating visibility")
-                    pendingUnlockFade = windowAnalyzer.isLockScreenActive()
+                    pendingUnlockFade = true // Allow unlock fade even if lock screen state lags on screen-on.
                     updateOverlayVisibility(forceFade = false)
                 }
                 Intent.ACTION_USER_PRESENT -> {
@@ -334,8 +334,6 @@ class NavBarAccessibilityService : AccessibilityService() {
             checkNotificationPanelState()
             checkImeVisibility()
             updateHomeAndRecentsFromWindows()
-            // 상태 체크 후 오버레이 가시성 재평가 (비활성화 앱에서 복귀 시 필요)
-            updateOverlayVisibility()
         }
         handler.postDelayed(pendingStateCheck!!, Constants.Timing.STATE_CHECK_DELAY_MS)
     }
