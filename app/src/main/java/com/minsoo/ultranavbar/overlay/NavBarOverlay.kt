@@ -52,6 +52,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         private const val TAG = "NavBarOverlay"
     }
 
+    private fun shouldUseCustomBackgroundNow(): Boolean {
+        if (!settings.homeBgEnabled) return false
+        // “일반 앱에서는 기본 배경 유지” 요구사항 반영
+        // 필요하면 recents 포함/제외 조절 가능
+        return isOnHomeScreen || isLockScreenActive || isRecentsVisible
+    }
+
     private val context: Context = service
     private val windowManager: WindowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -697,12 +704,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     private fun applyUnlockCustomBackgroundIfAvailable(): Boolean {
-        if (!settings.homeBgEnabled) return false
+        if (!shouldUseCustomBackgroundNow()) return false
         val bar = navBarView ?: return false
+
         backgroundManager.forceOrientationSync(context.resources.configuration.orientation)
         backgroundManager.loadBackgroundBitmaps(forceReload = false)
+
         val bitmap = backgroundManager.getCurrentBitmap() ?: return false
         isCustomBackgroundActive = true
+
         backgroundManager.applyBackground(bar, useCustom = true, forceUpdate = true)
         bar.background?.alpha = 255
         return true
@@ -887,10 +897,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (isLockScreenActive == active) return
         val wasLockScreenActive = isLockScreenActive
         isLockScreenActive = active
+
         if (active) {
             resetUnlockFadeState()
         } else if (wasLockScreenActive && !active) {
             unlockFadeRequested = true
+            handler.post { updateNavBarBackground() }
         }
     }
 
@@ -954,7 +966,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun updateNavBarBackground() {
         val bar = navBarView ?: return
 
-        // ?? ??? ?? - NavBarOverlay? currentOrientation? ?? ???
         if (backgroundManager.syncOrientationWithSystem()) {
             val actualOrientation = context.resources.configuration.orientation
             if (currentOrientation != actualOrientation) {
@@ -963,27 +974,40 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             }
         }
 
-        // backgroundView? ???
+        // 기본 배경 레이어 색은 항상 시스템 기본으로 맞춤
         backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
 
         val isUnlockSuppressed = isUnlockFadeSuppressionActive()
-        if (isUnlockSuppressed && settings.homeBgEnabled) {
+        if (isUnlockSuppressed) {
+            // 잠금해제 페이드 “중”이라도, 지금 화면이 일반 앱이면 커스텀을 쓰면 안 됨
+            if (!shouldUseCustomBackgroundNow()) {
+                isCustomBackgroundActive = false
+                backgroundManager.applyBackground(bar, useCustom = false, forceUpdate = true)
+                endUnlockFadeSuppression()
+                return
+            }
+
+            // 홈/잠금/리센트라면 기존처럼 커스텀 준비/적용
             backgroundManager.loadBackgroundBitmaps(forceReload = false)
             val bitmap = backgroundManager.getCurrentBitmap()
             if (bitmap != null) {
                 isCustomBackgroundActive = true
                 backgroundManager.applyBackground(bar, useCustom = true, forceUpdate = true)
                 maybeFinishUnlockFadeSuppression()
+                return
             }
+            // 비트맵이 아직 없으면(로드 실패/지연) 기본으로라도 유지
+            isCustomBackgroundActive = false
+            backgroundManager.applyBackground(bar, useCustom = false, forceUpdate = true)
             return
         }
 
-        val shouldUseCustom = backgroundManager.shouldUseCustomBackground(isOnHomeScreen, isRecentsVisible)
+        // 일반 경로: 홈/잠금/리센트일 때만 커스텀
+        val shouldUseCustom = shouldUseCustomBackgroundNow()
         isCustomBackgroundActive = shouldUseCustom
-        backgroundManager.applyBackground(bar, shouldUseCustom)
-        if (isShowing) {
-            showBackgroundLayer()
-        }
+        backgroundManager.applyBackground(bar, useCustom = shouldUseCustom)
+
+        if (isShowing) showBackgroundLayer()
     }
 
     private fun handleButtonClick(action: NavAction) {
