@@ -418,10 +418,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return
         }
 
-        // 1. backgroundView를 먼저 보이게 설정 (시스템 네비바를 가리는 뒷 프레임)
-        backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
-        backgroundView?.alpha = 1f
-        backgroundView?.visibility = View.VISIBLE
+        // 1. backgroundView 설정
+        // unlock fade 준비 상태가 아니면 바로 보이게 설정
+        // unlock fade 준비 상태면 애니메이션 완료 후 보이게 함
+        if (!wasPreparedForFade) {
+            backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+            backgroundView?.alpha = 1f
+            backgroundView?.visibility = View.VISIBLE
+        }
 
         // 2. 윈도우 높이 먼저 증가 (backgroundView가 시스템 네비바를 가림)
         updateWindowHeight(getSystemNavigationBarHeightPx())
@@ -447,16 +451,29 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
         hotspotView?.visibility = View.GONE
 
-        // 4. 애니메이션 시작
+        // 5. 애니메이션 시작
         navBarView?.let { bar ->
             if (shouldFade) {
                 ObjectAnimator.ofFloat(bar, "alpha", 0f, 1f).apply {
                     duration = Constants.Timing.ANIMATION_DURATION_MS
                     addListener(object : AnimatorListenerAdapter() {
                         override fun onAnimationEnd(animation: Animator) {
+                            // unlock fade 완료 시 backgroundView 표시
+                            if (wasPreparedForFade) {
+                                backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+                                backgroundView?.alpha = 1f
+                                backgroundView?.visibility = View.VISIBLE
+                                Log.d(TAG, "Unlock fade complete, backgroundView now visible")
+                            }
                             unlockFadePrepared = false
                         }
                         override fun onAnimationCancel(animation: Animator) {
+                            // 애니메이션 취소 시에도 backgroundView 표시
+                            if (wasPreparedForFade) {
+                                backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+                                backgroundView?.alpha = 1f
+                                backgroundView?.visibility = View.VISIBLE
+                            }
                             unlockFadePrepared = false
                         }
                     })
@@ -926,7 +943,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      * 윈도우 리사이즈가 슬라이드처럼 보이는 현상을 방지
      *
      * 준비 작업:
-     * 1. backgroundView를 먼저 보이게 설정 (시스템 네비바 가리기)
+     * 1. backgroundView를 숨김 (navBarView 페이드 완료 전까지)
      * 2. 윈도우 높이를 네비바 높이로 미리 확장
      * 3. navBarView를 alpha=0 상태로 VISIBLE 설정
      * 4. 홈 화면 배경 이미지 미리 적용
@@ -938,10 +955,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         unlockFadePrepared = true
 
-        // backgroundView를 먼저 보이게 - 시스템 네비바 가림
-        backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
-        backgroundView?.alpha = 1f
-        backgroundView?.visibility = View.VISIBLE
+        // backgroundView를 숨김 - navBarView가 완전히 페이드인 될 때까지
+        // 이렇게 해야 잠금화면 → 홈 화면 전환 시 자연스러운 페이드 효과
+        backgroundView?.visibility = View.GONE
 
         navBarView?.clearAnimation()
         navBarView?.animate()?.cancel()
@@ -961,7 +977,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         hotspotView?.visibility = View.GONE
         updateWindowHeight(getSystemNavigationBarHeightPx())
 
-        Log.d(TAG, "Prepared for unlock fade animation (window pre-expanded)")
+        Log.d(TAG, "Prepared for unlock fade animation (backgroundView hidden until fade complete)")
     }
 
     fun markNextShowInstant() { /* no-op */ }

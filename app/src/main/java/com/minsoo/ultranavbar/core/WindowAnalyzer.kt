@@ -124,18 +124,26 @@ class WindowAnalyzer(
 
     /**
      * 전체화면 상태 분석
+     *
+     * 새로운 로직: 앱 윈도우 경계 확인
+     * - 안드로이드는 전체화면 모드에서 네비바 윈도우를 제거하지 않고 투명하게 만듦
+     * - 따라서 시스템 UI 윈도우 높이가 아닌, 앱 윈도우가 화면 하단까지 확장되었는지 확인
+     * - 앱 윈도우가 화면 하단 경계까지 도달하면 전체화면으로 판단
+     *
      * @param windows 현재 윈도우 목록
      * @return 전체화면 여부
      */
     fun analyzeFullscreenState(windows: List<AccessibilityWindowInfo>): Boolean {
         val screen = getScreenBounds()
         val isLandscape = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-        var bottomSystemUiHeight = 0
+        val currentNavBarHeight = getCurrentNavBarHeight()
+
+        // 앱 윈도우가 화면 하단까지 확장되었는지 확인
+        var appTouchesBottom = false
+        var appWindowBottom = 0
 
         for (w in windows) {
-            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
-            val rootPkg = try { w.root?.packageName?.toString() } catch (e: Exception) { null }
-            if (rootPkg != "com.android.systemui") continue
+            if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
 
             val r = Rect()
             try {
@@ -144,33 +152,25 @@ class WindowAnalyzer(
                 continue
             }
 
-            val touchesBottom = (r.bottom >= screen.bottom - 2)
-            val wideEnough = r.width() >= (screen.width() * 0.5f)
-            if (touchesBottom && wideEnough) {
-                bottomSystemUiHeight = maxOf(bottomSystemUiHeight, r.height())
+            // 앱 윈도우가 충분히 넓고 화면 하단에 가까운지 확인
+            val wideEnough = r.width() >= (screen.width() * 0.9f)
+            // 앱 윈도우 하단이 화면 하단 - 네비바 높이 보다 더 아래에 있으면 전체화면
+            // (여유분 5px 추가)
+            val touchesBottom = r.bottom >= (screen.bottom - currentNavBarHeight + 5)
+
+            if (wideEnough && touchesBottom) {
+                appTouchesBottom = true
+                appWindowBottom = maxOf(appWindowBottom, r.bottom)
             }
         }
 
-        // 현재 방향에 맞는 네비바 높이 사용
-        val currentNavBarHeight = getCurrentNavBarHeight()
+        // 앱 윈도우가 네비바 영역까지 확장되었으면 전체화면
+        val isFullscreen = appTouchesBottom
 
-        // "네비바가 보임" 기준: navBarHeight의 70% 이상
-        val navVisibleThreshold = maxOf(
-            (currentNavBarHeight * Constants.Threshold.NAV_BAR_VISIBLE_RATIO).toInt(),
-            context.dpToPx(Constants.Dimension.MIN_NAV_BAR_HEIGHT_DP)
-        )
-        val gestureOnlyThreshold = context.dpToPx(Constants.Threshold.GESTURE_ONLY_HEIGHT_DP)
-
-        val navBarVisible = bottomSystemUiHeight >= navVisibleThreshold
-        val navBarHiddenOrGestureOnly = bottomSystemUiHeight <= gestureOnlyThreshold
-
-        val isFullscreen = navBarHiddenOrGestureOnly || !navBarVisible
-
-        // 디버그 로깅 (세로모드에서 전체화면 감지 문제 추적용)
-        Log.d(TAG, "Fullscreen check: orientation=${if (isLandscape) "landscape" else "portrait"}, " +
-                "bottomSysUi=$bottomSystemUiHeight, navBarHeight=$currentNavBarHeight, " +
-                "threshold=$navVisibleThreshold, gestureThreshold=$gestureOnlyThreshold, " +
-                "result=$isFullscreen")
+        // 디버그 로깅
+        Log.d(TAG, "Fullscreen check (app bounds): orientation=${if (isLandscape) "landscape" else "portrait"}, " +
+                "screenBottom=${screen.bottom}, appWindowBottom=$appWindowBottom, navBarHeight=$currentNavBarHeight, " +
+                "appTouchesBottom=$appTouchesBottom, result=$isFullscreen")
 
         return isFullscreen
     }
