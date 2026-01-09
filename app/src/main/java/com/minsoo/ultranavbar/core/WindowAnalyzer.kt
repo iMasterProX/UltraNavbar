@@ -129,6 +129,7 @@ class WindowAnalyzer(
      */
     fun analyzeFullscreenState(windows: List<AccessibilityWindowInfo>): Boolean {
         val screen = getScreenBounds()
+        val isLandscape = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         var bottomSystemUiHeight = 0
 
         for (w in windows) {
@@ -163,7 +164,15 @@ class WindowAnalyzer(
         val navBarVisible = bottomSystemUiHeight >= navVisibleThreshold
         val navBarHiddenOrGestureOnly = bottomSystemUiHeight <= gestureOnlyThreshold
 
-        return navBarHiddenOrGestureOnly || !navBarVisible
+        val isFullscreen = navBarHiddenOrGestureOnly || !navBarVisible
+
+        // 디버그 로깅 (세로모드에서 전체화면 감지 문제 추적용)
+        Log.d(TAG, "Fullscreen check: orientation=${if (isLandscape) "landscape" else "portrait"}, " +
+                "bottomSysUi=$bottomSystemUiHeight, navBarHeight=$currentNavBarHeight, " +
+                "threshold=$navVisibleThreshold, gestureThreshold=$gestureOnlyThreshold, " +
+                "result=$isFullscreen")
+
+        return isFullscreen
     }
 
     // ===== IME 감지 =====

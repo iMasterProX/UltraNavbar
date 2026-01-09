@@ -418,14 +418,22 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return
         }
 
-        // 1. 먼저 배경 준비 (syncOrientationAndBackground가 backgroundView 가시성도 설정)
-        // 중요: backgroundView를 여기서 직접 건드리지 않음 - updateNavBarBackground()가 처리
-        // 숨김 상태에서 표시할 때는 forceInstant=true로 배경을 즉시 적용하여 시스템 네비바 깜빡임 방지
+        // 1. backgroundView를 먼저 보이게 설정 (시스템 네비바를 가리는 뒷 프레임)
+        backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+        backgroundView?.alpha = 1f
+        backgroundView?.visibility = View.VISIBLE
+
+        // 2. 윈도우 높이 먼저 증가 (backgroundView가 시스템 네비바를 가림)
+        updateWindowHeight(getSystemNavigationBarHeightPx())
+        rootView?.visibility = View.VISIBLE
+        setWindowTouchable(true)
+
+        // 3. 배경 준비 (navBarView 배경 설정, 페이드 애니메이션 포함)
         if (!wasPreparedForFade) {
-            syncOrientationAndBackground(forceInstant = true)
+            syncOrientationAndBackground()
         }
 
-        // 2. 뷰 상태 설정 (윈도우 높이 증가 전에 준비)
+        // 4. navBarView 상태 설정
         navBarView?.let { bar ->
             bar.clearAnimation()
             bar.animate().cancel()
@@ -438,11 +446,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             }
         }
         hotspotView?.visibility = View.GONE
-        rootView?.visibility = View.VISIBLE
-
-        // 3. 윈도우 높이 증가 및 터치 활성화
-        updateWindowHeight(getSystemNavigationBarHeightPx())
-        setWindowTouchable(true)
 
         // 4. 애니메이션 시작
         navBarView?.let { bar ->
@@ -477,10 +480,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         // 잠금화면일 때 숨김 (핫스팟 없이)
         if (!showHotspot && isLockScreenActive) {
             navBarView?.visibility = View.GONE
-            backgroundView?.visibility = View.GONE
             gestureOverlayView?.visibility = View.GONE
             hotspotView?.visibility = View.GONE
             rootView?.visibility = View.GONE
+            // backgroundView는 숨기지 않음 - 나중에 show() 시 시스템 네비바 가리기 위해
             setWindowTouchable(false)
             updateWindowHeight(getSystemNavigationBarHeightPx())
             hideAnimationInProgress = false
@@ -494,8 +497,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         // 비활성화 앱에서 강제 숨김 (showHotspot = false, 이미 숨겨진 상태)
         if (!showHotspot && !isShowing) {
             navBarView?.visibility = View.GONE
-            backgroundView?.visibility = View.GONE
             hotspotView?.visibility = View.GONE
+            // backgroundView는 숨기지 않음 - 윈도우 높이 0이면 어차피 안 보임
             updateWindowHeight(0)
             Log.d(TAG, "Force hiding for disabled app (window height = 0)")
             return
@@ -512,7 +515,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             if (!animate) {
                 bar.visibility = View.GONE
-                backgroundView?.visibility = View.GONE
+                // backgroundView는 숨기지 않음 - 항상 시스템 네비바를 가림
                 if (shouldShowHotspot) {
                     updateWindowHeight(context.dpToPx(settings.hotspotHeight))
                 } else {
@@ -529,7 +532,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         override fun onAnimationEnd(animation: Animation?) {
                             hideAnimationInProgress = false
                             bar.visibility = View.GONE
-                            backgroundView?.visibility = View.GONE
+                            // backgroundView는 숨기지 않음 - 항상 시스템 네비바를 가림
                             if (shouldShowHotspot) {
                                 updateWindowHeight(context.dpToPx(settings.hotspotHeight))
                             } else {
@@ -696,12 +699,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 }
                 backgroundManager.updateButtonColor(buttonColor)
             }
-            if (!isCustomBackgroundActive) {
-                backgroundView?.alpha = 1f
-                backgroundView?.visibility = View.VISIBLE
-            } else {
-                backgroundView?.visibility = View.GONE
-            }
+            // backgroundView는 항상 보임 - 시스템 네비바 가리기
+            backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+            backgroundView?.alpha = 1f
+            backgroundView?.visibility = View.VISIBLE
             hotspotView?.visibility = View.GONE
             updateWindowHeight(getSystemNavigationBarHeightPx())
             isShowing = true
@@ -811,14 +812,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     /**
      * 방향 및 배경 강제 동기화
      * 전체화면 모드 복귀 시 또는 홈 화면 복귀 시 호출
-     * @param forceInstant true이면 배경 애니메이션 없이 즉시 적용
      */
-    private fun syncOrientationAndBackground(forceInstant: Boolean = false) {
+    private fun syncOrientationAndBackground() {
         val actualOrientation = context.resources.configuration.orientation
         val actualOrientationName = if (actualOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
         val cachedOrientationName = if (currentOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
 
-        Log.d(TAG, "syncOrientationAndBackground: cached=$cachedOrientationName, actual=$actualOrientationName, forceInstant=$forceInstant")
+        Log.d(TAG, "syncOrientationAndBackground: cached=$cachedOrientationName, actual=$actualOrientationName")
 
         // 항상 실제 시스템 방향으로 동기화
         if (currentOrientation != actualOrientation) {
@@ -829,14 +829,19 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         // 비트맵이 없는 경우에만 로드 (불필요한 재로드 방지)
         backgroundManager.loadBackgroundBitmaps(forceReload = false)
-        updateNavBarBackground(forceInstant)
+        updateNavBarBackground()
     }
 
     /**
      * 네비바 배경 업데이트
-     * @param forceInstant true이면 애니메이션 없이 즉시 적용 (숨김 상태에서 복귀 시 사용)
+     *
+     * 레이어 구조:
+     * - backgroundView (뒷 프레임): 항상 보이며 다크모드에 따라 흰색/검은색
+     * - navBarView (앞 프레임): 배경 이미지 또는 기본색상, 페이드 애니메이션 대상
+     *
+     * backgroundView는 절대 GONE이 되지 않음 - 시스템 네비바를 항상 가림
      */
-    private fun updateNavBarBackground(forceInstant: Boolean = false) {
+    private fun updateNavBarBackground() {
         val bar = navBarView ?: return
 
         // 방향 동기화 확인 - NavBarOverlay의 currentOrientation도 함께 갱신
@@ -851,17 +856,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val shouldUseCustom = backgroundManager.shouldUseCustomBackground(isOnHomeScreen, isRecentsVisible)
         isCustomBackgroundActive = shouldUseCustom
 
-        // forceInstant가 true이면 애니메이션 없이 즉시 적용
-        backgroundManager.applyBackground(bar, shouldUseCustom, forceUpdate = forceInstant)
+        // navBarView에 배경 적용 (페이드 애니메이션 포함)
+        backgroundManager.applyBackground(bar, shouldUseCustom)
 
-        // backgroundView 가시성 업데이트
-        if (shouldUseCustom) {
-            backgroundView?.visibility = View.GONE
-        } else {
-            backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
-            backgroundView?.alpha = 1f
-            backgroundView?.visibility = View.VISIBLE
-        }
+        // backgroundView는 항상 보임 - 시스템 네비바를 가리는 뒷 프레임 역할
+        // 다크모드에 따라 흰색/검은색으로 설정
+        backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+        backgroundView?.alpha = 1f
+        backgroundView?.visibility = View.VISIBLE
     }
 
     private fun handleButtonClick(action: NavAction) {
@@ -924,9 +926,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      * 윈도우 리사이즈가 슬라이드처럼 보이는 현상을 방지
      *
      * 준비 작업:
-     * 1. 윈도우 높이를 네비바 높이로 미리 확장
-     * 2. navBarView를 alpha=0 상태로 VISIBLE 설정
-     * 3. backgroundView를 GONE으로 설정 (홈 화면 배경이 보이도록)
+     * 1. backgroundView를 먼저 보이게 설정 (시스템 네비바 가리기)
+     * 2. 윈도우 높이를 네비바 높이로 미리 확장
+     * 3. navBarView를 alpha=0 상태로 VISIBLE 설정
      * 4. 홈 화면 배경 이미지 미리 적용
      */
     fun prepareForUnlockFade() {
@@ -935,6 +937,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         unlockFadePrepared = true
+
+        // backgroundView를 먼저 보이게 - 시스템 네비바 가림
+        backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+        backgroundView?.alpha = 1f
+        backgroundView?.visibility = View.VISIBLE
 
         navBarView?.clearAnimation()
         navBarView?.animate()?.cancel()
@@ -948,10 +955,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             bar.background?.alpha = 255
         }
 
-        // 윈도우와 뷰 상태 준비
+        // navBarView는 alpha=0으로 시작 (페이드 인 예정)
         navBarView?.alpha = 0f
         navBarView?.visibility = View.VISIBLE
-        backgroundView?.visibility = View.GONE
         hotspotView?.visibility = View.GONE
         updateWindowHeight(getSystemNavigationBarHeightPx())
 
