@@ -51,7 +51,7 @@ class AppListActivity : AppCompatActivity() {
         settings = SettingsManager.getInstance(this)
         selectionMode = intent.getStringExtra(EXTRA_SELECTION_MODE) ?: MODE_DISABLED_APPS
 
-        // MODE_DISABLED_APPS 모드에서 비활성화된 앱 목록 로드
+        
         if (selectionMode == MODE_DISABLED_APPS) {
             selectedPackages = settings.disabledApps.toMutableSet()
         }
@@ -61,13 +61,12 @@ class AppListActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
-        // 툴바
+        
         findViewById<MaterialToolbar>(R.id.toolbar).setNavigationOnClickListener {
             finish()
         }
 
-        // 검색
-        editSearch = findViewById(R.id.editSearch)
+        
         editSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -76,22 +75,22 @@ class AppListActivity : AppCompatActivity() {
             }
         })
 
-        // 진행 표시
+        
         progressBar = findViewById(R.id.progressBar)
 
-        // RecyclerView
+        
         recyclerApps = findViewById(R.id.recyclerApps)
         recyclerApps.layoutManager = LinearLayoutManager(this)
         adapter = AppListAdapter(
             selectionMode = selectionMode,
-            onItemClick = { packageName -> // Single-selection
+            onItemClick = { packageName -> 
                 val resultIntent = Intent().apply {
                     putExtra(EXTRA_SELECTED_PACKAGE, packageName)
                 }
                 setResult(Activity.RESULT_OK, resultIntent)
                 finish()
             },
-            onItemChecked = { packageName, isChecked -> // Multi-selection
+            onItemChecked = { packageName, isChecked -> 
                 if (isChecked) {
                     selectedPackages.add(packageName)
                 } else {
@@ -101,14 +100,13 @@ class AppListActivity : AppCompatActivity() {
         )
         recyclerApps.adapter = adapter
 
-        // 저장 버튼
+        
         btnSave = findViewById(R.id.btnSave)
         btnSave.setOnClickListener {
             saveAndFinish()
         }
         
-        // MODE_SINGLE에서만 저장 버튼 숨기기
-        btnSave.visibility = if (selectionMode == MODE_SINGLE) View.GONE else View.VISIBLE
+        
     }
 
     private fun loadApps() {
@@ -135,11 +133,10 @@ class AppListActivity : AppCompatActivity() {
         val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
 
         for (appInfo in installedApps) {
-            // 시스템 앱이 아닌 것만 (선택적으로 시스템 앱도 포함 가능)
+            
             val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
 
-            // 런처에 표시되는 앱만 필터링
-            val launchIntent = pm.getLaunchIntentForPackage(appInfo.packageName)
+            
             if (launchIntent != null || isSystemApp) {
                 val name = pm.getApplicationLabel(appInfo).toString()
                 val icon = try {
@@ -157,13 +154,11 @@ class AppListActivity : AppCompatActivity() {
             }
         }
 
-        // 선택된 앱을 상단에, 그 외는 이름순 정렬
+        
         return sortAppsWithSelectedFirst(apps)
     }
 
-    /**
-     * 선택된 앱을 상단에 배치하고, 나머지는 이름순 정렬
-     */
+    
     private fun sortAppsWithSelectedFirst(apps: List<AppInfo>): List<AppInfo> {
         val selected = apps.filter { selectedPackages.contains(it.packageName) }
             .sortedBy { it.name.lowercase() }
@@ -174,21 +169,20 @@ class AppListActivity : AppCompatActivity() {
 
     private fun filterApps(query: String) {
         if (query.isEmpty()) {
-            // 선택된 앱 상단 정렬 적용
+            
             adapter.submitList(sortAppsWithSelectedFirst(allApps), selectedPackages)
         } else {
             val filtered = allApps.filter {
                 it.name.contains(query, ignoreCase = true) ||
                         it.packageName.contains(query, ignoreCase = true)
             }
-            // 검색 결과에도 선택된 앱 상단 정렬 적용
+            
             adapter.submitList(sortAppsWithSelectedFirst(filtered), selectedPackages)
         }
     }
 
     private fun saveAndFinish() {
-        // MODE_DISABLED_APPS 모드에서 비활성화된 앱 목록 저장
-        if (selectionMode == MODE_DISABLED_APPS) {
+        
             settings.disabledApps = selectedPackages
         }
         finish()

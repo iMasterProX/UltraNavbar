@@ -3,12 +3,10 @@ package com.minsoo.ultranavbar.core
 import android.util.TypedValue
 import android.content.Context
 
-/**
- * 앱 전체에서 사용되는 상수 정의
- */
+
 object Constants {
 
-    // ===== 치수 관련 (dp) =====
+    
     object Dimension {
         const val NAV_BUTTON_SIZE_DP = 48
         const val BUTTON_SPACING_DP = 8
@@ -21,7 +19,7 @@ object Constants {
         const val CROP_HEIGHT_PX = 72
     }
 
-    // ===== 타이밍 관련 (ms) =====
+    
     object Timing {
         const val ANIMATION_DURATION_MS = 200L
         const val BG_TRANSITION_DURATION_MS = 350L
@@ -29,13 +27,13 @@ object Constants {
         const val DARK_MODE_DEBOUNCE_MS = 1000L
         const val STATE_CHECK_DELAY_MS = 50L
         const val UNLOCK_FADE_WINDOW_MS = 1500L
-        const val HOME_STATE_DEBOUNCE_MS = 350L  // 증가: 빠른 상태 토글 방지 (200 -> 350)
-        const val RECENTS_STATE_DEBOUNCE_MS = 150L  // 증가: 빠른 상태 토글 방지 (100 -> 150)
+        const val HOME_STATE_DEBOUNCE_MS = 350L  
+        const val RECENTS_STATE_DEBOUNCE_MS = 150L  
         const val FULLSCREEN_POLLING_MS = 300L
         const val IME_VISIBILITY_DELAY_MS = 500L
     }
 
-    // ===== 비율 및 임계값 =====
+    
     object Threshold {
         const val NAV_BAR_VISIBLE_RATIO = 0.7f
         const val GESTURE_ONLY_HEIGHT_DP = 24f
@@ -43,7 +41,7 @@ object Constants {
         const val LUMINANCE_SAMPLE_SIZE = 10
     }
 
-    // ===== 회전 각도 =====
+    
     object Rotation {
         const val PANEL_OPEN = 180f
         const val PANEL_CLOSED = 0f
@@ -51,22 +49,20 @@ object Constants {
         const val IME_INACTIVE = 0f
     }
 
-    // ===== 파일명 =====
+    
     object FileName {
         const val LANDSCAPE_BG = "navbar_bg_landscape.png"
         const val PORTRAIT_BG = "navbar_bg_portrait.png"
     }
 
-    // ===== 브로드캐스트 액션 =====
+    
     object Action {
         const val SETTINGS_CHANGED = "com.minsoo.ultranavbar.SETTINGS_CHANGED"
         const val RELOAD_BACKGROUND = "com.minsoo.ultranavbar.RELOAD_BACKGROUND"
     }
 }
 
-/**
- * dp를 px로 변환하는 확장 함수
- */
+
 fun Context.dpToPx(dp: Int): Int {
     return TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP,

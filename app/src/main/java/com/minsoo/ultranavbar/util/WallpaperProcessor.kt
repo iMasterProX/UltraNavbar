@@ -24,7 +24,7 @@ object WallpaperProcessor {
                 return@withContext false
             }
 
-            // 실제 디스플레이 크기를 가져와서 방향에 맞게 계산
+            
             val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
             val metrics = windowManager.currentWindowMetrics
             val bounds = metrics.bounds
@@ -34,16 +34,14 @@ object WallpaperProcessor {
             val targetWidth = if (isLandscape) realScreenWidth else realScreenHeight
             val targetHeight = if (isLandscape) realScreenHeight else realScreenWidth
             
-            // 1. Drawable을 목표 크기의 Bitmap으로 변환
-            val wallpaperBitmap = wallpaperDrawable.toBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+            
 
-            // 2. Scrim 그라데이션 적용
+            
             val resultBitmap = applyScrim(wallpaperBitmap, targetHeight)
             
-            // 3. 크롭 및 저장
-            val success = ImageCropUtil.cropAndSave(context, resultBitmap, isLandscape)
+            
 
-            // 사용된 비트맵 메모리 해제
+            
             wallpaperBitmap.recycle()
             resultBitmap.recycle()
 
@@ -57,15 +55,13 @@ object WallpaperProcessor {
         }
     }
 
-    /**
-     * 비트맵에 상단 및 하단 scrim 그라데이션을 적용
-     */
+    
     private fun applyScrim(source: Bitmap, height: Int): Bitmap {
         val resultBitmap = source.copy(source.config, true)
         val canvas = Canvas(resultBitmap)
         val paint = Paint()
 
-        // 상단 그라데이션 (25% 높이, 20% 불투명도의 검은색 -> 투명)
+        
         val topShader = LinearGradient(
             0f, 0f, 0f, height * 0.25f,
             Color.argb(51, 0, 0, 0), Color.TRANSPARENT,
@@ -74,7 +70,7 @@ object WallpaperProcessor {
         paint.shader = topShader
         canvas.drawRect(0f, 0f, canvas.width.toFloat(), height * 0.25f, paint)
 
-        // 하단 그라데이션 (25% 높이, 20% 불투명도의 검은색 -> 투명)
+        
         val bottomShader = LinearGradient(
             0f, height * 0.75f, 0f, height.toFloat(),
             Color.TRANSPARENT, Color.argb(51, 0, 0, 0),
