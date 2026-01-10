@@ -22,7 +22,7 @@ import com.minsoo.ultranavbar.util.ImageCropUtil
  * - 배경 비트맵 로딩 (가로/세로)
  * - 다크 모드에 따른 배경색 결정
  * - 이미지 밝기 기반 버튼 색상 계산
- * - 배경 전환 애니메이션
+ * - 배경 전환 애니메이션 (하드웨어 가속 + 계단식 페이드)
  */
 class BackgroundManager(
     private val context: Context,
@@ -35,7 +35,6 @@ class BackgroundManager(
     // Android 12 표준 애니메이션 인터폴레이터
     private val android12Interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
     private var bgAnimator: ValueAnimator? = null
-
     private val settings: SettingsManager = SettingsManager.getInstance(context)
 
     // 배경 비트맵 캐시
@@ -52,6 +51,9 @@ class BackgroundManager(
     val currentButtonColor: Int get() = _currentButtonColor
 
     private var currentOrientation: Int = Configuration.ORIENTATION_UNDEFINED
+
+    // 하드웨어 가속 관리
+    private var hardwareAcceleratedView: View? = null
 
     /**
      * 배경 변경 리스너
@@ -102,7 +104,6 @@ class BackgroundManager(
 
         landscapeBitmap = ImageCropUtil.loadBackgroundBitmap(context, true)
         portraitBitmap = ImageCropUtil.loadBackgroundBitmap(context, false)
-
         Log.d(TAG, "Background bitmaps loaded: landscape=${landscapeBitmap?.hashCode()}, portrait=${portraitBitmap?.hashCode()}")
     }
 
@@ -148,10 +149,12 @@ class BackgroundManager(
         if (cached != null && !cached.isRecycled) {
             return cached
         }
+
         val current = getCurrentBitmap()
         if (current != null && !current.isRecycled) {
             return current
         }
+
         return null
     }
 
@@ -169,7 +172,6 @@ class BackgroundManager(
      */
     fun handleOrientationChange(newOrientation: Int): Boolean {
         if (currentOrientation == newOrientation) return false
-
         Log.d(TAG, "Orientation changed: ${getOrientationName(currentOrientation)} -> ${getOrientationName(newOrientation)}")
         currentOrientation = newOrientation
         return true
@@ -184,7 +186,6 @@ class BackgroundManager(
         if (currentOrientation != actualOrientation) {
             Log.w(TAG, "Orientation mismatch! cached=$currentOrientation, actual=$actualOrientation - resyncing")
             currentOrientation = actualOrientation
-            // 방향이 바뀌었으므로 비트맵 리로드 필요 없음 (이미 로드되어 있음)
             return true
         }
         return false
@@ -255,7 +256,6 @@ class BackgroundManager(
         val sampleSize = Constants.Threshold.LUMINANCE_SAMPLE_SIZE
         val width = bitmap.width
         val height = bitmap.height
-
         var totalLuminance = 0.0
         var sampleCount = 0
 
@@ -280,7 +280,6 @@ class BackgroundManager(
         }
 
         val avgLuminance = if (sampleCount > 0) totalLuminance / sampleCount else Constants.Threshold.BRIGHTNESS_THRESHOLD
-
         return if (avgLuminance > Constants.Threshold.BRIGHTNESS_THRESHOLD) Color.BLACK else Color.WHITE
     }
 
@@ -314,7 +313,7 @@ class BackgroundManager(
     }
 
     /**
-     * 배경을 뷰에 적용
+     * 배경을 뷰에 적용 (하드웨어 가속 + 계단식 페이드)
      * @param targetView 배경을 적용할 뷰
      * @param useCustom 커스텀 배경 사용 여부
      * @param forceUpdate 강제 업데이트 여부
@@ -324,20 +323,22 @@ class BackgroundManager(
         useCustom: Boolean,
         forceUpdate: Boolean = false,
         forceFadeFromCustom: Boolean = false,
-        forceFadeToCustom: Boolean = false   // 추가
+        forceFadeToCustom: Boolean = false
     ) {
         val currentBg = targetView.background
         val defaultBgColor = getDefaultBackgroundColor()
 
         val shouldCancel = bgAnimator != null && (
-            forceUpdate ||
-            forceFadeFromCustom ||
-            forceFadeToCustom ||
-            (lastUseCustom != null && lastUseCustom != useCustom)
-        )
+                forceUpdate ||
+                        forceFadeFromCustom ||
+                        forceFadeToCustom ||
+                        (lastUseCustom != null && lastUseCustom != useCustom)
+                )
+
         if (shouldCancel) {
             cancelBackgroundTransition()
         }
+
         lastUseCustom = useCustom
 
         if (useCustom) {
@@ -357,6 +358,7 @@ class BackgroundManager(
         val targetBitmap = getCurrentBitmap()
         if (targetBitmap != null) {
             lastCustomBitmap = targetBitmap
+
             val currentBitmapDrawable = currentBg as? BitmapDrawable
             val currentBitmap = currentBitmapDrawable?.bitmap
             val sameBitmap = currentBitmap === targetBitmap
@@ -368,8 +370,8 @@ class BackgroundManager(
 
             val buttonColor = calculateButtonColorForBitmap(targetBitmap)
             val shouldForceFade = forceFadeToCustom && !(sameBitmap && currentAlpha >= 255)
-            val needsFade =
-                shouldForceFade || (!forceUpdate && (currentBg is ColorDrawable || currentAlpha < 255))
+            val needsFade = shouldForceFade || (!forceUpdate && (currentBg is ColorDrawable || currentAlpha < 255))
+
             val targetDrawable = if (sameBitmap && currentBitmapDrawable != null) {
                 currentBitmapDrawable
             } else {
@@ -382,7 +384,15 @@ class BackgroundManager(
                 if (targetDrawable !== currentBg) {
                     targetView.background = targetDrawable
                 }
-                animateBackgroundAlpha(targetDrawable, startAlpha, 255, onStart = { updateButtonColor(buttonColor) })
+
+                // 하드웨어 가속 + 계단식 페이드 애니메이션
+                animateBackgroundAlphaWithHardwareAccel(
+                    targetView,
+                    targetDrawable,
+                    startAlpha,
+                    255,
+                    onStart = { updateButtonColor(buttonColor) }
+                )
             } else {
                 updateButtonColor(buttonColor)
                 targetDrawable.alpha = 255
@@ -392,13 +402,13 @@ class BackgroundManager(
             return
         }
 
+        // 비트맵이 없는 경우 기본 배경으로 폴백
         if (forceUpdate || (currentBg as? ColorDrawable)?.color != defaultBgColor) {
             Log.d(TAG, "Fallback to default background (bitmap not loaded)")
             targetView.background = ColorDrawable(defaultBgColor)
             updateButtonColor(getDefaultButtonColor())
         }
     }
-
 
     private fun applyDefaultBackground(
         targetView: View,
@@ -409,8 +419,8 @@ class BackgroundManager(
     ) {
         if (!forceUpdate) {
             val currentBitmapDrawable = currentBg as? BitmapDrawable
-            val canFadeCurrent =
-                currentBitmapDrawable?.bitmap?.isRecycled == false && currentBitmapDrawable.alpha > 0
+            val canFadeCurrent = currentBitmapDrawable?.bitmap?.isRecycled == false && currentBitmapDrawable.alpha > 0
+
             val drawableToFade = when {
                 canFadeCurrent -> currentBitmapDrawable
                 forceFadeFromCustom -> {
@@ -425,11 +435,18 @@ class BackgroundManager(
                 if (drawableToFade !== currentBg) {
                     targetView.background = drawableToFade
                 }
+
                 val startAlpha = drawableToFade.alpha
                 val defaultButtonColor = getDefaultButtonColor()
-                animateBackgroundAlpha(drawableToFade, startAlpha, 0, onStart = {
-                    updateButtonColor(defaultButtonColor)
-                }) {
+
+                // 하드웨어 가속 + 계단식 페이드 아웃
+                animateBackgroundAlphaWithHardwareAccel(
+                    targetView,
+                    drawableToFade,
+                    startAlpha,
+                    0,
+                    onStart = { updateButtonColor(defaultButtonColor) }
+                ) {
                     val defaultDrawable = ColorDrawable(defaultBgColor)
                     targetView.background = defaultDrawable
                     listener.onBackgroundApplied(defaultDrawable)
@@ -446,7 +463,12 @@ class BackgroundManager(
         }
     }
 
-    private fun animateBackgroundAlpha(
+    /**
+     * 하드웨어 가속을 사용한 계단식 페이드 애니메이션
+     * 성능 최적화를 위해 애니메이션 중 하드웨어 레이어 사용
+     */
+    private fun animateBackgroundAlphaWithHardwareAccel(
+        targetView: View,
         drawable: BitmapDrawable,
         fromAlpha: Int,
         toAlpha: Int,
@@ -457,33 +479,66 @@ class BackgroundManager(
             animator.removeAllListeners()
             animator.cancel()
         }
+
         bgAnimator = ValueAnimator.ofInt(fromAlpha, toAlpha).apply {
             duration = Constants.Timing.BG_TRANSITION_DURATION_MS
             interpolator = android12Interpolator
+
             addUpdateListener { animation ->
                 drawable.alpha = animation.animatedValue as Int
             }
-            if (onStart != null || onEnd != null) {
-                addListener(object : AnimatorListenerAdapter() {
-                    private var wasCancelled = false
 
-                    override fun onAnimationStart(animation: Animator) {
-                        onStart?.invoke()
-                    }
+            addListener(object : AnimatorListenerAdapter() {
+                private var wasCancelled = false
 
-                    override fun onAnimationCancel(animation: Animator) {
-                        wasCancelled = true
-                    }
+                override fun onAnimationStart(animation: Animator) {
+                    // 애니메이션 시작 시 하드웨어 가속 활성화
+                    enableHardwareAcceleration(targetView)
+                    onStart?.invoke()
+                }
 
-                    override fun onAnimationEnd(animation: Animator) {
-                        if (!wasCancelled) {
-                            onEnd?.invoke()
-                        }
+                override fun onAnimationCancel(animation: Animator) {
+                    wasCancelled = true
+                    // 애니메이션 취소 시 하드웨어 가속 해제
+                    disableHardwareAcceleration()
+                }
+
+                override fun onAnimationEnd(animation: Animator) {
+                    // 애니메이션 종료 시 하드웨어 가속 해제
+                    disableHardwareAcceleration()
+                    if (!wasCancelled) {
+                        onEnd?.invoke()
                     }
-                })
-            }
+                    bgAnimator = null
+                }
+            })
+
             start()
         }
+    }
+
+    /**
+     * 하드웨어 가속 활성화 (페이드 애니메이션 성능 향상)
+     */
+    private fun enableHardwareAcceleration(view: View) {
+        if (hardwareAcceleratedView != null) {
+            Log.w(TAG, "Hardware acceleration already enabled")
+            return
+        }
+        hardwareAcceleratedView = view
+        view.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        Log.d(TAG, "Hardware acceleration enabled for fade animation")
+    }
+
+    /**
+     * 하드웨어 가속 해제 (애니메이션 종료 후 메모리 절약)
+     */
+    private fun disableHardwareAcceleration() {
+        hardwareAcceleratedView?.let { view ->
+            view.setLayerType(View.LAYER_TYPE_NONE, null)
+            Log.d(TAG, "Hardware acceleration disabled")
+        }
+        hardwareAcceleratedView = null
     }
 
     /**
@@ -495,6 +550,7 @@ class BackgroundManager(
             animator.cancel()
         }
         bgAnimator = null
+        disableHardwareAcceleration()
     }
 
     // ===== 정리 =====
@@ -503,8 +559,8 @@ class BackgroundManager(
      * 리소스 정리
      */
     fun cleanup() {
-        bgAnimator?.cancel()
-        bgAnimator = null
+        cancelBackgroundTransition()
+        disableHardwareAcceleration()
         recycleBitmaps()
     }
 }
