@@ -12,6 +12,7 @@ import android.util.Log
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityWindowInfo
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.InputMethodManager
 
 /**
@@ -43,6 +44,11 @@ class WindowAnalyzer(
     // IME 추적
     private var lastImeEventAt: Long = 0
     private var imeFocusActive: Boolean = false
+
+    data class LauncherUiState(
+        val isWorkspaceVisible: Boolean,
+        val isAllAppsVisible: Boolean
+    )
 
     // ===== 초기화 =====
 
@@ -295,6 +301,134 @@ class WindowAnalyzer(
      */
     fun isLauncherPackage(packageName: String): Boolean {
         return launcherPackages.contains(packageName)
+    }
+
+    fun analyzeLauncherUiState(root: AccessibilityNodeInfo?, launcherPackage: String): LauncherUiState {
+        if (root == null) return LauncherUiState(isWorkspaceVisible = false, isAllAppsVisible = false)
+
+        val allAppsVisible = hasVisibleViewId(
+            root,
+            launcherPackage,
+            listOf(
+                "apps_view",
+                "search_container_all_apps",
+                "all_apps_header",
+                "apps_list_view",
+                "all_apps_tabs_view_pager"
+            )
+        )
+
+        val launchAnimationVisible = !allAppsVisible && hasVisibleClassName(
+            root,
+            listOf(
+                "FloatingIconView",
+                "FloatingSurfaceView"
+            )
+        )
+
+        val workspaceVisible = hasVisibleViewId(
+            root,
+            launcherPackage,
+            listOf(
+                "workspace",
+                "search_container_workspace"
+            )
+        ) && !launchAnimationVisible
+
+        return LauncherUiState(isWorkspaceVisible = workspaceVisible, isAllAppsVisible = allAppsVisible)
+    }
+
+    private fun hasVisibleViewId(
+        root: AccessibilityNodeInfo,
+        packageName: String,
+        viewIds: List<String>
+    ): Boolean {
+        for (viewId in viewIds) {
+            val fullId = "$packageName:id/$viewId"
+            val nodes = try {
+                root.findAccessibilityNodeInfosByViewId(fullId)
+            } catch (e: Exception) {
+                continue
+            }
+
+            for (node in nodes) {
+                val visible = node.isVisibleToUser
+                node.recycle()
+                if (visible) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    private fun hasVisibleClassName(
+        root: AccessibilityNodeInfo,
+        classNameSuffixes: List<String>,
+        maxNodes: Int = 800
+    ): Boolean {
+        val stack = ArrayDeque<AccessibilityNodeInfo>()
+        stack.add(root)
+        var visited = 0
+
+        while (stack.isNotEmpty() && visited < maxNodes) {
+            val node = stack.removeLast()
+            visited++
+            val nodeClass = node.className?.toString()
+            if (nodeClass != null && node.isVisibleToUser &&
+                classNameSuffixes.any { nodeClass.endsWith(it) }) {
+                if (node !== root) {
+                    node.recycle()
+                }
+                recycleNodes(stack)
+                return true
+            }
+
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                stack.add(child)
+            }
+
+            if (node !== root) {
+                node.recycle()
+            }
+        }
+
+        recycleNodes(stack)
+        return false
+    }
+
+    private fun recycleNodes(nodes: ArrayDeque<AccessibilityNodeInfo>) {
+        while (nodes.isNotEmpty()) {
+            nodes.removeLast().recycle()
+        }
+    }
+
+    fun hasActiveNonLauncherAppWindow(windows: List<AccessibilityWindowInfo>): Boolean {
+        val screen = getScreenBounds()
+        val screenArea = screen.width() * screen.height()
+        val minArea = (screenArea * 0.5f).toInt()
+
+        for (w in windows) {
+            if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val rootPkg = try { w.root?.packageName?.toString() } catch (e: Exception) { null }
+            if (rootPkg.isNullOrBlank()) continue
+            if (rootPkg == "com.android.systemui") continue
+            if (isLauncherPackage(rootPkg)) continue
+            val r = Rect()
+            try {
+                w.getBoundsInScreen(r)
+            } catch (e: Exception) {
+                continue
+            }
+            val area = r.width() * r.height()
+            val occupiesScreen = area >= minArea
+            val isActiveApp = w.isFocused || w.isActive
+            if (isActiveApp && occupiesScreen) {
+                return true
+            }
+        }
+        return false
     }
 
     /**

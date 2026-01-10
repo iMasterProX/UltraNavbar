@@ -41,6 +41,8 @@ class BackgroundManager(
     // 배경 비트맵 캐시
     private var landscapeBitmap: Bitmap? = null
     private var portraitBitmap: Bitmap? = null
+    private var lastCustomBitmap: Bitmap? = null
+    private var lastUseCustom: Boolean? = null
 
     // 현재 상태
     private var _isDarkMode: Boolean = false
@@ -121,6 +123,7 @@ class BackgroundManager(
             }
         }
         portraitBitmap = null
+        lastCustomBitmap = null
     }
 
     /**
@@ -138,6 +141,24 @@ class BackgroundManager(
      */
     fun hasBitmaps(): Boolean {
         return landscapeBitmap != null || portraitBitmap != null
+    }
+
+    private fun resolveFadeBitmap(): Bitmap? {
+        val cached = lastCustomBitmap
+        if (cached != null && !cached.isRecycled) {
+            return cached
+        }
+        val current = getCurrentBitmap()
+        if (current != null && !current.isRecycled) {
+            return current
+        }
+        return null
+    }
+
+    private fun createBitmapDrawable(bitmap: Bitmap): BitmapDrawable {
+        return BitmapDrawable(context.resources, bitmap).apply {
+            gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
+        }
     }
 
     // ===== 방향 처리 =====
@@ -298,18 +319,31 @@ class BackgroundManager(
      * @param useCustom 커스텀 배경 사용 여부
      * @param forceUpdate 강제 업데이트 여부
      */
-    fun applyBackground(targetView: View, useCustom: Boolean, forceUpdate: Boolean = false) {
+    fun applyBackground(
+        targetView: View,
+        useCustom: Boolean,
+        forceUpdate: Boolean = false,
+        forceFadeFromCustom: Boolean = false,
+        forceFadeToCustom: Boolean = false   // 추가
+    ) {
         val currentBg = targetView.background
         val defaultBgColor = getDefaultBackgroundColor()
 
-        if (forceUpdate) {
+        val shouldCancel = bgAnimator != null && (
+            forceUpdate ||
+            forceFadeFromCustom ||
+            forceFadeToCustom ||
+            (lastUseCustom != null && lastUseCustom != useCustom)
+        )
+        if (shouldCancel) {
             cancelBackgroundTransition()
         }
+        lastUseCustom = useCustom
 
         if (useCustom) {
-            applyCustomBackground(targetView, currentBg, defaultBgColor, forceUpdate)
+            applyCustomBackground(targetView, currentBg, defaultBgColor, forceUpdate, forceFadeToCustom)
         } else {
-            applyDefaultBackground(targetView, currentBg, defaultBgColor, forceUpdate)
+            applyDefaultBackground(targetView, currentBg, defaultBgColor, forceUpdate, forceFadeFromCustom)
         }
     }
 
@@ -317,59 +351,95 @@ class BackgroundManager(
         targetView: View,
         currentBg: Drawable?,
         defaultBgColor: Int,
-        forceUpdate: Boolean
+        forceUpdate: Boolean,
+        forceFadeToCustom: Boolean
     ) {
         val targetBitmap = getCurrentBitmap()
-
         if (targetBitmap != null) {
-            val currentBitmap = (currentBg as? BitmapDrawable)?.bitmap
-            if (forceUpdate || currentBitmap !== targetBitmap) {
-                Log.d(TAG, "Applying custom background image")
+            lastCustomBitmap = targetBitmap
+            val currentBitmapDrawable = currentBg as? BitmapDrawable
+            val currentBitmap = currentBitmapDrawable?.bitmap
+            val sameBitmap = currentBitmap === targetBitmap
+            val currentAlpha = currentBitmapDrawable?.alpha ?: 255
 
-                val bgDrawable = BitmapDrawable(context.resources, targetBitmap).apply {
-                    gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
+            if (!forceUpdate && sameBitmap && !forceFadeToCustom && currentAlpha >= 255) {
+                return
+            }
+
+            val buttonColor = calculateButtonColorForBitmap(targetBitmap)
+            val shouldForceFade = forceFadeToCustom && !(sameBitmap && currentAlpha >= 255)
+            val needsFade =
+                shouldForceFade || (!forceUpdate && (currentBg is ColorDrawable || currentAlpha < 255))
+            val targetDrawable = if (sameBitmap && currentBitmapDrawable != null) {
+                currentBitmapDrawable
+            } else {
+                createBitmapDrawable(targetBitmap)
+            }
+
+            if (needsFade) {
+                val startAlpha = if (sameBitmap) currentAlpha else 0
+                targetDrawable.alpha = startAlpha
+                if (targetDrawable !== currentBg) {
+                    targetView.background = targetDrawable
                 }
-
-                // ??? ??? ?? ?? ?? ??
-                val buttonColor = calculateButtonColorForBitmap(targetBitmap)
+                animateBackgroundAlpha(targetDrawable, startAlpha, 255, onStart = { updateButtonColor(buttonColor) })
+            } else {
                 updateButtonColor(buttonColor)
-
-                // ?? ???? ???? ?? ? ??? ?
-                val needsFade = !forceUpdate && (currentBg is ColorDrawable || currentBg?.alpha == 0)
-                if (needsFade) {
-                    bgDrawable.alpha = 0
-                    targetView.background = bgDrawable
-                    animateBackgroundAlpha(bgDrawable, 0, 255)
-                } else {
-                    bgDrawable.alpha = 255
-                    targetView.background = bgDrawable
-                }
-
-                listener.onBackgroundApplied(bgDrawable)
+                targetDrawable.alpha = 255
+                targetView.background = targetDrawable
+                listener.onBackgroundApplied(targetDrawable)
             }
-        } else {
-            // ???? ??? ?? ?? ??
-            if (forceUpdate || (currentBg as? ColorDrawable)?.color != defaultBgColor) {
-                Log.d(TAG, "Fallback to default background (bitmap not loaded)")
-                targetView.background = ColorDrawable(defaultBgColor)
-                updateButtonColor(getDefaultButtonColor())
-            }
+            return
+        }
+
+        if (forceUpdate || (currentBg as? ColorDrawable)?.color != defaultBgColor) {
+            Log.d(TAG, "Fallback to default background (bitmap not loaded)")
+            targetView.background = ColorDrawable(defaultBgColor)
+            updateButtonColor(getDefaultButtonColor())
         }
     }
 
-    private fun applyDefaultBackground(targetView: View, currentBg: Drawable?, defaultBgColor: Int, forceUpdate: Boolean) {
-        updateButtonColor(getDefaultButtonColor())
 
-        val isCurrentlyImage = currentBg is BitmapDrawable && currentBg.alpha > 0
-        if (isCurrentlyImage && !forceUpdate) {
-            Log.d(TAG, "Transitioning from image to default background")
-            // ????? ?? ???? ??? ??
-            animateBackgroundAlpha(currentBg as BitmapDrawable, 255, 0) {
-                val defaultDrawable = ColorDrawable(defaultBgColor)
-                targetView.background = defaultDrawable
-                listener.onBackgroundApplied(defaultDrawable)
+    private fun applyDefaultBackground(
+        targetView: View,
+        currentBg: Drawable?,
+        defaultBgColor: Int,
+        forceUpdate: Boolean,
+        forceFadeFromCustom: Boolean
+    ) {
+        if (!forceUpdate) {
+            val currentBitmapDrawable = currentBg as? BitmapDrawable
+            val canFadeCurrent =
+                currentBitmapDrawable?.bitmap?.isRecycled == false && currentBitmapDrawable.alpha > 0
+            val drawableToFade = when {
+                canFadeCurrent -> currentBitmapDrawable
+                forceFadeFromCustom -> {
+                    val fadeBitmap = resolveFadeBitmap()
+                    if (fadeBitmap != null) createBitmapDrawable(fadeBitmap) else null
+                }
+                else -> null
             }
-        } else if (forceUpdate || (currentBg as? ColorDrawable)?.color != defaultBgColor) {
+
+            if (drawableToFade != null) {
+                Log.d(TAG, "Transitioning from image to default background")
+                if (drawableToFade !== currentBg) {
+                    targetView.background = drawableToFade
+                }
+                val startAlpha = drawableToFade.alpha
+                val defaultButtonColor = getDefaultButtonColor()
+                animateBackgroundAlpha(drawableToFade, startAlpha, 0, onStart = {
+                    updateButtonColor(defaultButtonColor)
+                }) {
+                    val defaultDrawable = ColorDrawable(defaultBgColor)
+                    targetView.background = defaultDrawable
+                    listener.onBackgroundApplied(defaultDrawable)
+                }
+                return
+            }
+        }
+
+        updateButtonColor(getDefaultButtonColor())
+        if (forceUpdate || (currentBg as? ColorDrawable)?.color != defaultBgColor) {
             val defaultDrawable = ColorDrawable(defaultBgColor)
             targetView.background = defaultDrawable
             listener.onBackgroundApplied(defaultDrawable)
@@ -380,6 +450,7 @@ class BackgroundManager(
         drawable: BitmapDrawable,
         fromAlpha: Int,
         toAlpha: Int,
+        onStart: (() -> Unit)? = null,
         onEnd: (() -> Unit)? = null
     ) {
         bgAnimator?.let { animator ->
@@ -392,9 +463,13 @@ class BackgroundManager(
             addUpdateListener { animation ->
                 drawable.alpha = animation.animatedValue as Int
             }
-            if (onEnd != null) {
+            if (onStart != null || onEnd != null) {
                 addListener(object : AnimatorListenerAdapter() {
                     private var wasCancelled = false
+
+                    override fun onAnimationStart(animation: Animator) {
+                        onStart?.invoke()
+                    }
 
                     override fun onAnimationCancel(animation: Animator) {
                         wasCancelled = true
@@ -402,7 +477,7 @@ class BackgroundManager(
 
                     override fun onAnimationEnd(animation: Animator) {
                         if (!wasCancelled) {
-                            onEnd()
+                            onEnd?.invoke()
                         }
                     }
                 })

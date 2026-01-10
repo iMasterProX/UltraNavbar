@@ -29,8 +29,10 @@ object Constants {
         const val DARK_MODE_DEBOUNCE_MS = 1000L
         const val STATE_CHECK_DELAY_MS = 50L
         const val UNLOCK_FADE_WINDOW_MS = 1500L
+        const val UNLOCK_FADE_START_DELAY_MS = 400L
+        const val HOME_BG_DEBOUNCE_MS = 150L
         const val HOME_STATE_DEBOUNCE_MS = 350L  // 증가: 빠른 상태 토글 방지 (200 -> 350)
-        const val RECENTS_STATE_DEBOUNCE_MS = 150L  // 증가: 빠른 상태 토글 방지 (100 -> 150)
+        const val RECENTS_STATE_DEBOUNCE_MS = 100L  // 조정: 배경 전환 시작 지연 최소화
         const val FULLSCREEN_POLLING_MS = 300L
         const val IME_VISIBILITY_DELAY_MS = 500L
     }

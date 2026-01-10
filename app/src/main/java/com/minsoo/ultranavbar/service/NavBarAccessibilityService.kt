@@ -13,6 +13,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import com.minsoo.ultranavbar.core.Constants
 import com.minsoo.ultranavbar.core.WindowAnalyzer
 import com.minsoo.ultranavbar.model.NavAction
@@ -52,6 +53,8 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isFullscreen: Boolean = false
     private var isOnHomeScreen: Boolean = false
     private var isRecentsVisible: Boolean = false
+    private var isAllAppsVisible: Boolean = false
+    private var isLauncherWindowOccluded: Boolean = false
     private var isNotificationPanelOpen: Boolean = false
     private var isWallpaperPreviewVisible: Boolean = false
     private var isImeVisible: Boolean = false
@@ -247,12 +250,23 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
             AccessibilityEvent.TYPE_WINDOWS_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_SCROLLED,
             AccessibilityEvent.TYPE_VIEW_FOCUSED,
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> {
+                maybeUpdateLauncherUiStateFromEvent(event)
                 scheduleStateCheck()
             }
         }
+    }
+
+    private fun maybeUpdateLauncherUiStateFromEvent(event: AccessibilityEvent) {
+        val packageName = event.packageName?.toString() ?: return
+        if (!windowAnalyzer.isLauncherPackage(packageName)) return
+        val className = event.className?.toString() ?: ""
+        val isRecents = windowAnalyzer.isRecentsClassName(className)
+        val launcherOccluded = computeLauncherOcclusion()
+        updateLauncherUiState(rootInActiveWindow, packageName, isRecents, launcherOccluded)
     }
 
     private fun handleImeFocusEvent(event: AccessibilityEvent, now: Long) {
@@ -291,9 +305,9 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         if (isSystemUi) {
             if (isRecents && isOnHomeScreen) {
-                isOnHomeScreen = false
-                overlay?.setHomeScreenState(false)
+                updateHomeScreenState(false)
             }
+            updateAllAppsState(false)
             return
         }
 
@@ -317,12 +331,66 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
 
         // 홈 화면 상태 업데이트
-        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !isRecents
-        if (isOnHomeScreen != newOnHomeScreen) {
-            isOnHomeScreen = newOnHomeScreen
-            Log.d(TAG, "Home screen state: $isOnHomeScreen")
-            overlay?.setHomeScreenState(isOnHomeScreen)
+        val launcherOccluded = computeLauncherOcclusion()
+        updateLauncherUiState(rootInActiveWindow, packageName, isRecents, launcherOccluded)
+    }
+
+    private fun updateHomeScreenState(isHome: Boolean, immediate: Boolean = false) {
+        var effectiveImmediate = immediate
+        if (!isHome && immediate) {
+            val isLauncher = windowAnalyzer.isLauncherPackage(currentPackage)
+            val shouldDefer = isLauncher &&
+                !isAllAppsVisible &&
+                !isRecentsVisible &&
+                !isNotificationPanelOpen
+            if (shouldDefer) {
+                effectiveImmediate = false
+            }
         }
+        if (isOnHomeScreen == isHome) return
+        isOnHomeScreen = isHome
+        Log.d(TAG, "Home screen state: $isOnHomeScreen")
+        overlay?.setHomeScreenState(isOnHomeScreen, effectiveImmediate)
+    }
+
+    private fun updateAllAppsState(isVisible: Boolean) {
+        if (isAllAppsVisible == isVisible) return
+        isAllAppsVisible = isVisible
+        Log.d(TAG, "All apps state: $isAllAppsVisible")
+        overlay?.setAllAppsState(isAllAppsVisible)
+    }
+
+    private fun updateLauncherUiState(
+        root: AccessibilityNodeInfo?,
+        packageName: String,
+        isRecents: Boolean,
+        launcherOccluded: Boolean
+    ) {
+        if (!windowAnalyzer.isLauncherPackage(packageName) || isRecents || launcherOccluded) {
+            updateAllAppsState(false)
+            updateHomeScreenState(false, immediate = true)
+            return
+        }
+
+        if (root == null) {
+            return
+        }
+
+        val uiState = windowAnalyzer.analyzeLauncherUiState(root, packageName)
+        val shouldBeHome = uiState.isWorkspaceVisible && !uiState.isAllAppsVisible
+        updateAllAppsState(uiState.isAllAppsVisible)
+        updateHomeScreenState(shouldBeHome, immediate = !shouldBeHome)
+    }
+
+    private fun computeLauncherOcclusion(): Boolean {
+        val occluded = runCatching {
+            windowAnalyzer.hasActiveNonLauncherAppWindow(windows.toList())
+        }.getOrDefault(false)
+        if (isLauncherWindowOccluded != occluded) {
+            isLauncherWindowOccluded = occluded
+            Log.d(TAG, "Launcher window occluded by app: $isLauncherWindowOccluded")
+        }
+        return occluded
     }
 
     // ===== 상태 체크 =====
@@ -360,6 +428,7 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Notification panel: $isNotificationPanelOpen")
             handler.post {
                 overlay?.updatePanelButtonState(isNotificationPanelOpen)
+                overlay?.setNotificationPanelState(isNotificationPanelOpen)
             }
         }
     }
@@ -395,9 +464,9 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         if (packageName == "com.android.systemui") {
             if (isRecents && isOnHomeScreen) {
-                isOnHomeScreen = false
-                overlay?.setHomeScreenState(false)
+                updateHomeScreenState(false)
             }
+            updateAllAppsState(false)
             return
         }
 
@@ -407,12 +476,8 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Foreground app (windows): $packageName")
         }
 
-        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !isRecents
-        if (isOnHomeScreen != newOnHomeScreen) {
-            isOnHomeScreen = newOnHomeScreen
-            Log.d(TAG, "Home screen state (windows): $isOnHomeScreen")
-            overlay?.setHomeScreenState(isOnHomeScreen)
-        }
+        val launcherOccluded = computeLauncherOcclusion()
+        updateLauncherUiState(root, packageName, isRecents, launcherOccluded)
 
         if (packageChanged) {
             // 윈도우 스냅샷 경로에서도 앱 전환 시 가시성을 즉시 재평가해 비활성화 목록 전환을 놓치지 않음
