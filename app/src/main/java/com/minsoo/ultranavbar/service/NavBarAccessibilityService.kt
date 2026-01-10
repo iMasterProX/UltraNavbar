@@ -20,7 +20,13 @@ import com.minsoo.ultranavbar.overlay.NavBarOverlay
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.util.DeviceProfile
 
-
+/**
+ * 네비게이션 바 접근성 서비스
+ *
+ * 리팩토링된 구조:
+ * - WindowAnalyzer: 윈도우 상태 분석 (전체화면, IME, 알림 패널 등)
+ * - NavBarOverlay: 오버레이 표시/숨김
+ */
 class NavBarAccessibilityService : AccessibilityService() {
 
     companion object {
@@ -33,14 +39,14 @@ class NavBarAccessibilityService : AccessibilityService() {
         fun isRunning(): Boolean = instance != null
     }
 
-    
+    // === 컴포넌트 ===
     private var overlay: NavBarOverlay? = null
     private lateinit var settings: SettingsManager
     private lateinit var windowAnalyzer: WindowAnalyzer
 
     private val handler = Handler(Looper.getMainLooper())
 
-    
+    // === 상태 ===
     private var currentPackage: String = ""
     private var currentOrientation: Int = Configuration.ORIENTATION_UNDEFINED
     private var isFullscreen: Boolean = false
@@ -54,11 +60,11 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var unlockFadeUntil: Long = 0
     private var pendingUnlockFade: Boolean = false
 
-    
+    // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
     private var fullscreenPoll: Runnable? = null
 
-    
+    // === 브로드캐스트 리시버 ===
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
@@ -87,7 +93,7 @@ class NavBarAccessibilityService : AccessibilityService() {
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     Log.d(TAG, "Screen on, updating visibility")
-                    pendingUnlockFade = true 
+                    pendingUnlockFade = true // Allow unlock fade even if lock screen state lags on screen-on.
                     updateOverlayVisibility(forceFade = false)
                 }
                 Intent.ACTION_USER_PRESENT -> {
@@ -102,7 +108,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
     }
 
-    
+    // ===== 서비스 생명주기 =====
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -193,7 +199,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
     }
 
-    
+    // ===== 설정 변경 =====
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -211,16 +217,16 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
     }
 
-    
+    // ===== 접근성 이벤트 =====
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         val now = SystemClock.elapsedRealtime()
 
-        
+        // IME 포커스 추적
         handleImeFocusEvent(event, now)
 
-        
+        // 배경화면 미리보기 감지
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val className = event.className?.toString()
             if (className == "com.minsoo.ultranavbar.ui.WallpaperPreviewActivity") {
@@ -233,7 +239,7 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
         }
 
-        
+        // 이벤트 유형별 처리
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 handleWindowStateChanged(event)
@@ -274,7 +280,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         val isSystemUi = packageName == "com.android.systemui"
         val isRecents = windowAnalyzer.isRecentsClassName(className)
 
-        
+        // 최근 앱 상태 업데이트
         if (isRecentsVisible != isRecents) {
             isRecentsVisible = isRecents
             Log.d(TAG, "Recents state changed: $isRecents")
@@ -291,26 +297,26 @@ class NavBarAccessibilityService : AccessibilityService() {
             return
         }
 
-        
+        // 포그라운드 앱 변경
         if (currentPackage != packageName) {
             val previousPackage = currentPackage
             currentPackage = packageName
             Log.d(TAG, "Foreground app: $packageName")
 
-            
+            // 비활성화된 앱에서 다른 앱으로 전환 시 오버레이 가시성 즉시 업데이트
             val wasDisabled = previousPackage.isNotEmpty() && settings.isAppDisabled(previousPackage)
             val isDisabled = settings.isAppDisabled(packageName)
             if (wasDisabled || isDisabled) {
                 Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
             }
-            
+            // 포그라운드 앱이 바뀔 때마다 가시성 재평가(윈도우 이벤트 경로에서도 누락되지 않도록)
             handler.post {
                 checkFullscreenState()
                 updateOverlayVisibility()
             }
         }
 
-        
+        // 홈 화면 상태 업데이트
         val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !isRecents
         if (isOnHomeScreen != newOnHomeScreen) {
             isOnHomeScreen = newOnHomeScreen
@@ -319,7 +325,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
     }
 
-    
+    // ===== 상태 체크 =====
 
     private fun scheduleStateCheck() {
         pendingStateCheck?.let { handler.removeCallbacks(it) }
@@ -409,12 +415,12 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
 
         if (packageChanged) {
-            
+            // 윈도우 스냅샷 경로에서도 앱 전환 시 가시성을 즉시 재평가해 비활성화 목록 전환을 놓치지 않음
             updateOverlayVisibility()
         }
     }
 
-    
+    // ===== 전체화면 폴링 =====
 
     private fun startFullscreenPolling() {
         if (fullscreenPoll != null) return
@@ -441,7 +447,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         fullscreenPoll = null
     }
 
-    
+    // ===== 오버레이 가시성 =====
 
     private fun updateOverlayVisibility(forceFade: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
@@ -509,7 +515,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         overlay = null
     }
 
-    
+    // ===== 액션 실행 =====
 
     fun executeAction(action: NavAction): Boolean {
         if (action == NavAction.NOTIFICATIONS) {
@@ -535,13 +541,13 @@ class NavBarAccessibilityService : AccessibilityService() {
         try {
             val customAction = settings.longPressAction
             if (customAction == null) {
-                
+                // 음성 어시스턴트 모드로 실행 (마이크 활성화 상태)
                 return executeVoiceAssistant()
             } else if (customAction.startsWith("shortcut:")) {
-                
+                // 바로가기 실행
                 return executeShortcut(customAction.removePrefix("shortcut:"))
             } else {
-                
+                // 앱 실행
                 val intent = packageManager.getLaunchIntentForPackage(customAction)
                 if (intent != null) {
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -560,7 +566,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun executeVoiceAssistant(): Boolean {
-        
+        // 방법 1: ACTION_VOICE_ASSIST (음성 대기 모드로 실행)
         try {
             val voiceIntent = Intent("android.intent.action.VOICE_ASSIST").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -574,7 +580,7 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.d(TAG, "VOICE_ASSIST failed: ${e.message}")
         }
 
-        
+        // 방법 2: ACTION_VOICE_COMMAND (음성 명령 모드)
         try {
             val voiceCommandIntent = Intent(Intent.ACTION_VOICE_COMMAND).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -588,7 +594,7 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.d(TAG, "ACTION_VOICE_COMMAND failed: ${e.message}")
         }
 
-        
+        // 방법 3: Google Assistant 직접 호출 (폴백)
         try {
             val assistIntent = Intent(Intent.ACTION_ASSIST).apply {
                 setPackage("com.google.android.googlequicksearchbox")

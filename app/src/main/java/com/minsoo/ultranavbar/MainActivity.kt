@@ -33,12 +33,12 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var settings: SettingsManager
 
-    
+    // UI 요소
     private lateinit var statusIndicator: View
     private lateinit var statusText: TextView
     private lateinit var onboardingCard: MaterialCardView
 
-    
+    // 롱프레스 설정
     private lateinit var txtLongPressAction: TextView
     private lateinit var btnChangeLongPressAction: MaterialButton
     private lateinit var btnSelectShortcut: MaterialButton
@@ -47,23 +47,24 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchHotspot: SwitchMaterial
     private lateinit var switchIgnoreStylus: SwitchMaterial
 
-    
+    // 홈 배경 관련
+    private lateinit var switchHomeBg: SwitchMaterial
     private lateinit var btnGenerateLandscape: MaterialButton
     private lateinit var btnGeneratePortrait: MaterialButton
     private lateinit var txtLandscapeStatus: TextView
     private lateinit var txtPortraitStatus: TextView
 
-    
+    // 이미지 선택 모드 (true = 가로, false = 세로)
     private var selectingLandscape = true
 
-    
+    // 이미지 선택 런처
     private val imagePickerLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { handleImageSelected(it) }
     }
 
-    
+    // 롱프레스 앱 선택 런처
     private val longPressActionPickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -74,7 +75,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    
+    // 바로가기 선택 런처
     @Suppress("DEPRECATION")
     private val shortcutPickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -85,7 +86,8 @@ class MainActivity : AppCompatActivity() {
                 val shortcutIntent = data.getParcelableExtra<Intent>(Intent.EXTRA_SHORTCUT_INTENT)
                 val shortcutName = data.getStringExtra(Intent.EXTRA_SHORTCUT_NAME)
                 if (shortcutIntent != null) {
-                    
+                    // shortcut: 접두사와 함께 인텐트 URI 저장
+                    val intentUri = shortcutIntent.toUri(Intent.URI_INTENT_SCHEME)
                     settings.longPressAction = "shortcut:$intentUri"
                     settings.shortcutName = shortcutName ?: "Shortcut"
                     updateLongPressActionUI()
@@ -95,7 +97,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    
+    // 배경화면 미리보기 및 생성 런처
     private val wallpaperPreviewLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -106,7 +108,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    
+    // 저장소 읽기 권한 요청 런처
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -138,7 +140,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         updateServiceStatus()
         updateBgImageStatus()
-        
+        // 자동으로 배터리 최적화 상태 확인 및 요청
         requestIgnoreBatteryOptimizations(isTriggeredByUser = false)
         updateLongPressActionUI()
     }
@@ -148,18 +150,18 @@ class MainActivity : AppCompatActivity() {
         if (action == null) {
             txtLongPressAction.text = getString(R.string.long_press_action_default)
         } else if (action.startsWith("shortcut:")) {
-            
+            // 바로가기인 경우 저장된 이름 표시
             val shortcutName = settings.shortcutName ?: "Shortcut"
             txtLongPressAction.text = shortcutName
         } else {
-            
+            // 앱인 경우
             try {
                 val appInfo = packageManager.getApplicationInfo(action, 0)
                 val appLabel = packageManager.getApplicationLabel(appInfo)
                 txtLongPressAction.text = appLabel
             } catch (e: PackageManager.NameNotFoundException) {
                 txtLongPressAction.text = getString(R.string.app_not_found)
-                
+                // 앱이 제거된 경우, 설정을 기본값으로 리셋
                 settings.longPressAction = null
             }
         }
@@ -177,12 +179,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
-        
+        // 상태 표시
         statusIndicator = findViewById(R.id.statusIndicator)
         statusText = findViewById(R.id.statusText)
         onboardingCard = findViewById(R.id.onboardingCard)
 
-        
+        // 롱프레스 설정
         txtLongPressAction = findViewById(R.id.txtLongPressAction)
         btnChangeLongPressAction = findViewById<MaterialButton>(R.id.btnChangeLongPressAction).apply {
             setOnClickListener {
@@ -206,12 +208,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        
+        // 접근성 설정 버튼
         findViewById<MaterialButton>(R.id.btnOpenAccessibility).setOnClickListener {
             openAccessibilitySettings()
         }
 
-        
+        // 비활성화 앱 관리 버튼
         findViewById<MaterialButton>(R.id.btnManageDisabledApps).setOnClickListener {
             val intent = Intent(this, AppListActivity::class.java).apply {
                 putExtra(AppListActivity.EXTRA_SELECTION_MODE, AppListActivity.MODE_DISABLED_APPS)
@@ -219,59 +221,61 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        
+        // 재호출 설정
         switchHotspot = findViewById(R.id.switchHotspot)
 
-        
+        // 스타일러스 설정
         switchIgnoreStylus = findViewById(R.id.switchIgnoreStylus)
 
-        
+        // 홈 배경 설정
         switchHomeBg = findViewById(R.id.switchHomeBg)
         btnGenerateLandscape = findViewById(R.id.btnGenerateLandscape)
         btnGeneratePortrait = findViewById(R.id.btnGeneratePortrait)
         txtLandscapeStatus = findViewById(R.id.txtLandscapeStatus)
         txtPortraitStatus = findViewById(R.id.txtPortraitStatus)
 
-        
+        // 가로 이미지 선택 버튼
         findViewById<MaterialButton>(R.id.btnSelectLandscape).setOnClickListener {
             selectingLandscape = true
             imagePickerLauncher.launch("image/*")
         }
 
-        
+        // 세로 이미지 선택 버튼
         findViewById<MaterialButton>(R.id.btnSelectPortrait).setOnClickListener {
             selectingLandscape = false
             imagePickerLauncher.launch("image/*")
         }
 
-        
+        // 배터리 최적화 버튼
         findViewById<MaterialButton>(R.id.btnBatteryOptimization).setOnClickListener {
-            
+            // 사용자가 직접 눌렀음을 명시
             requestIgnoreBatteryOptimizations(isTriggeredByUser = true)
         }
     }
 
     private fun loadSettings() {
-        
+        // 재호출 설정 로드
         switchHotspot.isChecked = settings.hotspotEnabled
         switchIgnoreStylus.isChecked = settings.ignoreStylus
 
-        
+        // 홈 배경 설정 로드
         switchHomeBg.isChecked = settings.homeBgEnabled
     }
 
     private fun setupListeners() {
-        
+        // 재호출 핫스팟
+        switchHotspot.setOnCheckedChangeListener { _, isChecked ->
             settings.hotspotEnabled = isChecked
             notifySettingsChanged()
         }
 
-        
+        // 스타일러스 입력 무시
         switchIgnoreStylus.setOnCheckedChangeListener { _, isChecked ->
             settings.ignoreStylus = isChecked
         }
 
-        
+        // 홈 배경 활성화
+        switchHomeBg.setOnCheckedChangeListener { _, isChecked ->
             settings.homeBgEnabled = isChecked
             notifySettingsChanged()
         }

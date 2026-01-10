@@ -50,7 +50,7 @@ class AppListAdapter(
             appName.text = app.name
             appPackage.text = app.packageName
 
-            
+            // 리스너를 먼저 제거하여 isChecked 설정 시 잘못된 콜백 방지
             checkBox.setOnCheckedChangeListener(null)
 
             if (selectionMode == AppListActivity.MODE_SINGLE) {

@@ -5,7 +5,10 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 
-
+/**
+ * 오버레이 상태를 중앙에서 관리하는 클래스
+ * 상태 전이 규칙과 디바운싱을 처리
+ */
 class OverlayStateManager(
     private val listener: StateChangeListener
 ) {
@@ -15,24 +18,26 @@ class OverlayStateManager(
 
     private val handler = Handler(Looper.getMainLooper())
 
-    
+    // 현재 시스템 상태
     private var _systemState = SystemState()
     val systemState: SystemState get() = _systemState
 
-    
+    // 현재 오버레이 상태
     private var _overlayState: OverlayState = OverlayState.Visible()
     val overlayState: OverlayState get() = _overlayState
 
-    
+    // 제스처 관련 타이밍
     private var gestureShowTime: Long = 0
     private var darkModeTransitionTime: Long = 0
 
-    
+    // 디바운스용 Runnable
     private var pendingHomeState: Runnable? = null
     private var pendingRecentsState: Runnable? = null
     private var gestureAutoHideRunnable: Runnable? = null
 
-    
+    /**
+     * 상태 변경 리스너 인터페이스
+     */
     interface StateChangeListener {
         fun onOverlayStateChanged(newState: OverlayState, oldState: OverlayState)
         fun onSystemStateChanged(newState: SystemState, event: StateChangeEvent)
@@ -40,7 +45,7 @@ class OverlayStateManager(
         fun onButtonColorsUpdateRequired(isDarkMode: Boolean)
     }
 
-    
+    // ===== 상태 업데이트 메서드 =====
 
     fun updateHomeScreenState(isHome: Boolean) {
         if (isHome) {
@@ -163,7 +168,7 @@ class OverlayStateManager(
         _systemState = _systemState.copy(isWallpaperPreviewVisible = isVisible)
     }
 
-    
+    // ===== 오버레이 상태 전이 =====
 
     fun showOverlay(method: OverlayState.ShowMethod = OverlayState.ShowMethod.NORMAL) {
         val oldState = _overlayState
@@ -191,18 +196,21 @@ class OverlayStateManager(
         listener.onOverlayStateChanged(newState, oldState)
     }
 
-    
+    // ===== 자동 숨김 관련 =====
 
-    
+    /**
+     * 자동 숨김이 가능한지 확인
+     * 다크 모드 전환 중이거나 제스처로 표시된 직후에는 차단
+     */
     fun canAutoHide(): Boolean {
-        
+        // 다크 모드 전환 중에는 차단
         val darkModeElapsed = SystemClock.elapsedRealtime() - darkModeTransitionTime
         if (darkModeElapsed < Constants.Timing.DARK_MODE_DEBOUNCE_MS) {
             Log.d(TAG, "Auto-hide blocked: dark mode transition")
             return false
         }
 
-        
+        // 제스처로 표시된 경우 일정 시간 동안 차단
         val currentState = _overlayState
         if (currentState is OverlayState.Visible &&
             currentState.showMethod == OverlayState.ShowMethod.GESTURE) {
@@ -243,7 +251,9 @@ class OverlayStateManager(
         pendingRecentsState = null
     }
 
-    
+    /**
+     * 정리 - 서비스 종료 시 호출
+     */
     fun cleanup() {
         cancelPendingHomeState()
         cancelPendingRecentsState()

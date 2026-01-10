@@ -128,7 +128,12 @@ class WallpaperPreviewActivity : AppCompatActivity() {
         imagePreview.invalidate()
     }
 
-    
+    /**
+     * 요구사항 반영:
+     * 1) centerCrop로 "꽉 차게" (넘치는 부분은 화면 밖으로 잘림)
+     * 2) 그 결과를 중앙 기준 10% 추가 확대
+     * 3) 스크림(그림자) 오버레이 유지 (단, 위/아래 일부 영역에만 적용 + 알파 조절)
+     */
     private suspend fun generatePreviewDrawable(): PreviewLayer? = withContext(Dispatchers.IO) {
         try {
             val wm = WallpaperManager.getInstance(this@WallpaperPreviewActivity)
@@ -138,18 +143,18 @@ class WallpaperPreviewActivity : AppCompatActivity() {
                 resources.configuration.orientation ==
                         android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
-            
+            // 기존 컨셉 유지(가로/세로 타겟 캔버스 크기)
             val landscapeWidth = 2000
             val landscapeHeight = 1200
             val targetWidth = if (isLandscape) landscapeWidth else landscapeHeight
             val targetHeight = if (isLandscape) landscapeHeight else landscapeWidth
 
-            
+            // 원본 비율 그대로 비트맵화
             val srcW = wallpaperDrawable.intrinsicWidth.coerceAtLeast(1)
             val srcH = wallpaperDrawable.intrinsicHeight.coerceAtLeast(1)
             val srcBitmap = wallpaperDrawable.toBitmap(srcW, srcH, Bitmap.Config.ARGB_8888)
 
-            
+            // 1차: centerCrop로 꽉 채우기(여백 없음)
             val filled = centerCropBitmap(
                 source = srcBitmap,
                 targetWidth = targetWidth,
@@ -157,13 +162,13 @@ class WallpaperPreviewActivity : AppCompatActivity() {
             )
             srcBitmap.recycle()
 
-            
+            // 2차: 그 상태에서 중앙 기준 10% 확대
             val zoomed = applyCenterZoomCrop(filled, zoomFactor = 1.10f)
             filled.recycle()
 
             val zoomedDrawable = BitmapDrawable(resources, zoomed)
 
-            
+            // 그림자(스크림)
             val bottomScrim = ContextCompat.getDrawable(
                 this@WallpaperPreviewActivity,
                 R.drawable.launcher_scrim_bottom_up
@@ -191,7 +196,7 @@ class WallpaperPreviewActivity : AppCompatActivity() {
             }
 
             return@withContext if (bottomScrim != null && topScrim != null) {
-                
+                // “검은 필터”처럼 보이지 않도록 스크림 강도(알파) 낮춤
                 bottomScrim.alpha = 120
                 topScrim.alpha = 90
 
@@ -201,13 +206,13 @@ class WallpaperPreviewActivity : AppCompatActivity() {
                     LayerDrawable(arrayOf(zoomedDrawable, bottomScrim, topScrim))
                 }
 
-                
-                val bottomH = (targetHeight * 0.35f).toInt().coerceAtLeast(1) 
-                val topH = (targetHeight * 0.20f).toInt().coerceAtLeast(1)    
+                // 스크림을 화면 전체가 아니라 “아래/위 일부”에만 적용 (은은한 그림자 느낌)
+                val bottomH = (targetHeight * 0.35f).toInt().coerceAtLeast(1) // 아래 35%
+                val topH = (targetHeight * 0.20f).toInt().coerceAtLeast(1)    // 위 20%
 
-                
-                layer.setLayerInset(1, 0, targetHeight - bottomH, 0, 0) 
-                layer.setLayerInset(2, 0, 0, 0, targetHeight - topH)    
+                // index: 0=wallpaper, 1=bottomScrim, 2=topScrim
+                layer.setLayerInset(1, 0, targetHeight - bottomH, 0, 0) // bottom
+                layer.setLayerInset(2, 0, 0, 0, targetHeight - topH)    // top
                 if (filterDrawable != null) {
                     layer.setLayerSize(3, targetWidth, targetHeight)
                     layer.setLayerInset(3, 0, 0, 0, 0)
@@ -232,7 +237,10 @@ class WallpaperPreviewActivity : AppCompatActivity() {
         }
     }
 
-    
+    /**
+     * centerCrop: target를 꽉 채우도록 확대/축소 후 중앙 정렬,
+     * 넘치는 부분은 target 밖으로 나가면서 잘리는 방식(여백 없음).
+     */
     private fun centerCropBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
         val result = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
@@ -257,7 +265,10 @@ class WallpaperPreviewActivity : AppCompatActivity() {
         return result
     }
 
-    
+    /**
+     * 중앙 기준 확대:
+     * zoomFactor=1.10 => 중앙 (1/1.10) 영역을 잘라서 다시 원래 크기로 늘림
+     */
     private fun applyCenterZoomCrop(source: Bitmap, zoomFactor: Float): Bitmap {
         val factor = zoomFactor.coerceAtLeast(1.0f)
 

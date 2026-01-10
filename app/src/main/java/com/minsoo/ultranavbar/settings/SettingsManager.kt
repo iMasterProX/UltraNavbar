@@ -7,9 +7,9 @@ class SettingsManager private constructor(context: Context) {
 
     companion object {
         private const val PREF_NAME = "UltraNavbarSettings"
-        const val CROP_HEIGHT_PX = 72 
+        const val CROP_HEIGHT_PX = 72 // 배경 크롭 높이 (px)
 
-        
+        // Keys
         private const val KEY_HOTSPOT_ENABLED = "hotspot_enabled"
         private const val KEY_HOTSPOT_HEIGHT = "hotspot_height"
         private const val KEY_HOME_BG_ENABLED = "home_bg_enabled"
@@ -18,9 +18,9 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_SHORTCUT_NAME = "shortcut_name"
         private const val KEY_BATTERY_OPT_REQUESTED = "battery_opt_requested"
         private const val KEY_PREVIEW_FILTER_OPACITY = "preview_filter_opacity"
-        private const val KEY_DISABLED_APPS = "disabled_apps" 
+        private const val KEY_DISABLED_APPS = "disabled_apps" // 비활성화할 앱 목록 (패키지명 set)
 
-        
+        // Background Image Filenames (Stored in prefs to track validity, though file existence is primary check)
         private const val KEY_HOME_BG_LANDSCAPE = "home_bg_landscape"
         private const val KEY_HOME_BG_PORTRAIT = "home_bg_portrait"
 
@@ -68,12 +68,12 @@ class SettingsManager private constructor(context: Context) {
         get() = prefs.getInt(KEY_PREVIEW_FILTER_OPACITY, 13)
         set(value) = prefs.edit().putInt(KEY_PREVIEW_FILTER_OPACITY, value.coerceIn(0, 100)).apply()
 
-    
+    // 커스텀 네비바를 비활성화할 앱 목록
     var disabledApps: Set<String>
         get() = prefs.getStringSet(KEY_DISABLED_APPS, emptySet()) ?: emptySet()
         set(value) = prefs.edit().putStringSet(KEY_DISABLED_APPS, value).apply()
 
-    
+    // 배경 이미지 설정 여부/경로 (실제 로딩은 ImageCropUtil에서 파일 유무로 판단하지만 설정값 유지용)
     var homeBgLandscape: String?
         get() = prefs.getString(KEY_HOME_BG_LANDSCAPE, null)
         set(value) = prefs.edit().putString(KEY_HOME_BG_LANDSCAPE, value).apply()
@@ -82,7 +82,9 @@ class SettingsManager private constructor(context: Context) {
         get() = prefs.getString(KEY_HOME_BG_PORTRAIT, null)
         set(value) = prefs.edit().putString(KEY_HOME_BG_PORTRAIT, value).apply()
 
-    
+    /**
+     * 해당 패키지에서 커스텀 네비바를 비활성화해야 하는지 확인
+     */
     fun isAppDisabled(packageName: String): Boolean {
         return disabledApps.contains(packageName)
     }
