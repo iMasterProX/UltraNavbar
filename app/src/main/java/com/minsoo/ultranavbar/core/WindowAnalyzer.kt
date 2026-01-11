@@ -65,7 +65,8 @@ class WindowAnalyzer(
             Log.e(TAG, "Failed to load launcher packages, using fallback", e)
             launcherPackages = setOf(
                 "com.android.launcher", "com.android.launcher3", "com.google.android.apps.nexuslauncher",
-                "com.sec.android.app.launcher", "com.lge.launcher3", "com.huawei.android.launcher"
+                "com.sec.android.app.launcher", "com.lge.launcher3", "com.huawei.android.launcher",
+                "com.android.launcher3"
             )
         }
     }
@@ -95,6 +96,39 @@ class WindowAnalyzer(
             Rect(0, 0, dm.widthPixels, dm.heightPixels)
         }
     }
+
+    // ===== 앱 서랍 감지 =====
+
+    /**
+     * 앱 서랍(App Drawer)이 열려있는지 확인
+     * 런처 패키지의 특정 뷰 ID를 통해 감지
+     * @param rootNode 활성 윈도우의 루트 노드
+     * @return 앱 서랍 열림 여부
+     */
+    fun isAppDrawerOpen(rootNode: android.view.accessibility.AccessibilityNodeInfo?): Boolean {
+        rootNode ?: return false
+        
+        // 감지할 뷰 ID 목록 (QuickStep, Pixel Launcher 등)
+        val targetIds = listOf(
+            "com.android.launcher3:id/apps_view",
+            "com.google.android.apps.nexuslauncher:id/apps_view",
+            "com.sec.android.app.launcher:id/apps_view" // 삼성 OneUI 예시
+        )
+
+        for (id in targetIds) {
+            val nodes = rootNode.findAccessibilityNodeInfosByViewId(id)
+            if (!nodes.isNullOrEmpty()) {
+                for (node in nodes) {
+                    // 뷰가 화면에 보이고 활성화된 상태인지 확인
+                    if (node.isVisibleToUser) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
 
     // ===== 전체화면 감지 =====
 

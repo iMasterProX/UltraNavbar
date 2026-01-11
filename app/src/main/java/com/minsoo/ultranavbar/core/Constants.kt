@@ -32,6 +32,7 @@ object Constants {
         const val RECENTS_STATE_DEBOUNCE_MS = 150L  // 증가: 빠른 상태 토글 방지 (100 -> 150)
         const val FULLSCREEN_POLLING_MS = 300L
         const val IME_VISIBILITY_DELAY_MS = 500L
+        const val UNLOCK_FADE_DELAY_MS = 400L
     }
 
     // ===== 비율 및 임계값 =====

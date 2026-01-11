@@ -13,6 +13,8 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import com.minsoo.ultranavbar.model.NavAction
+import android.animation.ValueAnimator
+import android.animation.ArgbEvaluator
 
 /**
  * 네비게이션 버튼 생성 및 스타일 관리
@@ -42,6 +44,9 @@ class ButtonManager(
 
     // 현재 버튼 색상 (-1은 초기화되지 않음을 의미)
     private var currentColor: Int = -1
+    
+    // 색상 애니메이터
+    private var colorAnimator: ValueAnimator? = null
 
     /**
      * 버튼 액션 리스너

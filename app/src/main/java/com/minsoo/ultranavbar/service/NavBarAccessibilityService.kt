@@ -52,6 +52,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isFullscreen: Boolean = false
     private var isOnHomeScreen: Boolean = false
     private var isRecentsVisible: Boolean = false
+    private var isAppDrawerOpen: Boolean = false
     private var isNotificationPanelOpen: Boolean = false
     private var isWallpaperPreviewVisible: Boolean = false
     private var isImeVisible: Boolean = false
@@ -60,6 +61,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
     private var fullscreenPoll: Runnable? = null
+    private var unlockFadeRunnable: Runnable? = null
 
     // === 브로드캐스트 리시버 ===
     private val settingsReceiver = object : BroadcastReceiver() {
@@ -97,9 +99,16 @@ class NavBarAccessibilityService : AccessibilityService() {
                     Log.d(TAG, "User present, showing with fade")
                     // 안전을 위해 여기서도 플래그 설정
                     overlay?.prepareForUnlockFade()
-                    handler.postDelayed({
-                        updateOverlayVisibility(forceFade = true)
-                    }, Constants.Timing.HOME_STATE_DEBOUNCE_MS)
+                    
+                    // 기존 예약 취소
+                    unlockFadeRunnable?.let { handler.removeCallbacks(it) }
+                    
+                    // 새 작업 예약
+                    unlockFadeRunnable = Runnable {
+                        unlockFadeRunnable = null
+                        overlay?.startUnlockFade()
+                    }
+                    handler.postDelayed(unlockFadeRunnable!!, Constants.Timing.UNLOCK_FADE_DELAY_MS)
                 }
             }
         }
@@ -182,6 +191,10 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun cancelPendingTasks() {
         pendingStateCheck?.let { handler.removeCallbacks(it) }
         pendingStateCheck = null
+        
+        unlockFadeRunnable?.let { handler.removeCallbacks(it) }
+        unlockFadeRunnable = null
+        
         stopFullscreenPolling()
     }
 
@@ -354,7 +367,7 @@ class NavBarAccessibilityService : AccessibilityService() {
             isNotificationPanelOpen = panelVisible
             Log.d(TAG, "Notification panel: $isNotificationPanelOpen")
             handler.post {
-                overlay?.updatePanelButtonState(isNotificationPanelOpen)
+                overlay?.setNotificationPanelState(isNotificationPanelOpen)
             }
         }
     }
@@ -407,6 +420,20 @@ class NavBarAccessibilityService : AccessibilityService() {
             isOnHomeScreen = newOnHomeScreen
             Log.d(TAG, "Home screen state (windows): $isOnHomeScreen")
             overlay?.setHomeScreenState(isOnHomeScreen)
+        }
+
+        // 앱 서랍 상태 감지 (홈 화면일 때만)
+        if (isOnHomeScreen) {
+            val appDrawerOpen = windowAnalyzer.isAppDrawerOpen(root)
+            if (isAppDrawerOpen != appDrawerOpen) {
+                isAppDrawerOpen = appDrawerOpen
+                Log.d(TAG, "App Drawer state: $isAppDrawerOpen")
+                overlay?.setAppDrawerState(isAppDrawerOpen)
+            }
+        } else if (isAppDrawerOpen) {
+            // 홈 화면이 아니면 앱 서랍도 닫힘 처리
+            isAppDrawerOpen = false
+            overlay?.setAppDrawerState(false)
         }
 
         if (packageChanged) {
