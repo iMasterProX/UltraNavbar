@@ -359,7 +359,12 @@ class BackgroundManager(
      * @param targetView 배경을 적용할 뷰
      * @param useCustom 커스텀 배경 사용 여부
      */
-    fun applyBackground(targetView: View, useCustom: Boolean, forceUpdate: Boolean = false) {
+    fun applyBackground(
+        targetView: View,
+        useCustom: Boolean,
+        forceUpdate: Boolean = false,
+        animate: Boolean = true
+    ) {
         val defaultBgColor = getDefaultBackgroundColor()
         val targetDrawable: Drawable
         val targetButtonColor: Int
@@ -381,10 +386,17 @@ class BackgroundManager(
         }
 
         // 2. 버튼 색상 업데이트 (애니메이션 포함)
-        updateButtonColor(targetButtonColor, animate = true)
+        updateButtonColor(targetButtonColor, animate = animate)
 
         // 3. 배경 전환 처리
         val currentBg = targetView.background
+
+        if (!animate) {
+            targetView.background = targetDrawable
+            targetView.setLayerType(View.LAYER_TYPE_NONE, null)
+            listener.onBackgroundApplied(targetDrawable)
+            return
+        }
 
         // 첫 실행이거나 배경이 없으면 즉시 적용
         if (currentBg == null) {

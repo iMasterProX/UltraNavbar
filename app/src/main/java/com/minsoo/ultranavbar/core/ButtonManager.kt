@@ -155,6 +155,7 @@ class ButtonManager(
         Log.d(TAG, "All button colors updated to ${getColorName(color)} (force=$force, buttons=${_allButtons.size})")
     }
 
+
     private fun getColorName(color: Int): String {
         return when (color) {
             Color.WHITE -> "WHITE"
@@ -174,9 +175,11 @@ class ButtonManager(
 
         _panelButton?.let { button ->
             if (animate) {
+                button.animate().cancel()
                 button.animate()
                     .rotation(rotation)
                     .setDuration(Constants.Timing.ANIMATION_DURATION_MS)
+                    .withLayer()
                     .start()
             } else {
                 button.rotation = rotation
@@ -209,6 +212,7 @@ class ButtonManager(
                 button.animate()
                     .rotation(targetRotation)
                     .setDuration(Constants.Timing.ANIMATION_DURATION_MS)
+                    .withLayer()
                     .start()
             } else {
                 button.rotation = targetRotation

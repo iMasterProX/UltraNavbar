@@ -54,6 +54,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isRecentsVisible: Boolean = false
     private var isAppDrawerOpen: Boolean = false
     private var isNotificationPanelOpen: Boolean = false
+    private var isQuickSettingsOpen: Boolean = false
     private var isWallpaperPreviewVisible: Boolean = false
     private var isImeVisible: Boolean = false
     private var lastImeEventAt: Long = 0
@@ -362,8 +363,10 @@ class NavBarAccessibilityService : AccessibilityService() {
         pendingStateCheck = Runnable {
             checkFullscreenState()
             checkNotificationPanelState()
+            checkQuickSettingsState()
             checkImeVisibility()
             updateHomeAndRecentsFromWindows()
+            overlay?.ensureOrientationSync()
         }
         handler.postDelayed(pendingStateCheck!!, Constants.Timing.STATE_CHECK_DELAY_MS)
     }
@@ -388,10 +391,22 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (isNotificationPanelOpen != panelVisible) {
             isNotificationPanelOpen = panelVisible
             Log.d(TAG, "Notification panel: $isNotificationPanelOpen")
-            handler.post {
-                overlay?.setNotificationPanelState(isNotificationPanelOpen)
-            }
+            handler.post { updatePanelUiState() }
         }
+    }
+
+    private fun checkQuickSettingsState() {
+        val qsVisible = windowAnalyzer.analyzeQuickSettingsState(windows.toList(), rootInActiveWindow)
+
+        if (isQuickSettingsOpen != qsVisible) {
+            isQuickSettingsOpen = qsVisible
+            Log.d(TAG, "Quick settings: $isQuickSettingsOpen")
+            handler.post { updatePanelUiState() }
+        }
+    }
+
+    private fun updatePanelUiState() {
+        overlay?.setPanelStates(isNotificationPanelOpen, isQuickSettingsOpen)
     }
 
     private fun checkImeVisibility() {
@@ -409,23 +424,28 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun updateHomeAndRecentsFromWindows() {
-        val root = rootInActiveWindow ?: return
-        val packageName = root.packageName?.toString() ?: return
-        val className = root.className?.toString() ?: ""
-        val isRecents = windowAnalyzer.isRecentsClassName(className)
+        val windowList = windows.toList()
+        val root = rootInActiveWindow
+        val recentsVisible = windowAnalyzer.analyzeRecentsState(windowList, root)
+        updateRecentsState(recentsVisible, "windows")
 
-        updateRecentsState(isRecents, "windows")
+        val topWindow = windowAnalyzer.getTopApplicationWindow(windowList)
+        var packageName = topWindow?.packageName
 
-        if (packageName == this.packageName) return
+        if (packageName.isNullOrEmpty() || packageName == this.packageName) {
+            packageName = root?.packageName?.toString()
+        }
+
+        if (packageName.isNullOrEmpty() || packageName == this.packageName) return
 
         val isSystemUi = packageName == "com.android.systemui"
-        if (handleSystemUiState(isSystemUi, isRecents, "windows")) {
+        if (handleSystemUiState(isSystemUi, recentsVisible, "windows")) {
             return
         }
 
         val packageChanged = updateForegroundPackage(packageName, "windows")
 
-        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !isRecents
+        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !recentsVisible
         updateHomeScreenState(newOnHomeScreen, "windows")
 
         if (isOnHomeScreen) {

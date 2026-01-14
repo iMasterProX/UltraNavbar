@@ -13,6 +13,7 @@ import android.util.Log
 import android.view.WindowManager
 import android.view.WindowInsets
 import android.view.accessibility.AccessibilityWindowInfo
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.InputMethodManager
 
 /**
@@ -34,6 +35,13 @@ class WindowAnalyzer(
         val visible: Boolean,
         val sizePx: Int
     )
+
+    data class TopAppWindow(
+        val packageName: String,
+        val className: String,
+        val layer: Int
+    )
+
 
     // 시스템 서비스 참조
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -143,6 +151,29 @@ class WindowAnalyzer(
         } catch (e: Exception) {
             null
         }
+    }
+
+    private fun findTopApplicationWindow(windows: List<AccessibilityWindowInfo>): TopAppWindow? {
+        var best: TopAppWindow? = null
+
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+
+            val root = try { window.root } catch (e: Exception) { null } ?: continue
+            val packageName = root.packageName?.toString() ?: continue
+            val className = root.className?.toString() ?: ""
+            val layer = window.layer
+
+            if (best == null || layer > best.layer) {
+                best = TopAppWindow(packageName, className, layer)
+            }
+        }
+
+        return best
+    }
+
+    fun getTopApplicationWindow(windows: List<AccessibilityWindowInfo>): TopAppWindow? {
+        return findTopApplicationWindow(windows)
     }
 
 // ===== 화면 정보 =====
@@ -377,6 +408,122 @@ class WindowAnalyzer(
 
             if (wideEnough && touchesTop && tallEnough) {
                 return true
+            }
+        }
+
+        return false
+    }
+
+    /**
+     * 빠른 설정 패널(Quick Settings) 확장 여부 확인
+     */
+    fun analyzeQuickSettingsState(
+        windows: List<AccessibilityWindowInfo>,
+        rootNode: AccessibilityNodeInfo?
+    ): Boolean {
+        val screen = getScreenBounds()
+
+        if (isQuickSettingsExpanded(rootNode, screen)) return true
+
+        for (w in windows) {
+            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
+            val rootPkg = try { w.root?.packageName?.toString() } catch (e: Exception) { null }
+            if (rootPkg != "com.android.systemui") continue
+
+            val root = try { w.root } catch (e: Exception) { null }
+            if (isQuickSettingsExpanded(root, screen)) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private fun isQuickSettingsExpanded(rootNode: AccessibilityNodeInfo?, screen: Rect): Boolean {
+        rootNode ?: return false
+        val rootPkg = rootNode.packageName?.toString() ?: return false
+        if (rootPkg != "com.android.systemui") return false
+
+        val minHeight = (screen.height() * 0.45f).toInt()
+        val minWidth = (screen.width() * 0.5f).toInt()
+
+        val targetIds = listOf(
+            "com.android.systemui:id/qs_frame",
+            "com.android.systemui:id/qs_panel",
+            "com.android.systemui:id/quick_settings_panel",
+            "com.android.systemui:id/qs_container",
+            "com.android.systemui:id/quick_settings_container",
+            "com.android.systemui:id/qs_detail",
+            "com.android.systemui:id/qs_pager"
+        )
+
+        for (id in targetIds) {
+            val nodes = try { rootNode.findAccessibilityNodeInfosByViewId(id) } catch (e: Exception) { null }
+            if (!nodes.isNullOrEmpty()) {
+                for (node in nodes) {
+                    if (!node.isVisibleToUser) continue
+                    val r = Rect()
+                    try {
+                        node.getBoundsInScreen(r)
+                    } catch (e: Exception) {
+                        continue
+                    }
+                    if (r.height() >= minHeight && r.width() >= minWidth) {
+                        return true
+                    }
+                }
+            }
+        }
+
+        return false
+    }
+
+    // ===== 최근 앱 감지 =====
+
+    /**
+     * 최근 앱(오버뷰) 화면이 열려있는지 확인
+     */
+    fun analyzeRecentsState(
+        windows: List<AccessibilityWindowInfo>,
+        rootNode: AccessibilityNodeInfo?
+    ): Boolean {
+        if (isRecentsOpen(rootNode)) return true
+
+        for (window in windows) {
+            val className = try { window.root?.className?.toString() } catch (e: Exception) { null }
+            if (isRecentsClassName(className ?: "")) {
+                return true
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                val title = try { window.title?.toString() } catch (e: Exception) { null }
+                if (title != null && isRecentsClassName(title)) {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    fun isRecentsOpen(rootNode: AccessibilityNodeInfo?): Boolean {
+        rootNode ?: return false
+
+        val targetIds = listOf(
+            "com.android.launcher3:id/overview_panel",
+            "com.google.android.apps.nexuslauncher:id/overview_panel",
+            "com.sec.android.app.launcher:id/overview_panel",
+            "com.lge.launcher3:id/overview_panel"
+        )
+
+        for (id in targetIds) {
+            val nodes = try { rootNode.findAccessibilityNodeInfosByViewId(id) } catch (e: Exception) { null }
+            if (!nodes.isNullOrEmpty()) {
+                for (node in nodes) {
+                    if (node.isVisibleToUser) {
+                        return true
+                    }
+                }
             }
         }
 
