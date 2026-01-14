@@ -18,8 +18,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.minsoo.ultranavbar.core.Constants
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.ui.AppListActivity
@@ -53,6 +55,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnGeneratePortrait: MaterialButton
     private lateinit var txtLandscapeStatus: TextView
     private lateinit var txtPortraitStatus: TextView
+    private lateinit var toggleHomeBgButtonColor: MaterialButtonToggleGroup
+    private lateinit var btnHomeBgColorAuto: MaterialButton
+    private lateinit var btnHomeBgColorWhite: MaterialButton
+    private lateinit var btnHomeBgColorBlack: MaterialButton
 
     // 이미지 선택 모드 (true = 가로, false = 세로)
     private var selectingLandscape = true
@@ -104,7 +110,7 @@ class MainActivity : AppCompatActivity() {
         if (result.resultCode == Activity.RESULT_OK) {
             Toast.makeText(this, R.string.wallpaper_generated, Toast.LENGTH_SHORT).show()
             updateBgImageStatus()
-            sendBroadcast(Intent("com.minsoo.ultranavbar.RELOAD_BACKGROUND"))
+            sendBroadcast(Intent(Constants.Action.RELOAD_BACKGROUND))
         }
     }
 
@@ -233,6 +239,10 @@ class MainActivity : AppCompatActivity() {
         btnGeneratePortrait = findViewById(R.id.btnGeneratePortrait)
         txtLandscapeStatus = findViewById(R.id.txtLandscapeStatus)
         txtPortraitStatus = findViewById(R.id.txtPortraitStatus)
+        toggleHomeBgButtonColor = findViewById(R.id.toggleHomeBgButtonColor)
+        btnHomeBgColorAuto = findViewById(R.id.btnHomeBgColorAuto)
+        btnHomeBgColorWhite = findViewById(R.id.btnHomeBgColorWhite)
+        btnHomeBgColorBlack = findViewById(R.id.btnHomeBgColorBlack)
 
         // 가로 이미지 선택 버튼
         findViewById<MaterialButton>(R.id.btnSelectLandscape).setOnClickListener {
@@ -260,6 +270,26 @@ class MainActivity : AppCompatActivity() {
 
         // 홈 배경 설정 로드
         switchHomeBg.isChecked = settings.homeBgEnabled
+        updateHomeBgButtonColorUi(settings.homeBgButtonColorMode)
+        setHomeBgButtonColorControlsEnabled(settings.homeBgEnabled)
+    }
+
+    private fun updateHomeBgButtonColorUi(mode: SettingsManager.HomeBgButtonColorMode) {
+        val targetId = when (mode) {
+            SettingsManager.HomeBgButtonColorMode.AUTO -> R.id.btnHomeBgColorAuto
+            SettingsManager.HomeBgButtonColorMode.WHITE -> R.id.btnHomeBgColorWhite
+            SettingsManager.HomeBgButtonColorMode.BLACK -> R.id.btnHomeBgColorBlack
+        }
+        if (toggleHomeBgButtonColor.checkedButtonId != targetId) {
+            toggleHomeBgButtonColor.check(targetId)
+        }
+    }
+
+    private fun setHomeBgButtonColorControlsEnabled(enabled: Boolean) {
+        toggleHomeBgButtonColor.isEnabled = enabled
+        btnHomeBgColorAuto.isEnabled = enabled
+        btnHomeBgColorWhite.isEnabled = enabled
+        btnHomeBgColorBlack.isEnabled = enabled
     }
 
     private fun setupListeners() {
@@ -278,6 +308,23 @@ class MainActivity : AppCompatActivity() {
         switchHomeBg.setOnCheckedChangeListener { _, isChecked ->
             settings.homeBgEnabled = isChecked
             notifySettingsChanged()
+            setHomeBgButtonColorControlsEnabled(isChecked)
+        }
+
+        toggleHomeBgButtonColor.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+
+            val mode = when (checkedId) {
+                R.id.btnHomeBgColorAuto -> SettingsManager.HomeBgButtonColorMode.AUTO
+                R.id.btnHomeBgColorWhite -> SettingsManager.HomeBgButtonColorMode.WHITE
+                R.id.btnHomeBgColorBlack -> SettingsManager.HomeBgButtonColorMode.BLACK
+                else -> return@addOnButtonCheckedListener
+            }
+
+            if (settings.homeBgButtonColorMode != mode) {
+                settings.homeBgButtonColorMode = mode
+                notifyBackgroundStyleChanged()
+            }
         }
 
         btnGenerateLandscape.setOnClickListener { generateBackground(isLandscape = true) }
@@ -297,7 +344,7 @@ class MainActivity : AppCompatActivity() {
         if (success) {
             Toast.makeText(this, R.string.image_crop_success, Toast.LENGTH_SHORT).show()
             updateBgImageStatus()
-            sendBroadcast(Intent("com.minsoo.ultranavbar.RELOAD_BACKGROUND"))
+            sendBroadcast(Intent(Constants.Action.RELOAD_BACKGROUND))
         } else {
             Toast.makeText(this, R.string.image_crop_failed, Toast.LENGTH_SHORT).show()
         }
@@ -340,7 +387,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun notifySettingsChanged() {
-        sendBroadcast(Intent("com.minsoo.ultranavbar.SETTINGS_CHANGED"))
+        sendBroadcast(Intent(Constants.Action.SETTINGS_CHANGED))
+    }
+
+    private fun notifyBackgroundStyleChanged() {
+        sendBroadcast(Intent(Constants.Action.UPDATE_BUTTON_COLORS))
     }
 
     private fun checkAndRequestStoragePermission() {

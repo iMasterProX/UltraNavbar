@@ -4,12 +4,14 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Rect
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
+import android.view.WindowInsets
 import android.view.accessibility.AccessibilityWindowInfo
 import android.view.inputmethod.InputMethodManager
 
@@ -28,6 +30,11 @@ class WindowAnalyzer(
         private const val TAG = "WindowAnalyzer"
     }
 
+    private data class NavBarInsets(
+        val visible: Boolean,
+        val sizePx: Int
+    )
+
     // 시스템 서비스 참조
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
@@ -38,6 +45,7 @@ class WindowAnalyzer(
 
     // 네비바 높이 (px)
     private var navBarHeightPx: Int = 0
+    private var navBarHeightOrientation: Int = Configuration.ORIENTATION_UNDEFINED
 
     // IME 추적
     private var lastImeEventAt: Long = 0
@@ -75,15 +83,69 @@ class WindowAnalyzer(
      * 네비바 높이 계산
      */
     fun calculateNavBarHeight() {
-        val resId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        val actualOrientation = getActualOrientation()
+        val resName = if (actualOrientation == Configuration.ORIENTATION_LANDSCAPE) {
+            "navigation_bar_height_landscape"
+        } else {
+            "navigation_bar_height"
+        }
+
+        var resId = context.resources.getIdentifier(resName, "dimen", "android")
+        if (resId == 0 && actualOrientation == Configuration.ORIENTATION_LANDSCAPE) {
+            resId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        }
+
         navBarHeightPx = if (resId > 0) {
             context.resources.getDimensionPixelSize(resId)
         } else {
             context.dpToPx(Constants.Dimension.NAV_BUTTON_SIZE_DP)
         }
+        navBarHeightOrientation = actualOrientation
     }
 
-    // ===== 화면 정보 =====
+    private fun ensureNavBarHeight() {
+        val actualOrientation = getActualOrientation()
+        if (navBarHeightPx == 0 || navBarHeightOrientation != actualOrientation) {
+            calculateNavBarHeight()
+        }
+    }
+
+    private fun getActualOrientation(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            if (bounds.width() >= bounds.height()) {
+                Configuration.ORIENTATION_LANDSCAPE
+            } else {
+                Configuration.ORIENTATION_PORTRAIT
+            }
+        } else {
+            val dm = context.resources.displayMetrics
+            if (dm.widthPixels >= dm.heightPixels) {
+                Configuration.ORIENTATION_LANDSCAPE
+            } else {
+                Configuration.ORIENTATION_PORTRAIT
+            }
+        }
+    }
+
+    private fun getNavigationBarInsets(): NavBarInsets? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+
+        return try {
+            val metrics = windowManager.currentWindowMetrics
+            val insets = metrics.windowInsets
+            val navInsets = insets.getInsets(WindowInsets.Type.navigationBars())
+            val sizePx = maxOf(navInsets.bottom, navInsets.left, navInsets.right)
+            NavBarInsets(
+                visible = insets.isVisible(WindowInsets.Type.navigationBars()),
+                sizePx = sizePx
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+// ===== 화면 정보 =====
 
     /**
      * 현재 화면 경계 가져오기
@@ -138,8 +200,26 @@ class WindowAnalyzer(
      * @return 전체화면 여부
      */
     fun analyzeFullscreenState(windows: List<AccessibilityWindowInfo>): Boolean {
+        ensureNavBarHeight()
+        val minNavBarHeight = maxOf(
+            (navBarHeightPx * Constants.Threshold.NAV_BAR_VISIBLE_RATIO).toInt(),
+            context.dpToPx(Constants.Dimension.MIN_NAV_BAR_HEIGHT_DP)
+        )
+        val gestureOnlyThreshold = context.dpToPx(Constants.Threshold.GESTURE_ONLY_HEIGHT_DP)
+
+        val insets = getNavigationBarInsets()
+        if (insets != null) {
+            val navBarVisible = insets.visible && insets.sizePx >= minNavBarHeight
+            val navBarHiddenOrGestureOnly = !insets.visible || insets.sizePx <= gestureOnlyThreshold
+            return navBarHiddenOrGestureOnly || !navBarVisible
+        }
+
         val screen = getScreenBounds()
-        var bottomSystemUiHeight = 0
+        val maxNavBarHeight = run {
+            val scaled = maxOf(navBarHeightPx * 3, context.dpToPx(120))
+            minOf(scaled, (screen.height() * 0.4f).toInt())
+        }
+        var navBarThicknessPx = 0
 
         for (w in windows) {
             if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
@@ -155,20 +235,22 @@ class WindowAnalyzer(
 
             val touchesBottom = (r.bottom >= screen.bottom - 2)
             val wideEnough = r.width() >= (screen.width() * 0.5f)
-            if (touchesBottom && wideEnough) {
-                bottomSystemUiHeight = maxOf(bottomSystemUiHeight, r.height())
+            val reasonableHeight = r.height() <= maxNavBarHeight
+            if (touchesBottom && wideEnough && reasonableHeight) {
+                navBarThicknessPx = maxOf(navBarThicknessPx, r.height())
+            }
+
+            val touchesLeft = (r.left <= screen.left + 2)
+            val touchesRight = (r.right >= screen.right - 2)
+            val tallEnough = r.height() >= (screen.height() * 0.5f)
+            val reasonableWidth = r.width() <= maxNavBarHeight
+            if ((touchesLeft || touchesRight) && tallEnough && reasonableWidth) {
+                navBarThicknessPx = maxOf(navBarThicknessPx, r.width())
             }
         }
 
-        // "네비바가 보임" 기준: navBarHeight의 70% 이상
-        val navVisibleThreshold = maxOf(
-            (navBarHeightPx * Constants.Threshold.NAV_BAR_VISIBLE_RATIO).toInt(),
-            context.dpToPx(Constants.Dimension.MIN_NAV_BAR_HEIGHT_DP)
-        )
-        val gestureOnlyThreshold = context.dpToPx(Constants.Threshold.GESTURE_ONLY_HEIGHT_DP)
-
-        val navBarVisible = bottomSystemUiHeight >= navVisibleThreshold
-        val navBarHiddenOrGestureOnly = bottomSystemUiHeight <= gestureOnlyThreshold
+        val navBarVisible = navBarThicknessPx >= minNavBarHeight
+        val navBarHiddenOrGestureOnly = navBarThicknessPx <= gestureOnlyThreshold
 
         return navBarHiddenOrGestureOnly || !navBarVisible
     }
@@ -181,6 +263,7 @@ class WindowAnalyzer(
      * @return IME 가시 여부
      */
     fun analyzeImeVisibility(windows: List<AccessibilityWindowInfo>): Boolean {
+        ensureNavBarHeight()
         val screen = getScreenBounds()
         val minImeHeight = context.dpToPx(Constants.Dimension.MIN_IME_HEIGHT_DP)
         val now = SystemClock.elapsedRealtime()

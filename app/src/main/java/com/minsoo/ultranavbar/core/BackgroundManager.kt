@@ -11,9 +11,11 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.TransitionDrawable
+import android.os.Build
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.WindowManager
 import android.view.animation.PathInterpolator
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.util.ImageCropUtil
@@ -34,6 +36,7 @@ class BackgroundManager(
     }
 
     private val settings: SettingsManager = SettingsManager.getInstance(context)
+    private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
     // Android 12 표준 애니메이션 인터폴레이터 (버튼 색상 애니메이션용)
     private val android12Interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
@@ -161,20 +164,33 @@ class BackgroundManager(
      * @return 동기화가 필요했으면 true
      */
     fun syncOrientationWithSystem(): Boolean {
-        val actualOrientation = context.resources.configuration.orientation
+        val actualOrientation = getActualOrientation()
         if (currentOrientation != actualOrientation) {
             Log.w(TAG, "Orientation mismatch! cached=$currentOrientation, actual=$actualOrientation - resyncing")
             currentOrientation = actualOrientation
-            // 방향이 바뀌었으므로 비트맵 리로드 필요 없음 (이미 로드되어 있음)
             return true
         }
         return false
     }
 
-    /**
-     * 방향 강제 동기화 (조건 없이 지정된 방향으로 설정)
-     * 전체화면 모드 복귀 시 사용
-     */
+    private fun getActualOrientation(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            if (bounds.width() >= bounds.height()) {
+                Configuration.ORIENTATION_LANDSCAPE
+            } else {
+                Configuration.ORIENTATION_PORTRAIT
+            }
+        } else {
+            val dm = context.resources.displayMetrics
+            if (dm.widthPixels >= dm.heightPixels) {
+                Configuration.ORIENTATION_LANDSCAPE
+            } else {
+                Configuration.ORIENTATION_PORTRAIT
+            }
+        }
+    }
+
     fun forceOrientationSync(orientation: Int) {
         Log.d(TAG, "Force orientation sync: ${getOrientationName(currentOrientation)} -> ${getOrientationName(orientation)}")
         currentOrientation = orientation
@@ -202,21 +218,12 @@ class BackgroundManager(
         val newDarkMode = isSystemDarkMode()
         if (_isDarkMode != newDarkMode) {
             _isDarkMode = newDarkMode
-            val newButtonColor = getDefaultButtonColor()
-            _currentButtonColor = newButtonColor
-            // 다크 모드 전환 시 버튼 색상 즉시 업데이트
-            listener.onButtonColorChanged(newButtonColor)
-            Log.d(TAG, "Dark mode changed: $_isDarkMode, button color: ${getColorName(newButtonColor)}")
+            Log.d(TAG, "Dark mode changed: $_isDarkMode")
             return true
         }
         return false
     }
 
-    // ===== 색상 계산 =====
-
-    /**
-     * 다크 모드에 따른 기본 배경 색상
-     */
     fun getDefaultBackgroundColor(): Int {
         return if (_isDarkMode) Color.BLACK else Color.WHITE
     }
@@ -263,6 +270,28 @@ class BackgroundManager(
         val avgLuminance = if (sampleCount > 0) totalLuminance / sampleCount else Constants.Threshold.BRIGHTNESS_THRESHOLD
 
         return if (avgLuminance > Constants.Threshold.BRIGHTNESS_THRESHOLD) Color.BLACK else Color.WHITE
+    }
+
+    private fun resolveHomeBackgroundButtonColor(bitmap: Bitmap?, defaultBgColor: Int): Int {
+        return when (settings.homeBgButtonColorMode) {
+            SettingsManager.HomeBgButtonColorMode.AUTO -> {
+                if (bitmap != null) {
+                    calculateButtonColorForBitmap(bitmap)
+                } else {
+                    if (isColorLight(defaultBgColor)) Color.BLACK else Color.WHITE
+                }
+            }
+            SettingsManager.HomeBgButtonColorMode.WHITE -> Color.WHITE
+            SettingsManager.HomeBgButtonColorMode.BLACK -> Color.BLACK
+        }
+    }
+
+    private fun isColorLight(color: Int): Boolean {
+        val r = Color.red(color)
+        val g = Color.green(color)
+        val b = Color.blue(color)
+        val luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return luminance > Constants.Threshold.BRIGHTNESS_THRESHOLD
     }
 
     /**
@@ -342,11 +371,10 @@ class BackgroundManager(
                 targetDrawable = BitmapDrawable(context.resources, bitmap).apply {
                     gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
                 }
-                targetButtonColor = calculateButtonColorForBitmap(bitmap)
             } else {
                 targetDrawable = ColorDrawable(defaultBgColor)
-                targetButtonColor = getDefaultButtonColor()
             }
+            targetButtonColor = resolveHomeBackgroundButtonColor(bitmap, defaultBgColor)
         } else {
             targetDrawable = ColorDrawable(defaultBgColor)
             targetButtonColor = getDefaultButtonColor()

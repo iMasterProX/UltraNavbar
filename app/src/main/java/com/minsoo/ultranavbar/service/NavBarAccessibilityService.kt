@@ -76,6 +76,10 @@ class NavBarAccessibilityService : AccessibilityService() {
                     Log.d(TAG, "Reloading background images")
                     overlay?.reloadBackgroundImages()
                 }
+                Constants.Action.UPDATE_BUTTON_COLORS -> {
+                    Log.d(TAG, "Updating background/button colors")
+                    overlay?.refreshBackgroundStyle()
+                }
             }
         }
     }
@@ -161,6 +165,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         val settingsFilter = IntentFilter().apply {
             addAction(Constants.Action.SETTINGS_CHANGED)
             addAction(Constants.Action.RELOAD_BACKGROUND)
+            addAction(Constants.Action.UPDATE_BUTTON_COLORS)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(settingsReceiver, settingsFilter, Context.RECEIVER_NOT_EXPORTED)
@@ -285,55 +290,72 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun handleWindowStateChanged(event: AccessibilityEvent) {
         val packageName = event.packageName?.toString() ?: return
         val className = event.className?.toString() ?: ""
-        val isSystemUi = packageName == "com.android.systemui"
         val isRecents = windowAnalyzer.isRecentsClassName(className)
 
-        // 최근 앱 상태 업데이트
-        if (isRecentsVisible != isRecents) {
-            isRecentsVisible = isRecents
-            Log.d(TAG, "Recents state changed: $isRecents")
-            overlay?.setRecentsState(isRecents)
-        }
+        updateRecentsState(isRecents, "event")
 
         if (packageName == this.packageName) return
 
-        if (isSystemUi) {
-            if (isRecents && isOnHomeScreen) {
-                isOnHomeScreen = false
-                overlay?.setHomeScreenState(false)
-            }
+        val isSystemUi = packageName == "com.android.systemui"
+        if (handleSystemUiState(isSystemUi, isRecents, "event")) {
             return
         }
 
-        // 포그라운드 앱 변경
-        if (currentPackage != packageName) {
-            val previousPackage = currentPackage
-            currentPackage = packageName
-            Log.d(TAG, "Foreground app: $packageName")
+        val packageChanged = updateForegroundPackage(packageName, "event")
 
-            // 비활성화된 앱에서 다른 앱으로 전환 시 오버레이 가시성 즉시 업데이트
-            val wasDisabled = previousPackage.isNotEmpty() && settings.isAppDisabled(previousPackage)
-            val isDisabled = settings.isAppDisabled(packageName)
-            if (wasDisabled || isDisabled) {
-                Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
-            }
-            // 포그라운드 앱이 바뀔 때마다 가시성 재평가(윈도우 이벤트 경로에서도 누락되지 않도록)
+        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !isRecents
+        updateHomeScreenState(newOnHomeScreen, "event")
+
+        if (packageChanged) {
             handler.post {
                 checkFullscreenState()
                 updateOverlayVisibility()
             }
         }
+    }
 
-        // 홈 화면 상태 업데이트
-        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !isRecents
-        if (isOnHomeScreen != newOnHomeScreen) {
-            isOnHomeScreen = newOnHomeScreen
-            Log.d(TAG, "Home screen state: $isOnHomeScreen")
+    private fun updateRecentsState(isRecents: Boolean, source: String) {
+        if (isRecentsVisible != isRecents) {
+            isRecentsVisible = isRecents
+            Log.d(TAG, "Recents state ($source): $isRecentsVisible")
+            overlay?.setRecentsState(isRecents)
+        }
+    }
+
+    private fun updateHomeScreenState(isHome: Boolean, source: String) {
+        if (isOnHomeScreen != isHome) {
+            isOnHomeScreen = isHome
+            Log.d(TAG, "Home screen state ($source): $isOnHomeScreen")
             overlay?.setHomeScreenState(isOnHomeScreen)
         }
     }
 
-    // ===== 상태 체크 =====
+    private fun updateForegroundPackage(
+        packageName: String,
+        source: String
+    ): Boolean {
+        if (currentPackage == packageName) return false
+
+        val previousPackage = currentPackage
+        currentPackage = packageName
+        Log.d(TAG, "Foreground app ($source): $packageName")
+
+        val wasDisabled = previousPackage.isNotEmpty() && settings.isAppDisabled(previousPackage)
+        val isDisabled = settings.isAppDisabled(packageName)
+        if (wasDisabled || isDisabled) {
+            Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
+        }
+
+        return true
+    }
+
+    private fun handleSystemUiState(isSystemUi: Boolean, isRecents: Boolean, source: String): Boolean {
+        if (!isSystemUi) return false
+        if (isRecents && isOnHomeScreen) {
+            updateHomeScreenState(false, source)
+        }
+        return true
+    }
 
     private fun scheduleStateCheck() {
         pendingStateCheck?.let { handler.removeCallbacks(it) }
@@ -391,38 +413,21 @@ class NavBarAccessibilityService : AccessibilityService() {
         val packageName = root.packageName?.toString() ?: return
         val className = root.className?.toString() ?: ""
         val isRecents = windowAnalyzer.isRecentsClassName(className)
-        var packageChanged = false
 
-        if (isRecentsVisible != isRecents) {
-            isRecentsVisible = isRecents
-            Log.d(TAG, "Recents state (windows): $isRecents")
-            overlay?.setRecentsState(isRecents)
-        }
+        updateRecentsState(isRecents, "windows")
 
         if (packageName == this.packageName) return
 
-        if (packageName == "com.android.systemui") {
-            if (isRecents && isOnHomeScreen) {
-                isOnHomeScreen = false
-                overlay?.setHomeScreenState(false)
-            }
+        val isSystemUi = packageName == "com.android.systemui"
+        if (handleSystemUiState(isSystemUi, isRecents, "windows")) {
             return
         }
 
-        if (currentPackage != packageName) {
-            currentPackage = packageName
-            packageChanged = true
-            Log.d(TAG, "Foreground app (windows): $packageName")
-        }
+        val packageChanged = updateForegroundPackage(packageName, "windows")
 
         val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !isRecents
-        if (isOnHomeScreen != newOnHomeScreen) {
-            isOnHomeScreen = newOnHomeScreen
-            Log.d(TAG, "Home screen state (windows): $isOnHomeScreen")
-            overlay?.setHomeScreenState(isOnHomeScreen)
-        }
+        updateHomeScreenState(newOnHomeScreen, "windows")
 
-        // 앱 서랍 상태 감지 (홈 화면일 때만)
         if (isOnHomeScreen) {
             val appDrawerOpen = windowAnalyzer.isAppDrawerOpen(root)
             if (isAppDrawerOpen != appDrawerOpen) {
@@ -431,18 +436,14 @@ class NavBarAccessibilityService : AccessibilityService() {
                 overlay?.setAppDrawerState(isAppDrawerOpen)
             }
         } else if (isAppDrawerOpen) {
-            // 홈 화면이 아니면 앱 서랍도 닫힘 처리
             isAppDrawerOpen = false
             overlay?.setAppDrawerState(false)
         }
 
         if (packageChanged) {
-            // 윈도우 스냅샷 경로에서도 앱 전환 시 가시성을 즉시 재평가해 비활성화 목록 전환을 놓치지 않음
             updateOverlayVisibility()
         }
     }
-
-    // ===== 전체화면 폴링 =====
 
     private fun startFullscreenPolling() {
         if (fullscreenPoll != null) return

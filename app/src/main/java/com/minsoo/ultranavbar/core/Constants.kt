@@ -61,6 +61,7 @@ object Constants {
     object Action {
         const val SETTINGS_CHANGED = "com.minsoo.ultranavbar.SETTINGS_CHANGED"
         const val RELOAD_BACKGROUND = "com.minsoo.ultranavbar.RELOAD_BACKGROUND"
+        const val UPDATE_BUTTON_COLORS = "com.minsoo.ultranavbar.UPDATE_BUTTON_COLORS"
     }
 }
 

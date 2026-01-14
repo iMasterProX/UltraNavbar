@@ -42,6 +42,11 @@
     <string name="home_bg_settings">Home screen background</string>
     <string name="home_bg_enable">Enable custom background</string>
     <string name="home_bg_enable_summary">Use a cropped screenshot as the bar background on the home screen.</string>
+    <string name="home_bg_button_color">Home background button color</string>
+    <string name="home_bg_button_color_summary">Choose button color for the home background (ignores dark mode).</string>
+    <string name="home_bg_button_color_auto">Auto</string>
+    <string name="home_bg_button_color_white">White</string>
+    <string name="home_bg_button_color_black">Black</string>
     <string name="home_bg_landscape">Landscape screenshot</string>
     <string name="home_bg_portrait">Portrait screenshot</string>
     <string name="home_bg_not_set">Not set</string>
