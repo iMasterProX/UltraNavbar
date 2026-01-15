@@ -15,6 +15,7 @@ import android.widget.LinearLayout
 import com.minsoo.ultranavbar.model.NavAction
 import android.animation.ValueAnimator
 import android.animation.ArgbEvaluator
+import kotlin.math.abs
 
 /**
  * 네비게이션 버튼 생성 및 스타일 관리
@@ -174,6 +175,11 @@ class ButtonManager(
         val rotation = if (isOpen) Constants.Rotation.PANEL_OPEN else Constants.Rotation.PANEL_CLOSED
 
         _panelButton?.let { button ->
+            if (abs(button.rotation - rotation) < 0.5f) {
+                button.animate().cancel()
+                button.rotation = rotation
+                return
+            }
             if (animate) {
                 button.animate().cancel()
                 button.animate()
