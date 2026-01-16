@@ -7,13 +7,16 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Point
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.TransitionDrawable
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
+import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.PathInterpolator
@@ -53,6 +56,11 @@ class BackgroundManager(
     val currentButtonColor: Int get() = _currentButtonColor
 
     private var currentOrientation: Int = Configuration.ORIENTATION_UNDEFINED
+
+    private var lastAppliedUseCustom: Boolean = false
+    private var transitionSourceUseCustom: Boolean = false
+    private var transitionTargetUseCustom: Boolean = false
+    private var transitionEndAt: Long = 0L
 
     // 버튼 색상 애니메이터
     private var buttonColorAnimator: ValueAnimator? = null
@@ -174,21 +182,34 @@ class BackgroundManager(
     }
 
     private fun getActualOrientation(): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        @Suppress("DEPRECATION")
+        val display = windowManager.defaultDisplay
+            ?: return context.resources.configuration.orientation
+
+        val rotation = display.rotation
+        val size = Point()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val bounds = windowManager.currentWindowMetrics.bounds
-            if (bounds.width() >= bounds.height()) {
-                Configuration.ORIENTATION_LANDSCAPE
-            } else {
-                Configuration.ORIENTATION_PORTRAIT
-            }
+            size.x = bounds.width()
+            size.y = bounds.height()
         } else {
-            val dm = context.resources.displayMetrics
-            if (dm.widthPixels >= dm.heightPixels) {
-                Configuration.ORIENTATION_LANDSCAPE
-            } else {
-                Configuration.ORIENTATION_PORTRAIT
-            }
+            @Suppress("DEPRECATION")
+            display.getRealSize(size)
         }
+
+        val naturalPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+            size.x < size.y
+        } else {
+            size.x > size.y
+        }
+
+        val isPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+            naturalPortrait
+        } else {
+            !naturalPortrait
+        }
+
+        return if (isPortrait) Configuration.ORIENTATION_PORTRAIT else Configuration.ORIENTATION_LANDSCAPE
     }
 
     fun forceOrientationSync(orientation: Int) {
@@ -368,6 +389,8 @@ class BackgroundManager(
         val defaultBgColor = getDefaultBackgroundColor()
         val targetDrawable: Drawable
         val targetButtonColor: Int
+        val previousUseCustom = lastAppliedUseCustom
+        lastAppliedUseCustom = useCustom
 
         // 1. 목표 배경 및 버튼 색상 결정
         if (useCustom) {
@@ -392,6 +415,7 @@ class BackgroundManager(
         val currentBg = targetView.background
 
         if (!animate) {
+            transitionEndAt = 0L
             targetView.background = targetDrawable
             targetView.setLayerType(View.LAYER_TYPE_NONE, null)
             listener.onBackgroundApplied(targetDrawable)
@@ -400,6 +424,7 @@ class BackgroundManager(
 
         // 첫 실행이거나 배경이 없으면 즉시 적용
         if (currentBg == null) {
+            transitionEndAt = 0L
             targetView.background = targetDrawable
             listener.onBackgroundApplied(targetDrawable)
             return
@@ -433,7 +458,10 @@ class BackgroundManager(
         targetView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         
         transition.startTransition(Constants.Timing.BG_TRANSITION_DURATION_MS.toInt())
-        
+        transitionSourceUseCustom = previousUseCustom
+        transitionTargetUseCustom = useCustom
+        transitionEndAt = SystemClock.elapsedRealtime() + Constants.Timing.BG_TRANSITION_DURATION_MS
+
         // 애니메이션 종료 후 레이어 타입 복원 등을 위한 지연 실행
         // (TransitionDrawable은 리스너가 없으므로 Handler 사용)
         targetView.postDelayed({
@@ -449,12 +477,35 @@ class BackgroundManager(
         Log.d(TAG, "Background transition started: ${startDrawable.javaClass.simpleName} -> ${targetDrawable.javaClass.simpleName}")
     }
 
+    fun resolveUseCustomForUnlock(currentUseCustom: Boolean): Boolean {
+        if (SystemClock.elapsedRealtime() >= transitionEndAt) {
+            return currentUseCustom
+        }
+        if (transitionSourceUseCustom && !transitionTargetUseCustom) {
+            return true
+        }
+        return currentUseCustom
+    }
+
+    fun isTransitionInProgress(): Boolean {
+        return SystemClock.elapsedRealtime() < transitionEndAt
+    }
+
+    fun isTransitioningFromCustomToDefault(): Boolean {
+        return isTransitionInProgress() && transitionSourceUseCustom && !transitionTargetUseCustom
+    }
+
+    fun wasLastAppliedCustom(): Boolean {
+        return lastAppliedUseCustom
+    }
+
     /**
      * 진행 중인 배경 전환 애니메이션 취소
      * TransitionDrawable은 별도 취소 없이 뷰에서 교체되면 자동 종료됨.
      */
     fun cancelBackgroundTransition() {
         buttonColorAnimator?.cancel()
+        transitionEndAt = 0L
     }
 
     // ===== 정리 =====

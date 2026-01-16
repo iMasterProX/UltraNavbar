@@ -58,6 +58,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isWallpaperPreviewVisible: Boolean = false
     private var isImeVisible: Boolean = false
     private var lastImeEventAt: Long = 0
+    private var lastNonLauncherEventAt: Long = 0
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
@@ -90,7 +91,8 @@ class NavBarAccessibilityService : AccessibilityService() {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     Log.d(TAG, "Screen off, hiding overlay")
-                    overlay?.resetUnlockFadeState()
+                    overlay?.captureUnlockBackgroundForLock()
+                    overlay?.resetUnlockFadeState(clearOverride = false)
                     overlay?.hide(animate = false, showHotspot = false)
                 }
                 Intent.ACTION_SCREEN_ON -> {
@@ -303,9 +305,25 @@ class NavBarAccessibilityService : AccessibilityService() {
             return
         }
 
+        markNonLauncherEvent(packageName)
+
         val packageChanged = updateForegroundPackage(packageName, "event")
 
-        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !isRecents
+        val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
+            windows.toList(),
+            this.packageName
+        )
+        if (hasVisibleNonLauncherApp) {
+            lastNonLauncherEventAt = SystemClock.elapsedRealtime()
+        }
+        val hasNonLauncherForeground =
+            currentPackage.isNotEmpty() && !windowAnalyzer.isLauncherPackage(currentPackage)
+        val suppressHomeForRecentApp = shouldSuppressHomeForRecentApp()
+        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) &&
+            !isRecents &&
+            !hasVisibleNonLauncherApp &&
+            !hasNonLauncherForeground &&
+            !suppressHomeForRecentApp
         updateHomeScreenState(newOnHomeScreen, "event")
 
         if (packageChanged) {
@@ -330,6 +348,19 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Home screen state ($source): $isOnHomeScreen")
             overlay?.setHomeScreenState(isOnHomeScreen)
         }
+    }
+
+    private fun markNonLauncherEvent(packageName: String) {
+        if (packageName.isEmpty()) return
+        if (packageName == this.packageName) return
+        if (packageName == "com.android.systemui") return
+        if (windowAnalyzer.isLauncherPackage(packageName)) return
+        lastNonLauncherEventAt = SystemClock.elapsedRealtime()
+    }
+
+    private fun shouldSuppressHomeForRecentApp(): Boolean {
+        val elapsed = SystemClock.elapsedRealtime() - lastNonLauncherEventAt
+        return elapsed < Constants.Timing.HOME_STATE_DEBOUNCE_MS
     }
 
     private fun updateForegroundPackage(
@@ -444,9 +475,25 @@ class NavBarAccessibilityService : AccessibilityService() {
             return
         }
 
+        markNonLauncherEvent(packageName)
+
         val packageChanged = updateForegroundPackage(packageName, "windows")
 
-        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !recentsVisible
+        val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
+            windowList,
+            this.packageName
+        )
+        if (hasVisibleNonLauncherApp) {
+            lastNonLauncherEventAt = SystemClock.elapsedRealtime()
+        }
+        val hasNonLauncherForeground =
+            currentPackage.isNotEmpty() && !windowAnalyzer.isLauncherPackage(currentPackage)
+        val suppressHomeForRecentApp = shouldSuppressHomeForRecentApp()
+        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) &&
+            !recentsVisible &&
+            !hasVisibleNonLauncherApp &&
+            !hasNonLauncherForeground &&
+            !suppressHomeForRecentApp
         updateHomeScreenState(newOnHomeScreen, "windows")
 
         if (isOnHomeScreen) {

@@ -71,3 +71,12 @@
 ## 로그 태그
 - `NavBarAccessibility`, `NavBarOverlay`, `WindowAnalyzer`, `BackgroundManager`, `ButtonManager`
   - 예: `adb logcat -s NavBarAccessibility WindowAnalyzer NavBarOverlay`
+
+## 작업 일지
+- 2026-01-16
+  - 홈 이탈 직후 커스텀 배경 과등장을 막기 위해 홈 이탈 억제 창(`HOME_STATE_DEBOUNCE_MS`) 도입.
+  - `NavBarOverlay`에서 억제 시간 동안 기본 배경 강제, 억제 종료 시 즉시 배경 복구.
+  - 배경 전환 중 목표가 바뀐 경우 즉시 적용으로 페이드 섞임 최소화.
+  - `applyBackgroundImmediate()`에 방향 동기화 추가(세로/가로 혼선 방지).
+  - `NavBarAccessibilityService`에 최근 비런처 이벤트 추적으로 로딩/앱 시작 구간 홈 판정 억제.
+  - Kotlin 컴파일 오류(자기 참조 `task`)를 `Runnable` 객체 방식으로 수정.

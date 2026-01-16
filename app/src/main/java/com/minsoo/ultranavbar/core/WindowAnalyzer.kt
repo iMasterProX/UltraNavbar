@@ -5,11 +5,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Point
 import android.graphics.Rect
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.view.Surface
 import android.view.WindowManager
 import android.view.WindowInsets
 import android.view.accessibility.AccessibilityWindowInfo
@@ -119,21 +121,34 @@ class WindowAnalyzer(
     }
 
     private fun getActualOrientation(): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        @Suppress("DEPRECATION")
+        val display = windowManager.defaultDisplay
+            ?: return context.resources.configuration.orientation
+
+        val rotation = display.rotation
+        val size = Point()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val bounds = windowManager.currentWindowMetrics.bounds
-            if (bounds.width() >= bounds.height()) {
-                Configuration.ORIENTATION_LANDSCAPE
-            } else {
-                Configuration.ORIENTATION_PORTRAIT
-            }
+            size.x = bounds.width()
+            size.y = bounds.height()
         } else {
-            val dm = context.resources.displayMetrics
-            if (dm.widthPixels >= dm.heightPixels) {
-                Configuration.ORIENTATION_LANDSCAPE
-            } else {
-                Configuration.ORIENTATION_PORTRAIT
-            }
+            @Suppress("DEPRECATION")
+            display.getRealSize(size)
         }
+
+        val naturalPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+            size.x < size.y
+        } else {
+            size.x > size.y
+        }
+
+        val isPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+            naturalPortrait
+        } else {
+            !naturalPortrait
+        }
+
+        return if (isPortrait) Configuration.ORIENTATION_PORTRAIT else Configuration.ORIENTATION_LANDSCAPE
     }
 
     private fun getNavigationBarInsets(): NavBarInsets? {
@@ -528,6 +543,37 @@ class WindowAnalyzer(
         }
 
         return false
+    }
+
+    /**
+     * 런처가 최상위로 보이더라도 다른 앱 창이 실제로 보이는지 확인
+     * QuickStep 앱 실행 전환 화면에서 커스텀 배경을 억제하기 위한 보조 신호.
+     */
+    fun hasVisibleNonLauncherAppWindow(
+        windows: List<AccessibilityWindowInfo>,
+        selfPackage: String
+    ): Boolean {
+        var hasUnknownAppWindow = false
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val bounds = Rect()
+            try {
+                window.getBoundsInScreen(bounds)
+            } catch (e: Exception) {
+                continue
+            }
+            if (bounds.width() <= 0 || bounds.height() <= 0) continue
+
+            val pkg = try { window.root?.packageName?.toString() } catch (e: Exception) { null }
+            if (pkg == null) {
+                hasUnknownAppWindow = true
+                continue
+            }
+            if (pkg == selfPackage) continue
+            if (isLauncherPackage(pkg)) continue
+            return true
+        }
+        return hasUnknownAppWindow
     }
 
     // ===== 홈/최근 앱 감지 =====
