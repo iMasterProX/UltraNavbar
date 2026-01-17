@@ -84,7 +84,7 @@ class WindowAnalyzer(
             launcherPackages = setOf(
                 "com.android.launcher", "com.android.launcher3", "com.google.android.apps.nexuslauncher",
                 "com.sec.android.app.launcher", "com.lge.launcher3", "com.huawei.android.launcher",
-                "com.android.launcher3"
+                "com.teslacoilsw.launcher", "com.android.launcher3"
             )
         }
     }
@@ -220,7 +220,9 @@ class WindowAnalyzer(
         val targetIds = listOf(
             "com.android.launcher3:id/apps_view",
             "com.google.android.apps.nexuslauncher:id/apps_view",
-            "com.sec.android.app.launcher:id/apps_view" // 삼성 OneUI 예시
+            "com.sec.android.app.launcher:id/apps_view", // 삼성 OneUI 예시
+            "com.teslacoilsw.launcher:id/apps_view", // Nova Launcher
+            "com.teslacoilsw.launcher:id/apps_list_view" // Nova Launcher
         )
 
         for (id in targetIds) {
