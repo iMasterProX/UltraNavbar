@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adb devices:*)",
+      "Bash(adb shell:*)",
+      "Bash(adb shell cmd:*)",
+      "Bash(adb logcat:*)",
+      "Bash(timeout 3 adb logcat:*)",
+      "Bash(findstr:*)",
+      "Bash(adb pull:*)",
+      "Bash(cmd /c \"adb shell uiautomator dump //data//local//tmp//uidump_home.xml\")",
+      "Bash(adb exec-out:*)",
+      "Bash(timeout 5 adb logcat:*)"
+    ]
+  }
+}

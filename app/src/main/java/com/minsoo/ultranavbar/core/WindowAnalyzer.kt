@@ -72,20 +72,18 @@ class WindowAnalyzer(
             val resolveInfo = context.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
             if (resolveInfo?.activityInfo?.packageName != null) {
                 launcherPackages = setOf(resolveInfo.activityInfo.packageName)
+                Log.d(TAG, "Detected default launcher: ${resolveInfo.activityInfo.packageName}")
             } else {
                 val resolveInfos = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
                 launcherPackages = resolveInfos.map { it.activityInfo.packageName }
                     .filter { it != "com.android.settings" }
                     .toSet()
+                Log.d(TAG, "Detected launcher packages: $launcherPackages")
             }
-            Log.d(TAG, "Detected launcher packages: $launcherPackages")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load launcher packages, using fallback", e)
-            launcherPackages = setOf(
-                "com.android.launcher", "com.android.launcher3", "com.google.android.apps.nexuslauncher",
-                "com.sec.android.app.launcher", "com.lge.launcher3", "com.huawei.android.launcher",
-                "com.teslacoilsw.launcher", "com.android.launcher3"
-            )
+            // QuickStep 런처 폴백
+            launcherPackages = setOf("com.android.launcher3")
         }
     }
 
@@ -209,27 +207,23 @@ class WindowAnalyzer(
 
     /**
      * 앱 서랍(App Drawer)이 열려있는지 확인
-     * 런처 패키지의 특정 뷰 ID를 통해 감지
+     * QuickStep 런처의 뷰 ID를 통해 감지
      * @param rootNode 활성 윈도우의 루트 노드
      * @return 앱 서랍 열림 여부
      */
     fun isAppDrawerOpen(rootNode: android.view.accessibility.AccessibilityNodeInfo?): Boolean {
         rootNode ?: return false
-        
-        // 감지할 뷰 ID 목록 (QuickStep, Pixel Launcher 등)
+
+        // QuickStep 런처 앱 서랍 뷰 ID
         val targetIds = listOf(
             "com.android.launcher3:id/apps_view",
-            "com.google.android.apps.nexuslauncher:id/apps_view",
-            "com.sec.android.app.launcher:id/apps_view", // 삼성 OneUI 예시
-            "com.teslacoilsw.launcher:id/apps_view", // Nova Launcher
-            "com.teslacoilsw.launcher:id/apps_list_view" // Nova Launcher
+            "com.android.launcher3:id/apps_list_view"
         )
 
         for (id in targetIds) {
             val nodes = rootNode.findAccessibilityNodeInfosByViewId(id)
             if (!nodes.isNullOrEmpty()) {
                 for (node in nodes) {
-                    // 뷰가 화면에 보이고 활성화된 상태인지 확인
                     if (node.isVisibleToUser) {
                         return true
                     }
@@ -526,11 +520,10 @@ class WindowAnalyzer(
     fun isRecentsOpen(rootNode: AccessibilityNodeInfo?): Boolean {
         rootNode ?: return false
 
+        // QuickStep 런처 최근 앱 뷰 ID
         val targetIds = listOf(
             "com.android.launcher3:id/overview_panel",
-            "com.google.android.apps.nexuslauncher:id/overview_panel",
-            "com.sec.android.app.launcher:id/overview_panel",
-            "com.lge.launcher3:id/overview_panel"
+            "com.android.launcher3:id/overview_actions_view"
         )
 
         for (id in targetIds) {

@@ -31,6 +31,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "NavBarAccessibility"
+        private const val HOME_ENTRY_STABILIZE_MS = 400L  // 홈 진입 후 안정화 시간
 
         @Volatile
         var instance: NavBarAccessibilityService? = null
@@ -59,6 +60,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isImeVisible: Boolean = false
     private var lastImeEventAt: Long = 0
     private var lastNonLauncherEventAt: Long = 0
+    private var lastHomeEntryAt: Long = 0  // 홈 진입 안정화용
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
@@ -319,11 +321,15 @@ class NavBarAccessibilityService : AccessibilityService() {
         val hasNonLauncherForeground =
             currentPackage.isNotEmpty() && !windowAnalyzer.isLauncherPackage(currentPackage)
         val suppressHomeForRecentApp = shouldSuppressHomeForRecentApp()
-        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) &&
+        val isLauncherPackage = windowAnalyzer.isLauncherPackage(packageName)
+        // 앱→홈 전환: 현재 홈이 아닌 상태에서 런처가 오면 즉시 홈 상태 설정
+        // 홈→앱 전환: suppressHomeForRecentApp 적용 (앱 로딩 화면에서 커스텀 배경 억제)
+        val shouldSuppressHome = suppressHomeForRecentApp && isOnHomeScreen
+        val newOnHomeScreen = isLauncherPackage &&
             !isRecents &&
             !hasVisibleNonLauncherApp &&
             !hasNonLauncherForeground &&
-            !suppressHomeForRecentApp
+            !shouldSuppressHome
         updateHomeScreenState(newOnHomeScreen, "event")
 
         if (packageChanged) {
@@ -343,11 +349,27 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun updateHomeScreenState(isHome: Boolean, source: String) {
-        if (isOnHomeScreen != isHome) {
-            isOnHomeScreen = isHome
-            Log.d(TAG, "Home screen state ($source): $isOnHomeScreen")
-            overlay?.setHomeScreenState(isOnHomeScreen)
+        if (isOnHomeScreen == isHome) return
+
+        val now = SystemClock.elapsedRealtime()
+
+        // 홈 진입 안정화: 홈에 진입한 직후 false 이벤트 무시
+        if (!isHome && isOnHomeScreen) {
+            val elapsed = now - lastHomeEntryAt
+            if (elapsed < HOME_ENTRY_STABILIZE_MS) {
+                Log.d(TAG, "Home exit ignored (stabilizing, ${elapsed}ms < ${HOME_ENTRY_STABILIZE_MS}ms)")
+                return
+            }
         }
+
+        // 홈 진입 시 타임스탬프 기록
+        if (isHome && !isOnHomeScreen) {
+            lastHomeEntryAt = now
+        }
+
+        isOnHomeScreen = isHome
+        Log.d(TAG, "Home screen state ($source): $isOnHomeScreen")
+        overlay?.setHomeScreenState(isOnHomeScreen)
     }
 
     private fun markNonLauncherEvent(packageName: String) {
@@ -489,11 +511,14 @@ class NavBarAccessibilityService : AccessibilityService() {
         val hasNonLauncherForeground =
             currentPackage.isNotEmpty() && !windowAnalyzer.isLauncherPackage(currentPackage)
         val suppressHomeForRecentApp = shouldSuppressHomeForRecentApp()
-        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) &&
+        val isLauncherPackage = windowAnalyzer.isLauncherPackage(packageName)
+        // 앱→홈 전환: 현재 홈이 아닌 상태에서 런처가 오면 즉시 홈 상태 설정
+        val shouldSuppressHome = suppressHomeForRecentApp && isOnHomeScreen
+        val newOnHomeScreen = isLauncherPackage &&
             !recentsVisible &&
             !hasVisibleNonLauncherApp &&
             !hasNonLauncherForeground &&
-            !suppressHomeForRecentApp
+            !shouldSuppressHome
         updateHomeScreenState(newOnHomeScreen, "windows")
 
         if (isOnHomeScreen) {

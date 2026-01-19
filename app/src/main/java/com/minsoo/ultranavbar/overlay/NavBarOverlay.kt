@@ -849,8 +849,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 clearHomeExitSuppression()
                 Log.d(TAG, "Home screen state: true")
 
-                cancelAnimationsAndRestoreState()
-                syncOrientationAndBackground()
+                // 숨김 애니메이션만 취소하고, 배경은 페이드로 전환
+                cancelHideAnimationOnly()
+                applyHomeEntryBackground()
                 return
             }
 
@@ -914,6 +915,54 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         homeExitSuppressUntil = 0L
         homeExitSuppressTask?.let { handler.removeCallbacks(it) }
         homeExitSuppressTask = null
+    }
+
+    /**
+     * 홈 진입 시 숨김 애니메이션만 취소 (배경 전환은 유지)
+     */
+    private fun cancelHideAnimationOnly() {
+        if (isUnlockPending || isUnlockFadeRunning || isUnlockFadeSuppressed) {
+            return
+        }
+
+        // 숨김 애니메이션 취소
+        navBarView?.let { bar ->
+            bar.clearAnimation()
+            bar.animate().cancel()
+        }
+        cancelCurrentAnimator()
+
+        val shouldRestoreToShowing = hideAnimationInProgress || isShowing
+        hideAnimationInProgress = false
+
+        if (shouldRestoreToShowing) {
+            navBarView?.let { bar ->
+                bar.alpha = 1f
+                bar.visibility = View.VISIBLE
+                bar.translationY = 0f
+            }
+            backgroundView?.alpha = 1f
+            backgroundView?.visibility = View.VISIBLE
+            hotspotView?.visibility = View.GONE
+            updateWindowHeight(getSystemNavigationBarHeightPx())
+            isShowing = true
+        }
+    }
+
+    /**
+     * 홈 진입 시 배경을 페이드 효과로 전환
+     */
+    private fun applyHomeEntryBackground() {
+        val bar = navBarView ?: return
+        syncOrientationIfNeeded("home_entry")
+
+        val shouldUseCustom = shouldUseCustomBackground()
+        backgroundManager.applyBackground(bar, shouldUseCustom, forceUpdate = true, animate = true)
+
+        if (!shouldUseCustom) {
+            backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+        }
+        Log.d(TAG, "Home entry background applied with fade (custom=$shouldUseCustom)")
     }
 
     /**
