@@ -10,7 +10,17 @@
       "Bash(adb pull:*)",
       "Bash(cmd /c \"adb shell uiautomator dump //data//local//tmp//uidump_home.xml\")",
       "Bash(adb exec-out:*)",
-      "Bash(timeout 5 adb logcat:*)"
+      "Bash(timeout 5 adb logcat:*)",
+      "Bash(./gradlew assembleDebug:*)",
+      "Bash(gradlew.bat assembleDebug:*)",
+      "Bash(cmd.exe /c \"gradlew.bat assembleDebug\")",
+      "Bash(cmd.exe /c \"cd /d C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar && gradlew.bat assembleDebug\")",
+      "Bash(cmd.exe //c \"gradlew.bat assembleDebug --no-daemon 2>&1\")",
+      "Bash(java -jar gradle/wrapper/gradle-wrapper.jar assembleDebug:*)",
+      "Bash(bash gradlew assembleDebug)",
+      "Bash(java -version:*)",
+      "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/java\" -version)",
+      "Bash(export JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\")"
     ]
   }
 }

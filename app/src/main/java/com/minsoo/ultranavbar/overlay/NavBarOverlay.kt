@@ -849,6 +849,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 clearHomeExitSuppression()
                 Log.d(TAG, "Home screen state: true")
 
+                // 언락 페이드 중에는 배경 전환하지 않음 (언락 완료 후 자동 업데이트)
+                if (isUnlockPending || isUnlockFadeRunning || isUnlockFadeSuppressed) {
+                    Log.d(TAG, "Home entry during unlock fade - skipping background transition")
+                    return
+                }
+
                 // 숨김 애니메이션만 취소하고, 배경은 페이드로 전환
                 cancelHideAnimationOnly()
                 applyHomeEntryBackground()
@@ -903,6 +909,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     return
                 }
                 if (isOnHomeScreen) {
+                    // 이미 기본 배경으로 전환된 경우 복원하지 않음 (앱 실행 중 런처 잠깐 감지 케이스)
+                    if (!backgroundManager.wasLastAppliedCustom()) {
+                        Log.d(TAG, "Skipping custom background restoration (already at default)")
+                        return
+                    }
                     applyBackgroundImmediate(shouldUseCustomBackground())
                 }
             }

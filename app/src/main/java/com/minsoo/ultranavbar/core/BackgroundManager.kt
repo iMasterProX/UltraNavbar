@@ -62,6 +62,11 @@ class BackgroundManager(
     private var transitionTargetUseCustom: Boolean = false
     private var transitionEndAt: Long = 0L
 
+    // 트랜지션 추적용 ID (충돌 방지)
+    private var transitionId: Int = 0
+    private var pendingTransitionCallback: Runnable? = null
+    private var transitionTargetView: View? = null
+
     // 버튼 색상 애니메이터
     private var buttonColorAnimator: ValueAnimator? = null
 
@@ -386,6 +391,18 @@ class BackgroundManager(
         forceUpdate: Boolean = false,
         animate: Boolean = true
     ) {
+        // 연속 앱 전환 시 중복 페이드 방지 (로딩화면 → 실제 앱)
+        // 이미 같은 목표로 설정되어 있고, 트랜지션 진행 중이거나 최근 완료된 경우 스킵
+        if (!forceUpdate && lastAppliedUseCustom == useCustom) {
+            val now = SystemClock.elapsedRealtime()
+            val recentlyCompleted = now < transitionEndAt + Constants.Timing.TRANSITION_DEDUP_GRACE_MS
+            if (isTransitionInProgress() || recentlyCompleted) {
+                Log.d(TAG, "Skipping redundant transition (already useCustom=$useCustom, " +
+                        "inProgress=${isTransitionInProgress()}, recentlyCompleted=$recentlyCompleted)")
+                return
+            }
+        }
+
         val defaultBgColor = getDefaultBackgroundColor()
         val targetDrawable: Drawable
         val targetButtonColor: Int
@@ -411,7 +428,10 @@ class BackgroundManager(
         // 2. 버튼 색상 업데이트 (애니메이션 포함)
         updateButtonColor(targetButtonColor, animate = animate)
 
-        // 3. 배경 전환 처리
+        // 3. 진행 중인 트랜지션 콜백 취소 (충돌 방지)
+        cancelPendingTransitionCallback()
+
+        // 4. 배경 전환 처리
         val currentBg = targetView.background
 
         if (!animate) {
@@ -453,28 +473,50 @@ class BackgroundManager(
         val transition = TransitionDrawable(arrayOf(startDrawable, targetDrawable))
         transition.isCrossFadeEnabled = true // 크로스페이드 활성화
         targetView.background = transition
-        
+
         // 하드웨어 가속 적용 (애니메이션 동안만)
         targetView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        
+
         transition.startTransition(Constants.Timing.BG_TRANSITION_DURATION_MS.toInt())
         transitionSourceUseCustom = previousUseCustom
         transitionTargetUseCustom = useCustom
         transitionEndAt = SystemClock.elapsedRealtime() + Constants.Timing.BG_TRANSITION_DURATION_MS
 
+        // 트랜지션 ID 증가 (콜백에서 유효성 체크용)
+        val currentTransitionId = ++transitionId
+        transitionTargetView = targetView
+
         // 애니메이션 종료 후 레이어 타입 복원 등을 위한 지연 실행
-        // (TransitionDrawable은 리스너가 없으므로 Handler 사용)
-        targetView.postDelayed({
+        val callback = Runnable {
+            // 이 콜백이 현재 진행 중인 트랜지션에 해당하는지 확인
+            if (currentTransitionId != transitionId) {
+                Log.d(TAG, "Transition callback skipped (stale id: $currentTransitionId, current: $transitionId)")
+                return@Runnable
+            }
+            pendingTransitionCallback = null
             targetView.setLayerType(View.LAYER_TYPE_NONE, null)
             // 최종 상태로 고정 (메모리 절약 및 구조 단순화)
-            // 단, 애니메이션 도중 다른 배경이 적용되었을 수 있으므로 체크 필요
             if (targetView.background === transition) {
                 targetView.background = targetDrawable
                 listener.onBackgroundApplied(targetDrawable)
+                Log.d(TAG, "Transition completed: ${targetDrawable.javaClass.simpleName}")
             }
-        }, Constants.Timing.BG_TRANSITION_DURATION_MS)
+        }
+        pendingTransitionCallback = callback
+        targetView.postDelayed(callback, Constants.Timing.BG_TRANSITION_DURATION_MS)
 
-        Log.d(TAG, "Background transition started: ${startDrawable.javaClass.simpleName} -> ${targetDrawable.javaClass.simpleName}")
+        Log.d(TAG, "Background transition started (id=$currentTransitionId): ${startDrawable.javaClass.simpleName} -> ${targetDrawable.javaClass.simpleName}")
+    }
+
+    /**
+     * 진행 중인 트랜지션 콜백 취소
+     */
+    private fun cancelPendingTransitionCallback() {
+        pendingTransitionCallback?.let { callback ->
+            transitionTargetView?.removeCallbacks(callback)
+            Log.d(TAG, "Pending transition callback cancelled")
+        }
+        pendingTransitionCallback = null
     }
 
     fun resolveUseCustomForUnlock(currentUseCustom: Boolean): Boolean {
@@ -505,6 +547,8 @@ class BackgroundManager(
      */
     fun cancelBackgroundTransition() {
         buttonColorAnimator?.cancel()
+        cancelPendingTransitionCallback()
+        transitionId++ // 기존 콜백 무효화
         transitionEndAt = 0L
     }
 
@@ -516,5 +560,7 @@ class BackgroundManager(
     fun cleanup() {
         recycleBitmaps()
         buttonColorAnimator?.cancel()
+        cancelPendingTransitionCallback()
+        transitionTargetView = null
     }
 }
