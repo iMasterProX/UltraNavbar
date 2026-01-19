@@ -687,7 +687,19 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     fun captureUnlockBackgroundForLock() {
-        unlockUseCustomOverride = backgroundManager.resolveUseCustomForUnlock(shouldUseCustomBackground())
+        // 홈 화면이고 방해 요소가 없을 때만 커스텀 배경으로 캡처
+        val capturedCustom = if (isOnHomeScreen &&
+            !isRecentsVisible &&
+            !isAppDrawerOpen &&
+            !isPanelOpen() &&
+            !isImeVisible) {
+            true
+        } else {
+            // 방해 요소가 있으면 현재 적용된 상태 유지 (기존 override 값 유지)
+            unlockUseCustomOverride ?: false
+        }
+        unlockUseCustomOverride = capturedCustom
+        Log.d(TAG, "Captured unlock background: custom=$capturedCustom (home=$isOnHomeScreen, panel=${isPanelOpen()})")
     }
 
     fun hide(animate: Boolean = true, showHotspot: Boolean = true) {
@@ -1336,10 +1348,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         isUnlockPending = true
         isUnlockFadeRunning = false
         isUnlockFadeSuppressed = true
-        if (unlockUseCustomOverride == null) {
-            unlockUseCustomOverride =
-                backgroundManager.resolveUseCustomForUnlock(shouldUseCustomBackground())
+
+        // 언락 시점의 실시간 상태로 판단 (override 무시)
+        // 홈 화면이면 커스텀 배경 사용 (알림 패널은 언락 시 이미 닫혀있음)
+        val useCustomForUnlock = if (isOnHomeScreen) {
+            true
+        } else {
+            unlockUseCustomOverride ?: false
         }
+        unlockUseCustomOverride = useCustomForUnlock
 
         cancelCurrentAnimator()
         navBarView?.let { bar ->
@@ -1347,16 +1364,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             bar.animate().cancel()
         }
         hideAnimationInProgress = false
-        
+
         // 대기 중일 때는 터치 입력을 통과시켜 잠금 해제 제스처 등을 방해하지 않도록 함
         updateTouchableState(false)
 
         // 먼저 배경을 적용 (커스텀 배경이 준비되도록)
         navBarView?.let { bar ->
-            val shouldUseCustom = resolveUnlockUseCustom()
             backgroundManager.applyBackground(
                 bar,
-                shouldUseCustom,
+                useCustomForUnlock,
                 forceUpdate = true,
                 animate = false
             )
@@ -1372,7 +1388,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         hotspotView?.visibility = View.GONE
         updateWindowHeight(getSystemNavigationBarHeightPx())
 
-        Log.d(TAG, "Prepared for unlock fade animation (window pre-expanded, custom background applied)")
+        Log.d(TAG, "Prepared for unlock fade (home=$isOnHomeScreen, useCustom=$useCustomForUnlock)")
     }
     fun markNextShowInstant() { /* no-op */ }
 }

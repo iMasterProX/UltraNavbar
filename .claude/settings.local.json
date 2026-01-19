@@ -20,7 +20,8 @@
       "Bash(bash gradlew assembleDebug)",
       "Bash(java -version:*)",
       "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/java\" -version)",
-      "Bash(export JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\")"
+      "Bash(export JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\")",
+      "Bash(cmd.exe /c \"adb shell uiautomator dump && adb pull /sdcard/window_dump.xml C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar\\\\uidump_nova_home.xml\":*)"
     ]
   }
 }

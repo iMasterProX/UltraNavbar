@@ -82,8 +82,8 @@ class WindowAnalyzer(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load launcher packages, using fallback", e)
-            // QuickStep 런처 폴백
-            launcherPackages = setOf("com.android.launcher3")
+            // QuickStep 및 Nova Launcher 폴백
+            launcherPackages = setOf("com.android.launcher3", "com.teslacoilsw.launcher")
         }
     }
 
@@ -214,10 +214,14 @@ class WindowAnalyzer(
     fun isAppDrawerOpen(rootNode: android.view.accessibility.AccessibilityNodeInfo?): Boolean {
         rootNode ?: return false
 
-        // QuickStep 런처 앱 서랍 뷰 ID
+        // QuickStep 런처 및 Nova Launcher 앱 서랍 뷰 ID
         val targetIds = listOf(
+            // QuickStep
             "com.android.launcher3:id/apps_view",
-            "com.android.launcher3:id/apps_list_view"
+            "com.android.launcher3:id/apps_list_view",
+            // Nova Launcher
+            "com.teslacoilsw.launcher:id/apps_view",
+            "com.teslacoilsw.launcher:id/apps_list_view"
         )
 
         for (id in targetIds) {
