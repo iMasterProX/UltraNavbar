@@ -28,11 +28,13 @@ object Constants {
         const val GESTURE_AUTO_HIDE_MS = 3000L
         const val DARK_MODE_DEBOUNCE_MS = 1000L
         const val STATE_CHECK_DELAY_MS = 50L
-        const val UNLOCK_FADE_WINDOW_MS = 1500L
         const val HOME_STATE_DEBOUNCE_MS = 350L  // 증가: 빠른 상태 토글 방지 (200 -> 350)
         const val RECENTS_STATE_DEBOUNCE_MS = 150L  // 증가: 빠른 상태 토글 방지 (100 -> 150)
+        const val PANEL_CLOSE_DEBOUNCE_MS = 150L
         const val FULLSCREEN_POLLING_MS = 300L
         const val IME_VISIBILITY_DELAY_MS = 500L
+        const val UNLOCK_FADE_DELAY_MS = 400L
+        const val TRANSITION_DEDUP_GRACE_MS = 500L  // 로딩화면→앱 전환 시 중복 페이드 방지 유예 시간
     }
 
     // ===== 비율 및 임계값 =====
@@ -61,6 +63,7 @@ object Constants {
     object Action {
         const val SETTINGS_CHANGED = "com.minsoo.ultranavbar.SETTINGS_CHANGED"
         const val RELOAD_BACKGROUND = "com.minsoo.ultranavbar.RELOAD_BACKGROUND"
+        const val UPDATE_BUTTON_COLORS = "com.minsoo.ultranavbar.UPDATE_BUTTON_COLORS"
     }
 }
 

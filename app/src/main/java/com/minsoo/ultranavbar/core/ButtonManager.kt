@@ -13,6 +13,9 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import com.minsoo.ultranavbar.model.NavAction
+import android.animation.ValueAnimator
+import android.animation.ArgbEvaluator
+import kotlin.math.abs
 
 /**
  * 네비게이션 버튼 생성 및 스타일 관리
@@ -42,6 +45,12 @@ class ButtonManager(
 
     // 현재 버튼 색상 (-1은 초기화되지 않음을 의미)
     private var currentColor: Int = -1
+    
+    // 색상 애니메이터
+    private var colorAnimator: ValueAnimator? = null
+
+    // 알림 깜빡임 애니메이터
+    private var notificationBlinkAnimator: ValueAnimator? = null
 
     /**
      * 버튼 액션 리스너
@@ -150,6 +159,7 @@ class ButtonManager(
         Log.d(TAG, "All button colors updated to ${getColorName(color)} (force=$force, buttons=${_allButtons.size})")
     }
 
+
     private fun getColorName(color: Int): String {
         return when (color) {
             Color.WHITE -> "WHITE"
@@ -168,10 +178,17 @@ class ButtonManager(
         val rotation = if (isOpen) Constants.Rotation.PANEL_OPEN else Constants.Rotation.PANEL_CLOSED
 
         _panelButton?.let { button ->
+            if (abs(button.rotation - rotation) < 0.5f) {
+                button.animate().cancel()
+                button.rotation = rotation
+                return
+            }
             if (animate) {
+                button.animate().cancel()
                 button.animate()
                     .rotation(rotation)
                     .setDuration(Constants.Timing.ANIMATION_DURATION_MS)
+                    .withLayer()
                     .start()
             } else {
                 button.rotation = rotation
@@ -204,11 +221,42 @@ class ButtonManager(
                 button.animate()
                     .rotation(targetRotation)
                     .setDuration(Constants.Timing.ANIMATION_DURATION_MS)
+                    .withLayer()
                     .start()
             } else {
                 button.rotation = targetRotation
             }
         }
+    }
+
+    // ===== 알림 깜빡임 =====
+
+    /**
+     * 알림 깜빡임 시작
+     */
+    fun startNotificationBlink() {
+        stopNotificationBlink()
+        val button = _panelButton ?: return
+
+        notificationBlinkAnimator = ValueAnimator.ofFloat(1.0f, 0.4f).apply {
+            duration = 800L
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            addUpdateListener { animator ->
+                button.alpha = animator.animatedValue as Float
+            }
+            start()
+        }
+        Log.d(TAG, "Notification blink started")
+    }
+
+    /**
+     * 알림 깜빡임 중지
+     */
+    fun stopNotificationBlink() {
+        notificationBlinkAnimator?.cancel()
+        notificationBlinkAnimator = null
+        _panelButton?.alpha = 1f
     }
 
     // ===== 정리 =====
@@ -217,6 +265,8 @@ class ButtonManager(
      * 모든 버튼 참조 정리
      */
     fun clear() {
+        stopNotificationBlink()
+        colorAnimator?.cancel()
         _allButtons.clear()
         _panelButton = null
         _backButton = null

@@ -7,12 +7,18 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Point
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.TransitionDrawable
+import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
+import android.view.Surface
 import android.view.View
+import android.view.WindowManager
 import android.view.animation.PathInterpolator
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.util.ImageCropUtil
@@ -22,7 +28,7 @@ import com.minsoo.ultranavbar.util.ImageCropUtil
  * - 배경 비트맵 로딩 (가로/세로)
  * - 다크 모드에 따른 배경색 결정
  * - 이미지 밝기 기반 버튼 색상 계산
- * - 배경 전환 애니메이션
+ * - 배경 전환 애니메이션 (TransitionDrawable 사용)
  */
 class BackgroundManager(
     private val context: Context,
@@ -32,11 +38,11 @@ class BackgroundManager(
         private const val TAG = "BackgroundManager"
     }
 
-    // Android 12 표준 애니메이션 인터폴레이터
-    private val android12Interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
-    private var bgAnimator: ValueAnimator? = null
-
     private val settings: SettingsManager = SettingsManager.getInstance(context)
+    private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+    // Android 12 표준 애니메이션 인터폴레이터 (버튼 색상 애니메이션용)
+    private val android12Interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
 
     // 배경 비트맵 캐시
     private var landscapeBitmap: Bitmap? = null
@@ -50,6 +56,19 @@ class BackgroundManager(
     val currentButtonColor: Int get() = _currentButtonColor
 
     private var currentOrientation: Int = Configuration.ORIENTATION_UNDEFINED
+
+    private var lastAppliedUseCustom: Boolean = false
+    private var transitionSourceUseCustom: Boolean = false
+    private var transitionTargetUseCustom: Boolean = false
+    private var transitionEndAt: Long = 0L
+
+    // 트랜지션 추적용 ID (충돌 방지)
+    private var transitionId: Int = 0
+    private var pendingTransitionCallback: Runnable? = null
+    private var transitionTargetView: View? = null
+
+    // 버튼 색상 애니메이터
+    private var buttonColorAnimator: ValueAnimator? = null
 
     /**
      * 배경 변경 리스너
@@ -129,7 +148,6 @@ class BackgroundManager(
     fun getCurrentBitmap(): Bitmap? {
         val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
         val bitmap = if (isLandscape) landscapeBitmap else portraitBitmap
-        Log.d(TAG, "getCurrentBitmap: orientation=${getOrientationName(currentOrientation)}, returning ${if (isLandscape) "landscape" else "portrait"} bitmap (hash=${bitmap?.hashCode()})")
         return bitmap
     }
 
@@ -159,20 +177,46 @@ class BackgroundManager(
      * @return 동기화가 필요했으면 true
      */
     fun syncOrientationWithSystem(): Boolean {
-        val actualOrientation = context.resources.configuration.orientation
+        val actualOrientation = getActualOrientation()
         if (currentOrientation != actualOrientation) {
             Log.w(TAG, "Orientation mismatch! cached=$currentOrientation, actual=$actualOrientation - resyncing")
             currentOrientation = actualOrientation
-            // 방향이 바뀌었으므로 비트맵 리로드 필요 없음 (이미 로드되어 있음)
             return true
         }
         return false
     }
 
-    /**
-     * 방향 강제 동기화 (조건 없이 지정된 방향으로 설정)
-     * 전체화면 모드 복귀 시 사용
-     */
+    private fun getActualOrientation(): Int {
+        @Suppress("DEPRECATION")
+        val display = windowManager.defaultDisplay
+            ?: return context.resources.configuration.orientation
+
+        val rotation = display.rotation
+        val size = Point()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            size.x = bounds.width()
+            size.y = bounds.height()
+        } else {
+            @Suppress("DEPRECATION")
+            display.getRealSize(size)
+        }
+
+        val naturalPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+            size.x < size.y
+        } else {
+            size.x > size.y
+        }
+
+        val isPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+            naturalPortrait
+        } else {
+            !naturalPortrait
+        }
+
+        return if (isPortrait) Configuration.ORIENTATION_PORTRAIT else Configuration.ORIENTATION_LANDSCAPE
+    }
+
     fun forceOrientationSync(orientation: Int) {
         Log.d(TAG, "Force orientation sync: ${getOrientationName(currentOrientation)} -> ${getOrientationName(orientation)}")
         currentOrientation = orientation
@@ -200,21 +244,12 @@ class BackgroundManager(
         val newDarkMode = isSystemDarkMode()
         if (_isDarkMode != newDarkMode) {
             _isDarkMode = newDarkMode
-            val newButtonColor = getDefaultButtonColor()
-            _currentButtonColor = newButtonColor
-            // 다크 모드 전환 시 버튼 색상 즉시 업데이트
-            listener.onButtonColorChanged(newButtonColor)
-            Log.d(TAG, "Dark mode changed: $_isDarkMode, button color: ${getColorName(newButtonColor)}")
+            Log.d(TAG, "Dark mode changed: $_isDarkMode")
             return true
         }
         return false
     }
 
-    // ===== 색상 계산 =====
-
-    /**
-     * 다크 모드에 따른 기본 배경 색상
-     */
     fun getDefaultBackgroundColor(): Int {
         return if (_isDarkMode) Color.BLACK else Color.WHITE
     }
@@ -263,15 +298,59 @@ class BackgroundManager(
         return if (avgLuminance > Constants.Threshold.BRIGHTNESS_THRESHOLD) Color.BLACK else Color.WHITE
     }
 
-    /**
-     * 버튼 색상 업데이트
-     */
-    fun updateButtonColor(color: Int) {
-        if (_currentButtonColor != color) {
-            _currentButtonColor = color
-            listener.onButtonColorChanged(color)
-            Log.d(TAG, "Button color updated: ${getColorName(color)}")
+    private fun resolveHomeBackgroundButtonColor(bitmap: Bitmap?, defaultBgColor: Int): Int {
+        return when (settings.homeBgButtonColorMode) {
+            SettingsManager.HomeBgButtonColorMode.AUTO -> {
+                if (bitmap != null) {
+                    calculateButtonColorForBitmap(bitmap)
+                } else {
+                    if (isColorLight(defaultBgColor)) Color.BLACK else Color.WHITE
+                }
+            }
+            SettingsManager.HomeBgButtonColorMode.WHITE -> Color.WHITE
+            SettingsManager.HomeBgButtonColorMode.BLACK -> Color.BLACK
         }
+    }
+
+    private fun isColorLight(color: Int): Boolean {
+        val r = Color.red(color)
+        val g = Color.green(color)
+        val b = Color.blue(color)
+        val luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return luminance > Constants.Threshold.BRIGHTNESS_THRESHOLD
+    }
+
+    /**
+     * 버튼 색상 업데이트 (애니메이션 지원)
+     */
+    fun updateButtonColor(targetColor: Int, animate: Boolean = true) {
+        if (_currentButtonColor == targetColor) return
+
+        if (!animate) {
+            buttonColorAnimator?.cancel()
+            _currentButtonColor = targetColor
+            listener.onButtonColorChanged(targetColor)
+            return
+        }
+
+        // 이미 같은 색상으로 애니메이션 중이면 스킵
+        if (buttonColorAnimator?.isRunning == true && _currentButtonColor == targetColor) return
+
+        buttonColorAnimator?.cancel()
+        
+        val startColor = _currentButtonColor
+        buttonColorAnimator = ValueAnimator.ofArgb(startColor, targetColor).apply {
+            duration = Constants.Timing.BG_TRANSITION_DURATION_MS // 배경 전환 시간과 맞춤
+            interpolator = android12Interpolator
+            addUpdateListener { animator ->
+                val color = animator.animatedValue as Int
+                _currentButtonColor = color
+                listener.onButtonColorChanged(color)
+            }
+            start()
+        }
+        
+        Log.d(TAG, "Button color transition: ${getColorName(startColor)} -> ${getColorName(targetColor)}")
     }
 
     private fun getColorName(color: Int): String {
@@ -287,139 +366,190 @@ class BackgroundManager(
 
     /**
      * 커스텀 이미지 배경 사용 여부 판단
+     * 모든 방해 요소(최근 앱, 앱 서랍, 알림 패널, 키보드)가 없을 때만 홈 배경 표시
      */
-    fun shouldUseCustomBackground(isOnHomeScreen: Boolean, isRecentsVisible: Boolean): Boolean {
-        return isOnHomeScreen && settings.homeBgEnabled && !isRecentsVisible
+    fun shouldUseCustomBackground(
+        isOnHomeScreen: Boolean,
+        isRecentsVisible: Boolean,
+        isAppDrawerOpen: Boolean,
+        isPanelOpen: Boolean,
+        isImeVisible: Boolean
+    ): Boolean {
+        // 홈 화면에 있고, 홈 배경 설정이 켜져 있으며, 방해 요소가 없어야 함
+        return isOnHomeScreen && settings.homeBgEnabled &&
+                !isRecentsVisible && !isAppDrawerOpen && !isPanelOpen && !isImeVisible
     }
 
     /**
-     * 배경을 뷰에 적용
+     * 배경을 뷰에 적용 (TransitionDrawable을 이용한 크로스페이드)
      * @param targetView 배경을 적용할 뷰
      * @param useCustom 커스텀 배경 사용 여부
-     * @param forceUpdate 강제 업데이트 여부
      */
-    fun applyBackground(targetView: View, useCustom: Boolean, forceUpdate: Boolean = false) {
-        val currentBg = targetView.background
-        val defaultBgColor = getDefaultBackgroundColor()
-
-        if (forceUpdate) {
-            cancelBackgroundTransition()
-        }
-
-        if (useCustom) {
-            applyCustomBackground(targetView, currentBg, defaultBgColor, forceUpdate)
-        } else {
-            applyDefaultBackground(targetView, currentBg, defaultBgColor, forceUpdate)
-        }
-    }
-
-    private fun applyCustomBackground(
+    fun applyBackground(
         targetView: View,
-        currentBg: Drawable?,
-        defaultBgColor: Int,
-        forceUpdate: Boolean
+        useCustom: Boolean,
+        forceUpdate: Boolean = false,
+        animate: Boolean = true
     ) {
-        val targetBitmap = getCurrentBitmap()
+        // 연속 앱 전환 시 중복 페이드 방지 (로딩화면 → 실제 앱)
+        // 이미 같은 목표로 설정되어 있고, 트랜지션 진행 중이거나 최근 완료된 경우 스킵
+        if (!forceUpdate && lastAppliedUseCustom == useCustom) {
+            val now = SystemClock.elapsedRealtime()
+            val recentlyCompleted = now < transitionEndAt + Constants.Timing.TRANSITION_DEDUP_GRACE_MS
+            if (isTransitionInProgress() || recentlyCompleted) {
+                Log.d(TAG, "Skipping redundant transition (already useCustom=$useCustom, " +
+                        "inProgress=${isTransitionInProgress()}, recentlyCompleted=$recentlyCompleted)")
+                return
+            }
+        }
 
-        if (targetBitmap != null) {
-            val currentBitmap = (currentBg as? BitmapDrawable)?.bitmap
-            if (forceUpdate || currentBitmap !== targetBitmap) {
-                Log.d(TAG, "Applying custom background image")
+        val defaultBgColor = getDefaultBackgroundColor()
+        val targetDrawable: Drawable
+        val targetButtonColor: Int
+        val previousUseCustom = lastAppliedUseCustom
+        lastAppliedUseCustom = useCustom
 
-                val bgDrawable = BitmapDrawable(context.resources, targetBitmap).apply {
+        // 1. 목표 배경 및 버튼 색상 결정
+        if (useCustom) {
+            val bitmap = getCurrentBitmap()
+            if (bitmap != null) {
+                targetDrawable = BitmapDrawable(context.resources, bitmap).apply {
                     gravity = Gravity.FILL_HORIZONTAL or Gravity.CENTER_VERTICAL
                 }
-
-                // ??? ??? ?? ?? ?? ??
-                val buttonColor = calculateButtonColorForBitmap(targetBitmap)
-                updateButtonColor(buttonColor)
-
-                // ?? ???? ???? ?? ? ??? ?
-                val needsFade = !forceUpdate && (currentBg is ColorDrawable || currentBg?.alpha == 0)
-                if (needsFade) {
-                    bgDrawable.alpha = 0
-                    targetView.background = bgDrawable
-                    animateBackgroundAlpha(bgDrawable, 0, 255)
-                } else {
-                    bgDrawable.alpha = 255
-                    targetView.background = bgDrawable
-                }
-
-                listener.onBackgroundApplied(bgDrawable)
+            } else {
+                targetDrawable = ColorDrawable(defaultBgColor)
             }
+            targetButtonColor = resolveHomeBackgroundButtonColor(bitmap, defaultBgColor)
         } else {
-            // ???? ??? ?? ?? ??
-            if (forceUpdate || (currentBg as? ColorDrawable)?.color != defaultBgColor) {
-                Log.d(TAG, "Fallback to default background (bitmap not loaded)")
-                targetView.background = ColorDrawable(defaultBgColor)
-                updateButtonColor(getDefaultButtonColor())
+            targetDrawable = ColorDrawable(defaultBgColor)
+            targetButtonColor = getDefaultButtonColor()
+        }
+
+        // 2. 버튼 색상 업데이트 (애니메이션 포함)
+        updateButtonColor(targetButtonColor, animate = animate)
+
+        // 3. 진행 중인 트랜지션 콜백 취소 (충돌 방지)
+        cancelPendingTransitionCallback()
+
+        // 4. 배경 전환 처리
+        val currentBg = targetView.background
+
+        if (!animate) {
+            transitionEndAt = 0L
+            targetView.background = targetDrawable
+            targetView.setLayerType(View.LAYER_TYPE_NONE, null)
+            listener.onBackgroundApplied(targetDrawable)
+            return
+        }
+
+        // 첫 실행이거나 배경이 없으면 즉시 적용
+        if (currentBg == null) {
+            transitionEndAt = 0L
+            targetView.background = targetDrawable
+            listener.onBackgroundApplied(targetDrawable)
+            return
+        }
+
+        // 최적화: 완전히 동일한 객체/색상이고 강제 업데이트가 아니면 스킵
+        if (!forceUpdate) {
+            if (currentBg is ColorDrawable && targetDrawable is ColorDrawable && currentBg.color == targetDrawable.color) {
+                return
+            }
+            if (currentBg is BitmapDrawable && targetDrawable is BitmapDrawable && currentBg.bitmap === targetDrawable.bitmap) {
+                return
             }
         }
+
+        // 이전 배경의 마지막 상태를 시작점으로 사용
+        val startDrawable = if (currentBg is TransitionDrawable) {
+            // 현재 실행 중인 트랜지션의 마지막 레이어(도착점)를 가져옴
+            currentBg.getDrawable(1)
+        } else {
+            currentBg
+        }
+
+        // TransitionDrawable 생성 및 애니메이션 시작
+        // startDrawable -> targetDrawable
+        val transition = TransitionDrawable(arrayOf(startDrawable, targetDrawable))
+        transition.isCrossFadeEnabled = true // 크로스페이드 활성화
+        targetView.background = transition
+
+        // 하드웨어 가속 적용 (애니메이션 동안만)
+        targetView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+
+        transition.startTransition(Constants.Timing.BG_TRANSITION_DURATION_MS.toInt())
+        transitionSourceUseCustom = previousUseCustom
+        transitionTargetUseCustom = useCustom
+        transitionEndAt = SystemClock.elapsedRealtime() + Constants.Timing.BG_TRANSITION_DURATION_MS
+
+        // 트랜지션 ID 증가 (콜백에서 유효성 체크용)
+        val currentTransitionId = ++transitionId
+        transitionTargetView = targetView
+
+        // 애니메이션 종료 후 레이어 타입 복원 등을 위한 지연 실행
+        val callback = Runnable {
+            // 이 콜백이 현재 진행 중인 트랜지션에 해당하는지 확인
+            if (currentTransitionId != transitionId) {
+                Log.d(TAG, "Transition callback skipped (stale id: $currentTransitionId, current: $transitionId)")
+                return@Runnable
+            }
+            pendingTransitionCallback = null
+            targetView.setLayerType(View.LAYER_TYPE_NONE, null)
+            // 최종 상태로 고정 (메모리 절약 및 구조 단순화)
+            if (targetView.background === transition) {
+                targetView.background = targetDrawable
+                listener.onBackgroundApplied(targetDrawable)
+                Log.d(TAG, "Transition completed: ${targetDrawable.javaClass.simpleName}")
+            }
+        }
+        pendingTransitionCallback = callback
+        targetView.postDelayed(callback, Constants.Timing.BG_TRANSITION_DURATION_MS)
+
+        Log.d(TAG, "Background transition started (id=$currentTransitionId): ${startDrawable.javaClass.simpleName} -> ${targetDrawable.javaClass.simpleName}")
     }
 
-    private fun applyDefaultBackground(targetView: View, currentBg: Drawable?, defaultBgColor: Int, forceUpdate: Boolean) {
-        updateButtonColor(getDefaultButtonColor())
-
-        val isCurrentlyImage = currentBg is BitmapDrawable && currentBg.alpha > 0
-        if (isCurrentlyImage && !forceUpdate) {
-            Log.d(TAG, "Transitioning from image to default background")
-            // ????? ?? ???? ??? ??
-            animateBackgroundAlpha(currentBg as BitmapDrawable, 255, 0) {
-                val defaultDrawable = ColorDrawable(defaultBgColor)
-                targetView.background = defaultDrawable
-                listener.onBackgroundApplied(defaultDrawable)
-            }
-        } else if (forceUpdate || (currentBg as? ColorDrawable)?.color != defaultBgColor) {
-            val defaultDrawable = ColorDrawable(defaultBgColor)
-            targetView.background = defaultDrawable
-            listener.onBackgroundApplied(defaultDrawable)
+    /**
+     * 진행 중인 트랜지션 콜백 취소
+     */
+    private fun cancelPendingTransitionCallback() {
+        pendingTransitionCallback?.let { callback ->
+            transitionTargetView?.removeCallbacks(callback)
+            Log.d(TAG, "Pending transition callback cancelled")
         }
+        pendingTransitionCallback = null
     }
 
-    private fun animateBackgroundAlpha(
-        drawable: BitmapDrawable,
-        fromAlpha: Int,
-        toAlpha: Int,
-        onEnd: (() -> Unit)? = null
-    ) {
-        bgAnimator?.let { animator ->
-            animator.removeAllListeners()
-            animator.cancel()
+    fun resolveUseCustomForUnlock(currentUseCustom: Boolean): Boolean {
+        if (SystemClock.elapsedRealtime() >= transitionEndAt) {
+            return currentUseCustom
         }
-        bgAnimator = ValueAnimator.ofInt(fromAlpha, toAlpha).apply {
-            duration = Constants.Timing.BG_TRANSITION_DURATION_MS
-            interpolator = android12Interpolator
-            addUpdateListener { animation ->
-                drawable.alpha = animation.animatedValue as Int
-            }
-            if (onEnd != null) {
-                addListener(object : AnimatorListenerAdapter() {
-                    private var wasCancelled = false
-
-                    override fun onAnimationCancel(animation: Animator) {
-                        wasCancelled = true
-                    }
-
-                    override fun onAnimationEnd(animation: Animator) {
-                        if (!wasCancelled) {
-                            onEnd()
-                        }
-                    }
-                })
-            }
-            start()
+        if (transitionSourceUseCustom && !transitionTargetUseCustom) {
+            return true
         }
+        return currentUseCustom
+    }
+
+    fun isTransitionInProgress(): Boolean {
+        return SystemClock.elapsedRealtime() < transitionEndAt
+    }
+
+    fun isTransitioningFromCustomToDefault(): Boolean {
+        return isTransitionInProgress() && transitionSourceUseCustom && !transitionTargetUseCustom
+    }
+
+    fun wasLastAppliedCustom(): Boolean {
+        return lastAppliedUseCustom
     }
 
     /**
      * 진행 중인 배경 전환 애니메이션 취소
+     * TransitionDrawable은 별도 취소 없이 뷰에서 교체되면 자동 종료됨.
      */
     fun cancelBackgroundTransition() {
-        bgAnimator?.let { animator ->
-            animator.removeAllListeners()
-            animator.cancel()
-        }
-        bgAnimator = null
+        buttonColorAnimator?.cancel()
+        cancelPendingTransitionCallback()
+        transitionId++ // 기존 콜백 무효화
+        transitionEndAt = 0L
     }
 
     // ===== 정리 =====
@@ -428,8 +558,9 @@ class BackgroundManager(
      * 리소스 정리
      */
     fun cleanup() {
-        bgAnimator?.cancel()
-        bgAnimator = null
         recycleBitmaps()
+        buttonColorAnimator?.cancel()
+        cancelPendingTransitionCallback()
+        transitionTargetView = null
     }
 }

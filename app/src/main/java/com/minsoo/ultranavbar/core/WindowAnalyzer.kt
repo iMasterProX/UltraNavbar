@@ -4,14 +4,18 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.Point
 import android.graphics.Rect
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
-import android.view.WindowInsets
+import android.view.Surface
 import android.view.WindowManager
+import android.view.WindowInsets
 import android.view.accessibility.AccessibilityWindowInfo
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.InputMethodManager
 
 /**
@@ -29,6 +33,18 @@ class WindowAnalyzer(
         private const val TAG = "WindowAnalyzer"
     }
 
+    private data class NavBarInsets(
+        val visible: Boolean,
+        val sizePx: Int
+    )
+
+    data class TopAppWindow(
+        val packageName: String,
+        val className: String,
+        val layer: Int
+    )
+
+
     // 시스템 서비스 참조
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
@@ -39,6 +55,7 @@ class WindowAnalyzer(
 
     // 네비바 높이 (px)
     private var navBarHeightPx: Int = 0
+    private var navBarHeightOrientation: Int = Configuration.ORIENTATION_UNDEFINED
 
     // IME 추적
     private var lastImeEventAt: Long = 0
@@ -55,19 +72,18 @@ class WindowAnalyzer(
             val resolveInfo = context.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
             if (resolveInfo?.activityInfo?.packageName != null) {
                 launcherPackages = setOf(resolveInfo.activityInfo.packageName)
+                Log.d(TAG, "Detected default launcher: ${resolveInfo.activityInfo.packageName}")
             } else {
                 val resolveInfos = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
                 launcherPackages = resolveInfos.map { it.activityInfo.packageName }
                     .filter { it != "com.android.settings" }
                     .toSet()
+                Log.d(TAG, "Detected launcher packages: $launcherPackages")
             }
-            Log.d(TAG, "Detected launcher packages: $launcherPackages")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load launcher packages, using fallback", e)
-            launcherPackages = setOf(
-                "com.android.launcher", "com.android.launcher3", "com.google.android.apps.nexuslauncher",
-                "com.sec.android.app.launcher", "com.lge.launcher3", "com.huawei.android.launcher"
-            )
+            // QuickStep 및 Nova Launcher 폴백
+            launcherPackages = setOf("com.android.launcher3", "com.teslacoilsw.launcher")
         }
     }
 
@@ -75,15 +91,105 @@ class WindowAnalyzer(
      * 네비바 높이 계산
      */
     fun calculateNavBarHeight() {
-        val resId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        val actualOrientation = getActualOrientation()
+        val resName = if (actualOrientation == Configuration.ORIENTATION_LANDSCAPE) {
+            "navigation_bar_height_landscape"
+        } else {
+            "navigation_bar_height"
+        }
+
+        var resId = context.resources.getIdentifier(resName, "dimen", "android")
+        if (resId == 0 && actualOrientation == Configuration.ORIENTATION_LANDSCAPE) {
+            resId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        }
+
         navBarHeightPx = if (resId > 0) {
             context.resources.getDimensionPixelSize(resId)
         } else {
             context.dpToPx(Constants.Dimension.NAV_BUTTON_SIZE_DP)
         }
+        navBarHeightOrientation = actualOrientation
     }
 
-    // ===== 화면 정보 =====
+    private fun ensureNavBarHeight() {
+        val actualOrientation = getActualOrientation()
+        if (navBarHeightPx == 0 || navBarHeightOrientation != actualOrientation) {
+            calculateNavBarHeight()
+        }
+    }
+
+    private fun getActualOrientation(): Int {
+        @Suppress("DEPRECATION")
+        val display = windowManager.defaultDisplay
+            ?: return context.resources.configuration.orientation
+
+        val rotation = display.rotation
+        val size = Point()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            size.x = bounds.width()
+            size.y = bounds.height()
+        } else {
+            @Suppress("DEPRECATION")
+            display.getRealSize(size)
+        }
+
+        val naturalPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+            size.x < size.y
+        } else {
+            size.x > size.y
+        }
+
+        val isPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+            naturalPortrait
+        } else {
+            !naturalPortrait
+        }
+
+        return if (isPortrait) Configuration.ORIENTATION_PORTRAIT else Configuration.ORIENTATION_LANDSCAPE
+    }
+
+    private fun getNavigationBarInsets(): NavBarInsets? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+
+        return try {
+            val metrics = windowManager.currentWindowMetrics
+            val insets = metrics.windowInsets
+            val navInsets = insets.getInsets(WindowInsets.Type.navigationBars())
+            val sizePx = maxOf(navInsets.bottom, navInsets.left, navInsets.right)
+            NavBarInsets(
+                visible = insets.isVisible(WindowInsets.Type.navigationBars()),
+                sizePx = sizePx
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun findTopApplicationWindow(windows: List<AccessibilityWindowInfo>): TopAppWindow? {
+        var best: TopAppWindow? = null
+
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+
+            val root = try { window.root } catch (e: Exception) { null } ?: continue
+            val packageName = root.packageName?.toString() ?: continue
+            val className = root.className?.toString() ?: ""
+            val layer = window.layer
+
+            if (best == null || layer > best.layer) {
+                best = TopAppWindow(packageName, className, layer)
+            }
+        }
+
+        return best
+    }
+
+    fun getTopApplicationWindow(windows: List<AccessibilityWindowInfo>): TopAppWindow? {
+        return findTopApplicationWindow(windows)
+    }
+
+// ===== 화면 정보 =====
 
     /**
      * 현재 화면 경계 가져오기
@@ -97,6 +203,41 @@ class WindowAnalyzer(
         }
     }
 
+    // ===== 앱 서랍 감지 =====
+
+    /**
+     * 앱 서랍(App Drawer)이 열려있는지 확인
+     * QuickStep 런처의 뷰 ID를 통해 감지
+     * @param rootNode 활성 윈도우의 루트 노드
+     * @return 앱 서랍 열림 여부
+     */
+    fun isAppDrawerOpen(rootNode: android.view.accessibility.AccessibilityNodeInfo?): Boolean {
+        rootNode ?: return false
+
+        // QuickStep 런처 및 Nova Launcher 앱 서랍 뷰 ID
+        val targetIds = listOf(
+            // QuickStep
+            "com.android.launcher3:id/apps_view",
+            "com.android.launcher3:id/apps_list_view",
+            // Nova Launcher
+            "com.teslacoilsw.launcher:id/apps_view",
+            "com.teslacoilsw.launcher:id/apps_list_view"
+        )
+
+        for (id in targetIds) {
+            val nodes = rootNode.findAccessibilityNodeInfosByViewId(id)
+            if (!nodes.isNullOrEmpty()) {
+                for (node in nodes) {
+                    if (node.isVisibleToUser) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+
     // ===== 전체화면 감지 =====
 
     /**
@@ -105,8 +246,26 @@ class WindowAnalyzer(
      * @return 전체화면 여부
      */
     fun analyzeFullscreenState(windows: List<AccessibilityWindowInfo>): Boolean {
+        ensureNavBarHeight()
+        val minNavBarHeight = maxOf(
+            (navBarHeightPx * Constants.Threshold.NAV_BAR_VISIBLE_RATIO).toInt(),
+            context.dpToPx(Constants.Dimension.MIN_NAV_BAR_HEIGHT_DP)
+        )
+        val gestureOnlyThreshold = context.dpToPx(Constants.Threshold.GESTURE_ONLY_HEIGHT_DP)
+
+        val insets = getNavigationBarInsets()
+        if (insets != null) {
+            val navBarVisible = insets.visible && insets.sizePx >= minNavBarHeight
+            val navBarHiddenOrGestureOnly = !insets.visible || insets.sizePx <= gestureOnlyThreshold
+            return navBarHiddenOrGestureOnly || !navBarVisible
+        }
+
         val screen = getScreenBounds()
-        var bottomSystemUiHeight = 0
+        val maxNavBarHeight = run {
+            val scaled = maxOf(navBarHeightPx * 3, context.dpToPx(120))
+            minOf(scaled, (screen.height() * 0.4f).toInt())
+        }
+        var navBarThicknessPx = 0
 
         for (w in windows) {
             if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
@@ -122,41 +281,22 @@ class WindowAnalyzer(
 
             val touchesBottom = (r.bottom >= screen.bottom - 2)
             val wideEnough = r.width() >= (screen.width() * 0.5f)
-            if (touchesBottom && wideEnough) {
-                bottomSystemUiHeight = maxOf(bottomSystemUiHeight, r.height())
+            val reasonableHeight = r.height() <= maxNavBarHeight
+            if (touchesBottom && wideEnough && reasonableHeight) {
+                navBarThicknessPx = maxOf(navBarThicknessPx, r.height())
+            }
+
+            val touchesLeft = (r.left <= screen.left + 2)
+            val touchesRight = (r.right >= screen.right - 2)
+            val tallEnough = r.height() >= (screen.height() * 0.5f)
+            val reasonableWidth = r.width() <= maxNavBarHeight
+            if ((touchesLeft || touchesRight) && tallEnough && reasonableWidth) {
+                navBarThicknessPx = maxOf(navBarThicknessPx, r.width())
             }
         }
 
-        // "네비바가 보임" 기준: navBarHeight의 70% 이상
-        val navVisibleThreshold = maxOf(
-            (navBarHeightPx * Constants.Threshold.NAV_BAR_VISIBLE_RATIO).toInt(),
-            context.dpToPx(Constants.Dimension.MIN_NAV_BAR_HEIGHT_DP)
-        )
-        val gestureOnlyThreshold = context.dpToPx(Constants.Threshold.GESTURE_ONLY_HEIGHT_DP)
-
-        val insetResult = runCatching {
-            val insets = windowManager.currentWindowMetrics.windowInsets
-            val navInsets = insets.getInsets(WindowInsets.Type.navigationBars())
-            val navInsetSize = maxOf(navInsets.bottom, navInsets.top, navInsets.left, navInsets.right)
-            val navVisible = insets.isVisible(WindowInsets.Type.navigationBars())
-            Pair(navVisible, navInsetSize)
-        }.getOrNull()
-
-        if (insetResult != null) {
-            val (navVisible, navInsetSize) = insetResult
-            if (!navVisible) {
-                return true
-            }
-            if (navInsetSize in 1..gestureOnlyThreshold) {
-                return true
-            }
-            if (navInsetSize >= navVisibleThreshold) {
-                return false
-            }
-        }
-
-        val navBarVisible = bottomSystemUiHeight >= navVisibleThreshold
-        val navBarHiddenOrGestureOnly = bottomSystemUiHeight <= gestureOnlyThreshold
+        val navBarVisible = navBarThicknessPx >= minNavBarHeight
+        val navBarHiddenOrGestureOnly = navBarThicknessPx <= gestureOnlyThreshold
 
         return navBarHiddenOrGestureOnly || !navBarVisible
     }
@@ -169,6 +309,7 @@ class WindowAnalyzer(
      * @return IME 가시 여부
      */
     fun analyzeImeVisibility(windows: List<AccessibilityWindowInfo>): Boolean {
+        ensureNavBarHeight()
         val screen = getScreenBounds()
         val minImeHeight = context.dpToPx(Constants.Dimension.MIN_IME_HEIGHT_DP)
         val now = SystemClock.elapsedRealtime()
@@ -286,6 +427,152 @@ class WindowAnalyzer(
         }
 
         return false
+    }
+
+    /**
+     * 빠른 설정 패널(Quick Settings) 확장 여부 확인
+     */
+    fun analyzeQuickSettingsState(
+        windows: List<AccessibilityWindowInfo>,
+        rootNode: AccessibilityNodeInfo?
+    ): Boolean {
+        val screen = getScreenBounds()
+
+        if (isQuickSettingsExpanded(rootNode, screen)) return true
+
+        for (w in windows) {
+            if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
+            val rootPkg = try { w.root?.packageName?.toString() } catch (e: Exception) { null }
+            if (rootPkg != "com.android.systemui") continue
+
+            val root = try { w.root } catch (e: Exception) { null }
+            if (isQuickSettingsExpanded(root, screen)) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private fun isQuickSettingsExpanded(rootNode: AccessibilityNodeInfo?, screen: Rect): Boolean {
+        rootNode ?: return false
+        val rootPkg = rootNode.packageName?.toString() ?: return false
+        if (rootPkg != "com.android.systemui") return false
+
+        val minHeight = (screen.height() * 0.45f).toInt()
+        val minWidth = (screen.width() * 0.5f).toInt()
+
+        val targetIds = listOf(
+            "com.android.systemui:id/qs_frame",
+            "com.android.systemui:id/qs_panel",
+            "com.android.systemui:id/quick_settings_panel",
+            "com.android.systemui:id/qs_container",
+            "com.android.systemui:id/quick_settings_container",
+            "com.android.systemui:id/qs_detail",
+            "com.android.systemui:id/qs_pager"
+        )
+
+        for (id in targetIds) {
+            val nodes = try { rootNode.findAccessibilityNodeInfosByViewId(id) } catch (e: Exception) { null }
+            if (!nodes.isNullOrEmpty()) {
+                for (node in nodes) {
+                    if (!node.isVisibleToUser) continue
+                    val r = Rect()
+                    try {
+                        node.getBoundsInScreen(r)
+                    } catch (e: Exception) {
+                        continue
+                    }
+                    if (r.height() >= minHeight && r.width() >= minWidth) {
+                        return true
+                    }
+                }
+            }
+        }
+
+        return false
+    }
+
+    // ===== 최근 앱 감지 =====
+
+    /**
+     * 최근 앱(오버뷰) 화면이 열려있는지 확인
+     */
+    fun analyzeRecentsState(
+        windows: List<AccessibilityWindowInfo>,
+        rootNode: AccessibilityNodeInfo?
+    ): Boolean {
+        if (isRecentsOpen(rootNode)) return true
+
+        for (window in windows) {
+            val className = try { window.root?.className?.toString() } catch (e: Exception) { null }
+            if (isRecentsClassName(className ?: "")) {
+                return true
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                val title = try { window.title?.toString() } catch (e: Exception) { null }
+                if (title != null && isRecentsClassName(title)) {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    fun isRecentsOpen(rootNode: AccessibilityNodeInfo?): Boolean {
+        rootNode ?: return false
+
+        // QuickStep 런처 최근 앱 뷰 ID
+        val targetIds = listOf(
+            "com.android.launcher3:id/overview_panel",
+            "com.android.launcher3:id/overview_actions_view"
+        )
+
+        for (id in targetIds) {
+            val nodes = try { rootNode.findAccessibilityNodeInfosByViewId(id) } catch (e: Exception) { null }
+            if (!nodes.isNullOrEmpty()) {
+                for (node in nodes) {
+                    if (node.isVisibleToUser) {
+                        return true
+                    }
+                }
+            }
+        }
+
+        return false
+    }
+
+    /**
+     * 런처가 최상위로 보이더라도 다른 앱 창이 실제로 보이는지 확인
+     * QuickStep 앱 실행 전환 화면에서 커스텀 배경을 억제하기 위한 보조 신호.
+     */
+    fun hasVisibleNonLauncherAppWindow(
+        windows: List<AccessibilityWindowInfo>,
+        selfPackage: String
+    ): Boolean {
+        var hasUnknownAppWindow = false
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val bounds = Rect()
+            try {
+                window.getBoundsInScreen(bounds)
+            } catch (e: Exception) {
+                continue
+            }
+            if (bounds.width() <= 0 || bounds.height() <= 0) continue
+
+            val pkg = try { window.root?.packageName?.toString() } catch (e: Exception) { null }
+            if (pkg == null) {
+                hasUnknownAppWindow = true
+                continue
+            }
+            if (pkg == selfPackage) continue
+            if (isLauncherPackage(pkg)) continue
+            return true
+        }
+        return hasUnknownAppWindow
     }
 
     // ===== 홈/최근 앱 감지 =====

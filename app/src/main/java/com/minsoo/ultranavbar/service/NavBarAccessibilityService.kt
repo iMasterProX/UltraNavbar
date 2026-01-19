@@ -31,6 +31,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "NavBarAccessibility"
+        private const val HOME_ENTRY_STABILIZE_MS = 400L  // 홈 진입 후 안정화 시간
 
         @Volatile
         var instance: NavBarAccessibilityService? = null
@@ -52,17 +53,19 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isFullscreen: Boolean = false
     private var isOnHomeScreen: Boolean = false
     private var isRecentsVisible: Boolean = false
+    private var isAppDrawerOpen: Boolean = false
     private var isNotificationPanelOpen: Boolean = false
+    private var isQuickSettingsOpen: Boolean = false
     private var isWallpaperPreviewVisible: Boolean = false
     private var isImeVisible: Boolean = false
     private var lastImeEventAt: Long = 0
-    private var wasLockScreenActive: Boolean = false
-    private var unlockFadeUntil: Long = 0
-    private var pendingUnlockFade: Boolean = false
+    private var lastNonLauncherEventAt: Long = 0
+    private var lastHomeEntryAt: Long = 0  // 홈 진입 안정화용
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
     private var fullscreenPoll: Runnable? = null
+    private var unlockFadeRunnable: Runnable? = null
 
     // === 브로드캐스트 리시버 ===
     private val settingsReceiver = object : BroadcastReceiver() {
@@ -77,6 +80,10 @@ class NavBarAccessibilityService : AccessibilityService() {
                     Log.d(TAG, "Reloading background images")
                     overlay?.reloadBackgroundImages()
                 }
+                Constants.Action.UPDATE_BUTTON_COLORS -> {
+                    Log.d(TAG, "Updating background/button colors")
+                    overlay?.refreshBackgroundStyle()
+                }
             }
         }
     }
@@ -86,23 +93,32 @@ class NavBarAccessibilityService : AccessibilityService() {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     Log.d(TAG, "Screen off, hiding overlay")
-                    overlay?.setLockScreenActive(true)
-                    pendingUnlockFade = false
-                    unlockFadeUntil = 0
+                    overlay?.captureUnlockBackgroundForLock()
+                    overlay?.resetUnlockFadeState(clearOverride = false)
                     overlay?.hide(animate = false, showHotspot = false)
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     Log.d(TAG, "Screen on, updating visibility")
-                    pendingUnlockFade = true // Allow unlock fade even if lock screen state lags on screen-on.
+                    // 잠금화면이 활성화된 상태에서 화면이 켜지면 해제 시 페이드 애니메이션 준비
+                    if (windowAnalyzer.isLockScreenActive()) {
+                        overlay?.prepareForUnlockFade()
+                    }
                     updateOverlayVisibility(forceFade = false)
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     Log.d(TAG, "User present, showing with fade")
-                    pendingUnlockFade = true
-                    unlockFadeUntil = SystemClock.elapsedRealtime() + Constants.Timing.UNLOCK_FADE_WINDOW_MS
-                    handler.postDelayed({
-                        updateOverlayVisibility(forceFade = true)
-                    }, Constants.Timing.HOME_STATE_DEBOUNCE_MS)
+                    // 안전을 위해 여기서도 플래그 설정
+                    overlay?.prepareForUnlockFade()
+                    
+                    // 기존 예약 취소
+                    unlockFadeRunnable?.let { handler.removeCallbacks(it) }
+                    
+                    // 새 작업 예약
+                    unlockFadeRunnable = Runnable {
+                        unlockFadeRunnable = null
+                        overlay?.startUnlockFade()
+                    }
+                    handler.postDelayed(unlockFadeRunnable!!, Constants.Timing.UNLOCK_FADE_DELAY_MS)
                 }
             }
         }
@@ -128,8 +144,6 @@ class NavBarAccessibilityService : AccessibilityService() {
         windowAnalyzer.loadLauncherPackages()
         windowAnalyzer.calculateNavBarHeight()
         currentOrientation = resources.configuration.orientation
-        wasLockScreenActive = windowAnalyzer.isLockScreenActive()
-        pendingUnlockFade = wasLockScreenActive
 
         createOverlay()
         updateOverlayVisibility(forceFade = false)
@@ -157,6 +171,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         val settingsFilter = IntentFilter().apply {
             addAction(Constants.Action.SETTINGS_CHANGED)
             addAction(Constants.Action.RELOAD_BACKGROUND)
+            addAction(Constants.Action.UPDATE_BUTTON_COLORS)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(settingsReceiver, settingsFilter, Context.RECEIVER_NOT_EXPORTED)
@@ -187,6 +202,10 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun cancelPendingTasks() {
         pendingStateCheck?.let { handler.removeCallbacks(it) }
         pendingStateCheck = null
+        
+        unlockFadeRunnable?.let { handler.removeCallbacks(it) }
+        unlockFadeRunnable = null
+        
         stopFullscreenPolling()
     }
 
@@ -245,6 +264,9 @@ class NavBarAccessibilityService : AccessibilityService() {
                 handleWindowStateChanged(event)
                 scheduleStateCheck()
             }
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
+                handleNotificationStateChanged(event)
+            }
             AccessibilityEvent.TYPE_WINDOWS_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_FOCUSED,
@@ -274,66 +296,144 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun handleNotificationStateChanged(event: AccessibilityEvent) {
+        // 알림 추가 이벤트인지 확인
+        val parcelableData = event.parcelableData
+        val text = event.text?.toString() ?: ""
+        val hasNotifications = parcelableData != null || text.isNotEmpty()
+
+        Log.d(TAG, "Notification state: parcelable=${parcelableData != null}, text=$text")
+        overlay?.setNotificationPresent(hasNotifications)
+    }
+
     private fun handleWindowStateChanged(event: AccessibilityEvent) {
         val packageName = event.packageName?.toString() ?: return
         val className = event.className?.toString() ?: ""
-        val isSystemUi = packageName == "com.android.systemui"
         val isRecents = windowAnalyzer.isRecentsClassName(className)
 
-        // 최근 앱 상태 업데이트
-        if (isRecentsVisible != isRecents) {
-            isRecentsVisible = isRecents
-            Log.d(TAG, "Recents state changed: $isRecents")
-            overlay?.setRecentsState(isRecents)
-        }
+        updateRecentsState(isRecents, "event")
 
         if (packageName == this.packageName) return
 
-        if (isSystemUi) {
-            if (isRecents && isOnHomeScreen) {
-                isOnHomeScreen = false
-                overlay?.setHomeScreenState(false)
-            }
+        val isSystemUi = packageName == "com.android.systemui"
+        if (handleSystemUiState(isSystemUi, isRecents, "event")) {
             return
         }
 
-        // 포그라운드 앱 변경
-        if (currentPackage != packageName) {
-            val previousPackage = currentPackage
-            currentPackage = packageName
-            Log.d(TAG, "Foreground app: $packageName")
+        markNonLauncherEvent(packageName)
 
-            // 비활성화된 앱에서 다른 앱으로 전환 시 오버레이 가시성 즉시 업데이트
-            val wasDisabled = previousPackage.isNotEmpty() && settings.isAppDisabled(previousPackage)
-            val isDisabled = settings.isAppDisabled(packageName)
-            if (wasDisabled || isDisabled) {
-                Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
-            }
-            // 포그라운드 앱이 바뀔 때마다 가시성 재평가(윈도우 이벤트 경로에서도 누락되지 않도록)
+        val packageChanged = updateForegroundPackage(packageName, "event")
+
+        val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
+            windows.toList(),
+            this.packageName
+        )
+        if (hasVisibleNonLauncherApp) {
+            lastNonLauncherEventAt = SystemClock.elapsedRealtime()
+        }
+        val hasNonLauncherForeground =
+            currentPackage.isNotEmpty() && !windowAnalyzer.isLauncherPackage(currentPackage)
+        val suppressHomeForRecentApp = shouldSuppressHomeForRecentApp()
+        val isLauncherPackage = windowAnalyzer.isLauncherPackage(packageName)
+        // 앱→홈 전환: 현재 홈이 아닌 상태에서 런처가 오면 즉시 홈 상태 설정
+        // 홈→앱 전환: suppressHomeForRecentApp 적용 (앱 로딩 화면에서 커스텀 배경 억제)
+        val shouldSuppressHome = suppressHomeForRecentApp && isOnHomeScreen
+        val newOnHomeScreen = isLauncherPackage &&
+            !isRecents &&
+            !hasVisibleNonLauncherApp &&
+            !hasNonLauncherForeground &&
+            !shouldSuppressHome
+        updateHomeScreenState(newOnHomeScreen, "event")
+
+        if (packageChanged) {
             handler.post {
                 checkFullscreenState()
                 updateOverlayVisibility()
             }
         }
+    }
 
-        // 홈 화면 상태 업데이트
-        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !isRecents
-        if (isOnHomeScreen != newOnHomeScreen) {
-            isOnHomeScreen = newOnHomeScreen
-            Log.d(TAG, "Home screen state: $isOnHomeScreen")
-            overlay?.setHomeScreenState(isOnHomeScreen)
+    private fun updateRecentsState(isRecents: Boolean, source: String) {
+        if (isRecentsVisible != isRecents) {
+            isRecentsVisible = isRecents
+            Log.d(TAG, "Recents state ($source): $isRecentsVisible")
+            overlay?.setRecentsState(isRecents)
         }
     }
 
-    // ===== 상태 체크 =====
+    private fun updateHomeScreenState(isHome: Boolean, source: String) {
+        if (isOnHomeScreen == isHome) return
+
+        val now = SystemClock.elapsedRealtime()
+
+        // 홈 진입 안정화: 홈에 진입한 직후 false 이벤트 무시
+        if (!isHome && isOnHomeScreen) {
+            val elapsed = now - lastHomeEntryAt
+            if (elapsed < HOME_ENTRY_STABILIZE_MS) {
+                Log.d(TAG, "Home exit ignored (stabilizing, ${elapsed}ms < ${HOME_ENTRY_STABILIZE_MS}ms)")
+                return
+            }
+        }
+
+        // 홈 진입 시 타임스탬프 기록
+        if (isHome && !isOnHomeScreen) {
+            lastHomeEntryAt = now
+        }
+
+        isOnHomeScreen = isHome
+        Log.d(TAG, "Home screen state ($source): $isOnHomeScreen")
+        overlay?.setHomeScreenState(isOnHomeScreen)
+    }
+
+    private fun markNonLauncherEvent(packageName: String) {
+        if (packageName.isEmpty()) return
+        if (packageName == this.packageName) return
+        if (packageName == "com.android.systemui") return
+        if (windowAnalyzer.isLauncherPackage(packageName)) return
+        lastNonLauncherEventAt = SystemClock.elapsedRealtime()
+    }
+
+    private fun shouldSuppressHomeForRecentApp(): Boolean {
+        val elapsed = SystemClock.elapsedRealtime() - lastNonLauncherEventAt
+        return elapsed < Constants.Timing.HOME_STATE_DEBOUNCE_MS
+    }
+
+    private fun updateForegroundPackage(
+        packageName: String,
+        source: String
+    ): Boolean {
+        if (currentPackage == packageName) return false
+
+        val previousPackage = currentPackage
+        currentPackage = packageName
+        Log.d(TAG, "Foreground app ($source): $packageName")
+
+        val wasDisabled = previousPackage.isNotEmpty() && settings.isAppDisabled(previousPackage)
+        val isDisabled = settings.isAppDisabled(packageName)
+        if (wasDisabled || isDisabled) {
+            Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
+        }
+
+        return true
+    }
+
+    private fun handleSystemUiState(isSystemUi: Boolean, isRecents: Boolean, source: String): Boolean {
+        if (!isSystemUi) return false
+        if (isRecents && isOnHomeScreen) {
+            updateHomeScreenState(false, source)
+        }
+        return true
+    }
 
     private fun scheduleStateCheck() {
         pendingStateCheck?.let { handler.removeCallbacks(it) }
         pendingStateCheck = Runnable {
             checkFullscreenState()
             checkNotificationPanelState()
+            checkQuickSettingsState()
             checkImeVisibility()
             updateHomeAndRecentsFromWindows()
+            overlay?.ensureOrientationSync()
         }
         handler.postDelayed(pendingStateCheck!!, Constants.Timing.STATE_CHECK_DELAY_MS)
     }
@@ -358,10 +458,22 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (isNotificationPanelOpen != panelVisible) {
             isNotificationPanelOpen = panelVisible
             Log.d(TAG, "Notification panel: $isNotificationPanelOpen")
-            handler.post {
-                overlay?.updatePanelButtonState(isNotificationPanelOpen)
-            }
+            handler.post { updatePanelUiState() }
         }
+    }
+
+    private fun checkQuickSettingsState() {
+        val qsVisible = windowAnalyzer.analyzeQuickSettingsState(windows.toList(), rootInActiveWindow)
+
+        if (isQuickSettingsOpen != qsVisible) {
+            isQuickSettingsOpen = qsVisible
+            Log.d(TAG, "Quick settings: $isQuickSettingsOpen")
+            handler.post { updatePanelUiState() }
+        }
+    }
+
+    private fun updatePanelUiState() {
+        overlay?.setPanelStates(isNotificationPanelOpen, isQuickSettingsOpen)
     }
 
     private fun checkImeVisibility() {
@@ -379,48 +491,65 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun updateHomeAndRecentsFromWindows() {
-        val root = rootInActiveWindow ?: return
-        val packageName = root.packageName?.toString() ?: return
-        val className = root.className?.toString() ?: ""
-        val isRecents = windowAnalyzer.isRecentsClassName(className)
-        var packageChanged = false
+        val windowList = windows.toList()
+        val root = rootInActiveWindow
+        val recentsVisible = windowAnalyzer.analyzeRecentsState(windowList, root)
+        updateRecentsState(recentsVisible, "windows")
 
-        if (isRecentsVisible != isRecents) {
-            isRecentsVisible = isRecents
-            Log.d(TAG, "Recents state (windows): $isRecents")
-            overlay?.setRecentsState(isRecents)
+        val topWindow = windowAnalyzer.getTopApplicationWindow(windowList)
+        var packageName = topWindow?.packageName
+
+        if (packageName.isNullOrEmpty() || packageName == this.packageName) {
+            packageName = root?.packageName?.toString()
         }
 
-        if (packageName == this.packageName) return
+        if (packageName.isNullOrEmpty() || packageName == this.packageName) return
 
-        if (packageName == "com.android.systemui") {
-            if (isRecents && isOnHomeScreen) {
-                isOnHomeScreen = false
-                overlay?.setHomeScreenState(false)
-            }
+        val isSystemUi = packageName == "com.android.systemui"
+        if (handleSystemUiState(isSystemUi, recentsVisible, "windows")) {
             return
         }
 
-        if (currentPackage != packageName) {
-            currentPackage = packageName
-            packageChanged = true
-            Log.d(TAG, "Foreground app (windows): $packageName")
-        }
+        markNonLauncherEvent(packageName)
 
-        val newOnHomeScreen = windowAnalyzer.isLauncherPackage(packageName) && !isRecents
-        if (isOnHomeScreen != newOnHomeScreen) {
-            isOnHomeScreen = newOnHomeScreen
-            Log.d(TAG, "Home screen state (windows): $isOnHomeScreen")
-            overlay?.setHomeScreenState(isOnHomeScreen)
+        val packageChanged = updateForegroundPackage(packageName, "windows")
+
+        val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
+            windowList,
+            this.packageName
+        )
+        if (hasVisibleNonLauncherApp) {
+            lastNonLauncherEventAt = SystemClock.elapsedRealtime()
+        }
+        val hasNonLauncherForeground =
+            currentPackage.isNotEmpty() && !windowAnalyzer.isLauncherPackage(currentPackage)
+        val suppressHomeForRecentApp = shouldSuppressHomeForRecentApp()
+        val isLauncherPackage = windowAnalyzer.isLauncherPackage(packageName)
+        // 앱→홈 전환: 현재 홈이 아닌 상태에서 런처가 오면 즉시 홈 상태 설정
+        val shouldSuppressHome = suppressHomeForRecentApp && isOnHomeScreen
+        val newOnHomeScreen = isLauncherPackage &&
+            !recentsVisible &&
+            !hasVisibleNonLauncherApp &&
+            !hasNonLauncherForeground &&
+            !shouldSuppressHome
+        updateHomeScreenState(newOnHomeScreen, "windows")
+
+        if (isOnHomeScreen) {
+            val appDrawerOpen = windowAnalyzer.isAppDrawerOpen(root)
+            if (isAppDrawerOpen != appDrawerOpen) {
+                isAppDrawerOpen = appDrawerOpen
+                Log.d(TAG, "App Drawer state: $isAppDrawerOpen")
+                overlay?.setAppDrawerState(isAppDrawerOpen)
+            }
+        } else if (isAppDrawerOpen) {
+            isAppDrawerOpen = false
+            overlay?.setAppDrawerState(false)
         }
 
         if (packageChanged) {
-            // 윈도우 스냅샷 경로에서도 앱 전환 시 가시성을 즉시 재평가해 비활성화 목록 전환을 놓치지 않음
             updateOverlayVisibility()
         }
     }
-
-    // ===== 전체화면 폴링 =====
 
     private fun startFullscreenPolling() {
         if (fullscreenPoll != null) return
@@ -450,33 +579,16 @@ class NavBarAccessibilityService : AccessibilityService() {
     // ===== 오버레이 가시성 =====
 
     private fun updateOverlayVisibility(forceFade: Boolean = false) {
-        val now = SystemClock.elapsedRealtime()
         val lockScreenActive = windowAnalyzer.isLockScreenActive()
-        overlay?.setLockScreenActive(lockScreenActive)
 
-        if (lockScreenActive) {
-            pendingUnlockFade = true
-        }
-
-        if (lockScreenActive != wasLockScreenActive) {
-            if (wasLockScreenActive && !lockScreenActive) {
-                unlockFadeUntil = now + Constants.Timing.UNLOCK_FADE_WINDOW_MS
-            }
-            wasLockScreenActive = lockScreenActive
-        }
-
-        if (unlockFadeUntil > 0 && now > unlockFadeUntil) {
-            unlockFadeUntil = 0
-        }
-
-        val unlockFadeActive = pendingUnlockFade || unlockFadeUntil > 0
-
+        // 1. 비활성화된 앱 체크 - 오버레이를 완전히 숨김 (핫스팟 없음, 재호출 불가)
         if (currentPackage.isNotEmpty() && settings.isAppDisabled(currentPackage)) {
             Log.d(TAG, "App disabled: $currentPackage - hiding overlay completely")
             overlay?.hide(animate = false, showHotspot = false)
             return
         }
 
+        // 2. 자동 숨김 체크 - 전체화면 등에서 숨김 (핫스팟으로 재호출 가능)
         val shouldAutoHide = windowAnalyzer.shouldAutoHideOverlay(
             currentPackage = currentPackage,
             isFullscreen = isFullscreen,
@@ -493,14 +605,11 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
             overlay?.hide(animate = !lockScreenActive, showHotspot = !lockScreenActive)
         } else {
-            if (unlockFadeActive) {
-                overlay?.prepareForUnlockFade()
-                pendingUnlockFade = false
-                unlockFadeUntil = 0
-            }
-            overlay?.show(fade = forceFade || unlockFadeActive)
+            overlay?.show(fade = forceFade)
         }
     }
+
+    // ===== 오버레이 생성/파괴 =====
 
     private fun createOverlay() {
         if (overlay == null) {

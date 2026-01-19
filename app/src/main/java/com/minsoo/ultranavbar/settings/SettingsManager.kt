@@ -5,6 +5,12 @@ import android.content.SharedPreferences
 
 class SettingsManager private constructor(context: Context) {
 
+    enum class HomeBgButtonColorMode {
+        AUTO,
+        WHITE,
+        BLACK
+    }
+
     companion object {
         private const val PREF_NAME = "UltraNavbarSettings"
         const val CROP_HEIGHT_PX = 72 // 배경 크롭 높이 (px)
@@ -13,6 +19,7 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_HOTSPOT_ENABLED = "hotspot_enabled"
         private const val KEY_HOTSPOT_HEIGHT = "hotspot_height"
         private const val KEY_HOME_BG_ENABLED = "home_bg_enabled"
+        private const val KEY_HOME_BG_BUTTON_COLOR_MODE = "home_bg_button_color_mode"
         private const val KEY_IGNORE_STYLUS = "ignore_stylus"
         private const val KEY_LONG_PRESS_ACTION = "long_press_action"
         private const val KEY_SHORTCUT_NAME = "shortcut_name"
@@ -47,6 +54,20 @@ class SettingsManager private constructor(context: Context) {
     var homeBgEnabled: Boolean
         get() = prefs.getBoolean(KEY_HOME_BG_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_HOME_BG_ENABLED, value).apply()
+
+    var homeBgButtonColorMode: HomeBgButtonColorMode
+        get() {
+            val stored = prefs.getString(
+                KEY_HOME_BG_BUTTON_COLOR_MODE,
+                HomeBgButtonColorMode.AUTO.name
+            ) ?: HomeBgButtonColorMode.AUTO.name
+            return try {
+                HomeBgButtonColorMode.valueOf(stored)
+            } catch (e: IllegalArgumentException) {
+                HomeBgButtonColorMode.AUTO
+            }
+        }
+        set(value) = prefs.edit().putString(KEY_HOME_BG_BUTTON_COLOR_MODE, value.name).apply()
 
     var ignoreStylus: Boolean
         get() = prefs.getBoolean(KEY_IGNORE_STYLUS, false)
