@@ -1101,6 +1101,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 isPanelButtonOpen = true
                 updatePanelButtonState(true)
             }
+            // 알림 패널 열면 깜빡임 중지
+            buttonManager.stopNotificationBlink()
         } else {
             if (pendingPanelClose == null) {
                 val task = Runnable {
@@ -1115,6 +1117,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             }
         }
         updateNavBarBackground()
+    }
+
+    fun setNotificationPresent(hasNotifications: Boolean) {
+        if (hasNotifications && !isPanelOpen()) {
+            buttonManager.startNotificationBlink()
+        } else {
+            buttonManager.stopNotificationBlink()
+        }
     }
 
     fun updatePanelButtonState(isOpen: Boolean) {

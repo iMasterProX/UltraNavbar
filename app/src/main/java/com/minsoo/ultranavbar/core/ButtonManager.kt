@@ -49,6 +49,9 @@ class ButtonManager(
     // 색상 애니메이터
     private var colorAnimator: ValueAnimator? = null
 
+    // 알림 깜빡임 애니메이터
+    private var notificationBlinkAnimator: ValueAnimator? = null
+
     /**
      * 버튼 액션 리스너
      */
@@ -226,12 +229,44 @@ class ButtonManager(
         }
     }
 
+    // ===== 알림 깜빡임 =====
+
+    /**
+     * 알림 깜빡임 시작
+     */
+    fun startNotificationBlink() {
+        stopNotificationBlink()
+        val button = _panelButton ?: return
+
+        notificationBlinkAnimator = ValueAnimator.ofFloat(1.0f, 0.4f).apply {
+            duration = 800L
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            addUpdateListener { animator ->
+                button.alpha = animator.animatedValue as Float
+            }
+            start()
+        }
+        Log.d(TAG, "Notification blink started")
+    }
+
+    /**
+     * 알림 깜빡임 중지
+     */
+    fun stopNotificationBlink() {
+        notificationBlinkAnimator?.cancel()
+        notificationBlinkAnimator = null
+        _panelButton?.alpha = 1f
+    }
+
     // ===== 정리 =====
 
     /**
      * 모든 버튼 참조 정리
      */
     fun clear() {
+        stopNotificationBlink()
+        colorAnimator?.cancel()
         _allButtons.clear()
         _panelButton = null
         _backButton = null

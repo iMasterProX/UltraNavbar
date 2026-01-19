@@ -264,6 +264,9 @@ class NavBarAccessibilityService : AccessibilityService() {
                 handleWindowStateChanged(event)
                 scheduleStateCheck()
             }
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
+                handleNotificationStateChanged(event)
+            }
             AccessibilityEvent.TYPE_WINDOWS_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_FOCUSED,
@@ -291,6 +294,16 @@ class NavBarAccessibilityService : AccessibilityService() {
             event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED) {
             lastImeEventAt = now
         }
+    }
+
+    private fun handleNotificationStateChanged(event: AccessibilityEvent) {
+        // 알림 추가 이벤트인지 확인
+        val parcelableData = event.parcelableData
+        val text = event.text?.toString() ?: ""
+        val hasNotifications = parcelableData != null || text.isNotEmpty()
+
+        Log.d(TAG, "Notification state: parcelable=${parcelableData != null}, text=$text")
+        overlay?.setNotificationPresent(hasNotifications)
     }
 
     private fun handleWindowStateChanged(event: AccessibilityEvent) {
