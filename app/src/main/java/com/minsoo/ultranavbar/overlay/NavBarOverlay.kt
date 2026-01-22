@@ -598,6 +598,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         } else {
                             View.GONE
                         }
+                        // 언락 페이드 완료 후 상태 동기화 (버튼 색상 등)
+                        if (!unlockFadeCancelled && !isUnlockPending) {
+                            handler.postDelayed({
+                                ensureVisualStateSync()
+                            }, 50L)
+                        }
                     }
                 }
             )
@@ -882,7 +888,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             if (backgroundManager.isTransitioningFromCustomToDefault() ||
                 (shouldUseCustom && !backgroundManager.wasLastAppliedCustom())
             ) {
-                applyBackgroundImmediate(shouldUseCustom)
+                // 홈 화면 상태 복원 시 애니메이션 사용 (부드러운 전환)
+                applyBackgroundImmediate(shouldUseCustom, animate = true)
             }
             return
         }
@@ -986,6 +993,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
         }
         Log.d(TAG, "Home entry background applied with fade (custom=$shouldUseCustom)")
+
+        // 홈 진입 완료 후 상태 동기화 예약 (애니메이션 완료 후)
+        handler.postDelayed({
+            ensureVisualStateSync()
+        }, Constants.Timing.BG_TRANSITION_DURATION_MS + 50L)
     }
 
     /**
@@ -1203,14 +1215,19 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         return override ?: backgroundManager.resolveUseCustomForUnlock(shouldUseCustomBackground())
     }
 
-    private fun applyBackgroundImmediate(useCustom: Boolean) {
+    /**
+     * 배경 즉시 적용 (트랜지션 중단 시 사용)
+     * @param useCustom 커스텀 배경 사용 여부
+     * @param animate 애니메이션 사용 여부 (기본값: false)
+     */
+    private fun applyBackgroundImmediate(useCustom: Boolean, animate: Boolean = false) {
         val bar = navBarView ?: return
         syncOrientationIfNeeded("background")
         backgroundManager.applyBackground(
             bar,
             useCustom,
             forceUpdate = true,
-            animate = false
+            animate = animate
         )
         if (!useCustom) {
             backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
@@ -1238,7 +1255,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (backgroundManager.isTransitionInProgress() &&
             backgroundManager.wasLastAppliedCustom() != shouldUseCustom
         ) {
-            applyBackgroundImmediate(shouldUseCustom)
+            // 진행 중인 트랜지션을 중단하고 올바른 상태로 전환
+            // 홈 화면에서는 부드러운 전환을 위해 애니메이션 사용
+            applyBackgroundImmediate(shouldUseCustom, animate = isOnHomeScreen)
             return
         }
         backgroundManager.applyBackground(bar, shouldUseCustom)
@@ -1266,6 +1285,27 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (syncOrientationIfNeeded("stateCheck")) {
             updateNavBarBackground()
         }
+    }
+
+    /**
+     * 상태 동기화 확인 및 강제 적용
+     * 시각적 상태가 내부 상태와 일치하지 않을 수 있는 상황 후 호출
+     * (예: 빠른 앱 전환, 언락 페이드 완료 후 등)
+     */
+    fun ensureVisualStateSync() {
+        if (!isCreated || !isShowing) return
+
+        // 버튼 색상 강제 동기화
+        backgroundManager.forceApplyCurrentButtonColor()
+
+        // 배경 레이어 상태 확인
+        val shouldUseCustom = shouldUseCustomBackground()
+        if (!shouldUseCustom) {
+            val expectedBgColor = backgroundManager.getDefaultBackgroundColor()
+            backgroundView?.setBackgroundColor(expectedBgColor)
+        }
+
+        Log.d(TAG, "Visual state sync completed (home=$isOnHomeScreen, custom=$shouldUseCustom)")
     }
 
 // ===== 버튼 액션 처리 =====

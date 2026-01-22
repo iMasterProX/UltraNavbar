@@ -320,37 +320,76 @@ class BackgroundManager(
         return luminance > Constants.Threshold.BRIGHTNESS_THRESHOLD
     }
 
+    // 애니메이션 목표 색상 (취소 시에도 최종 상태 보장용)
+    private var buttonColorAnimationTarget: Int = Color.WHITE
+
     /**
      * 버튼 색상 업데이트 (애니메이션 지원)
+     * 강화된 상태 동기화: 애니메이션 종료/취소 시 최종 상태 보장
      */
     fun updateButtonColor(targetColor: Int, animate: Boolean = true) {
-        if (_currentButtonColor == targetColor) return
+        // 이미 목표 색상과 같으면 스킵 (애니메이션 중 포함)
+        if (_currentButtonColor == targetColor && buttonColorAnimationTarget == targetColor) {
+            return
+        }
+
+        buttonColorAnimationTarget = targetColor
 
         if (!animate) {
             buttonColorAnimator?.cancel()
             _currentButtonColor = targetColor
             listener.onButtonColorChanged(targetColor)
+            Log.d(TAG, "Button color set immediately: ${getColorName(targetColor)}")
             return
         }
 
-        // 이미 같은 색상으로 애니메이션 중이면 스킵
-        if (buttonColorAnimator?.isRunning == true && _currentButtonColor == targetColor) return
+        // 이미 같은 목표로 애니메이션 중이면 스킵
+        if (buttonColorAnimator?.isRunning == true && buttonColorAnimationTarget == targetColor) {
+            return
+        }
 
         buttonColorAnimator?.cancel()
-        
+
         val startColor = _currentButtonColor
+        val finalTarget = targetColor // 클로저에서 캡처
+
         buttonColorAnimator = ValueAnimator.ofArgb(startColor, targetColor).apply {
-            duration = Constants.Timing.BG_TRANSITION_DURATION_MS // 배경 전환 시간과 맞춤
+            duration = Constants.Timing.BG_TRANSITION_DURATION_MS
             interpolator = android12Interpolator
             addUpdateListener { animator ->
                 val color = animator.animatedValue as Int
                 _currentButtonColor = color
                 listener.onButtonColorChanged(color)
             }
+            // 애니메이션 종료/취소 시 최종 상태 보장
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    // 정상 종료 시 최종 색상 확정
+                    if (_currentButtonColor != finalTarget) {
+                        _currentButtonColor = finalTarget
+                        listener.onButtonColorChanged(finalTarget)
+                        Log.d(TAG, "Button color finalized on end: ${getColorName(finalTarget)}")
+                    }
+                }
+            })
             start()
         }
-        
+
         Log.d(TAG, "Button color transition: ${getColorName(startColor)} -> ${getColorName(targetColor)}")
+    }
+
+    /**
+     * 현재 버튼 색상을 강제로 적용 (상태 동기화용)
+     * 애니메이션 없이 현재 설정된 목표 색상을 즉시 적용
+     */
+    fun forceApplyCurrentButtonColor() {
+        val targetColor = buttonColorAnimationTarget
+        if (_currentButtonColor != targetColor) {
+            buttonColorAnimator?.cancel()
+            _currentButtonColor = targetColor
+            listener.onButtonColorChanged(targetColor)
+            Log.d(TAG, "Button color force applied: ${getColorName(targetColor)}")
+        }
     }
 
     private fun getColorName(color: Int): String {
@@ -391,25 +430,12 @@ class BackgroundManager(
         forceUpdate: Boolean = false,
         animate: Boolean = true
     ) {
-        // 연속 앱 전환 시 중복 페이드 방지 (로딩화면 → 실제 앱)
-        // 이미 같은 목표로 설정되어 있고, 트랜지션 진행 중이거나 최근 완료된 경우 스킵
-        if (!forceUpdate && lastAppliedUseCustom == useCustom) {
-            val now = SystemClock.elapsedRealtime()
-            val recentlyCompleted = now < transitionEndAt + Constants.Timing.TRANSITION_DEDUP_GRACE_MS
-            if (isTransitionInProgress() || recentlyCompleted) {
-                Log.d(TAG, "Skipping redundant transition (already useCustom=$useCustom, " +
-                        "inProgress=${isTransitionInProgress()}, recentlyCompleted=$recentlyCompleted)")
-                return
-            }
-        }
-
         val defaultBgColor = getDefaultBackgroundColor()
+
+        // 1. 목표 배경 및 버튼 색상 결정 (dedup 체크 전에 먼저 계산)
         val targetDrawable: Drawable
         val targetButtonColor: Int
-        val previousUseCustom = lastAppliedUseCustom
-        lastAppliedUseCustom = useCustom
 
-        // 1. 목표 배경 및 버튼 색상 결정
         if (useCustom) {
             val bitmap = getCurrentBitmap()
             if (bitmap != null) {
@@ -425,8 +451,24 @@ class BackgroundManager(
             targetButtonColor = getDefaultButtonColor()
         }
 
-        // 2. 버튼 색상 업데이트 (애니메이션 포함)
+        // 2. 버튼 색상은 항상 업데이트 (dedup과 무관하게 상태 동기화 보장)
+        // 배경 전환이 스킵되더라도 버튼 색상은 올바르게 설정되어야 함
         updateButtonColor(targetButtonColor, animate = animate)
+
+        // 연속 앱 전환 시 중복 페이드 방지 (로딩화면 → 실제 앱)
+        // 이미 같은 목표로 설정되어 있고, 트랜지션 진행 중이거나 최근 완료된 경우 스킵
+        if (!forceUpdate && lastAppliedUseCustom == useCustom) {
+            val now = SystemClock.elapsedRealtime()
+            val recentlyCompleted = now < transitionEndAt + Constants.Timing.TRANSITION_DEDUP_GRACE_MS
+            if (isTransitionInProgress() || recentlyCompleted) {
+                Log.d(TAG, "Skipping redundant background transition (already useCustom=$useCustom, " +
+                        "inProgress=${isTransitionInProgress()}, recentlyCompleted=$recentlyCompleted)")
+                return
+            }
+        }
+
+        val previousUseCustom = lastAppliedUseCustom
+        lastAppliedUseCustom = useCustom
 
         // 3. 진행 중인 트랜지션 콜백 취소 (충돌 방지)
         cancelPendingTransitionCallback()
