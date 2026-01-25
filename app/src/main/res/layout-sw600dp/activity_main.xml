@@ -577,6 +577,147 @@
                         android:textSize="12sp"
                         android:textColor="?android:textColorSecondary" />
 
+                    <!-- 다크 모드 전용 배경 설정 구분선 -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="?android:attr/listDivider" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/home_bg_dark_section"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <!-- 다크 모드 배경 활성화 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_bg_dark_enable"
+                                android:textSize="14sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_bg_dark_enable_summary"
+                                android:textSize="12sp"
+                                android:textColor="?android:textColorSecondary" />
+                        </LinearLayout>
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchHomeBgDark"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+
+                    <!-- 다크 모드 가로 배경 -->
+                    <LinearLayout
+                        android:id="@+id/layoutDarkLandscape"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_bg_dark_landscape"
+                                android:textSize="14sp" />
+
+                            <TextView
+                                android:id="@+id/txtDarkLandscapeStatus"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_bg_not_set"
+                                android:textSize="12sp"
+                                android:textColor="?android:textColorSecondary" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnGenerateDarkLandscape"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="8dp"
+                            android:text="@string/auto_button_label" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSelectDarkLandscape"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/select_image"
+                            style="@style/Widget.Material3.Button.TonalButton" />
+                    </LinearLayout>
+
+                    <!-- 다크 모드 세로 배경 -->
+                    <LinearLayout
+                        android:id="@+id/layoutDarkPortrait"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_bg_dark_portrait"
+                                android:textSize="14sp" />
+
+                            <TextView
+                                android:id="@+id/txtDarkPortraitStatus"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_bg_not_set"
+                                android:textSize="12sp"
+                                android:textColor="?android:textColorSecondary" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnGenerateDarkPortrait"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="8dp"
+                            android:text="@string/auto_button_label" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSelectDarkPortrait"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/select_image"
+                            style="@style/Widget.Material3.Button.TonalButton" />
+                    </LinearLayout>
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
