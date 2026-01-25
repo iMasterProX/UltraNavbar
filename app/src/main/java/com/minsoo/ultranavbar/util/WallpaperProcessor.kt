@@ -14,7 +14,11 @@ object WallpaperProcessor {
 
     private const val TAG = "WallpaperProcessor"
 
-    suspend fun generate(context: Context, isLandscape: Boolean): Boolean = withContext(Dispatchers.IO) {
+    /**
+     * 배경화면에서 네비바 배경 이미지 생성
+     * @param isDarkMode 다크 모드 전용 배경 생성 여부
+     */
+    suspend fun generate(context: Context, isLandscape: Boolean, isDarkMode: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         try {
             val wallpaperManager = WallpaperManager.getInstance(context)
             val wallpaperDrawable = wallpaperManager.drawable
@@ -33,20 +37,21 @@ object WallpaperProcessor {
 
             val targetWidth = if (isLandscape) realScreenWidth else realScreenHeight
             val targetHeight = if (isLandscape) realScreenHeight else realScreenWidth
-            
+
             // 1. Drawable을 목표 크기의 Bitmap으로 변환
             val wallpaperBitmap = wallpaperDrawable.toBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
 
             // 2. Scrim 그라데이션 적용
             val resultBitmap = applyScrim(wallpaperBitmap, targetHeight)
-            
-            // 3. 크롭 및 저장
-            val success = ImageCropUtil.cropAndSave(context, resultBitmap, isLandscape)
+
+            // 3. 크롭 및 저장 (다크 모드 여부 전달)
+            val success = ImageCropUtil.cropAndSave(context, resultBitmap, isLandscape, isDarkMode)
 
             // 사용된 비트맵 메모리 해제
             wallpaperBitmap.recycle()
             resultBitmap.recycle()
 
+            Log.d(TAG, "Generated background: isLandscape=$isLandscape, isDarkMode=$isDarkMode, success=$success")
             return@withContext success
         } catch (e: IOException) {
             Log.e(TAG, "Failed to generate wallpaper background", e)

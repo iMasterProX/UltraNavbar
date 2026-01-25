@@ -54,6 +54,13 @@
     <string name="select_image">Select image</string>
     <string name="home_bg_note">When a screenshot is selected, the bottom 72px is cropped and used as the bar background. Other screens use a black background.</string>
 
+    <!-- Dark mode background settings -->
+    <string name="home_bg_dark_section">Dark mode background</string>
+    <string name="home_bg_dark_enable">Use separate dark mode background</string>
+    <string name="home_bg_dark_enable_summary">Use a different background image when dark mode is enabled. Falls back to normal background if not set.</string>
+    <string name="home_bg_dark_landscape">Dark mode landscape</string>
+    <string name="home_bg_dark_portrait">Dark mode portrait</string>
+
     <string name="image_crop_success">Background image saved.</string>
     <string name="image_crop_failed">Failed to process image.</string>
     <string name="stability_settings">Stability settings</string>
@@ -87,6 +94,8 @@
     <string name="preview_opacity_label">Opacity</string>
     <string name="preview_opacity_default">100%</string>
     <string name="preview_filter_opacity_desc">Preview filter opacity</string>
+    <string name="apply_wallpaper">Apply</string>
+    <string name="generating_wallpaper">Generating…</string>
 
     <string name="notification_panel_open">Open notification shade</string>
     <string name="notification_panel_close">Close notification shade</string>

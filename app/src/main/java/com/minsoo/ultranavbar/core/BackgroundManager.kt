@@ -44,9 +44,13 @@ class BackgroundManager(
     // Android 12 표준 애니메이션 인터폴레이터 (버튼 색상 애니메이션용)
     private val android12Interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
 
-    // 배경 비트맵 캐시
+    // 배경 비트맵 캐시 (일반 모드)
     private var landscapeBitmap: Bitmap? = null
     private var portraitBitmap: Bitmap? = null
+
+    // 다크 모드 전용 배경 비트맵 캐시
+    private var darkLandscapeBitmap: Bitmap? = null
+    private var darkPortraitBitmap: Bitmap? = null
 
     // 현재 상태
     private var _isDarkMode: Boolean = false
@@ -109,7 +113,11 @@ class BackgroundManager(
         }
 
         // 이미 로드된 비트맵이 있고 강제 리로드가 아니면 스킵
-        if (!forceReload && landscapeBitmap != null && portraitBitmap != null) {
+        val normalLoaded = landscapeBitmap != null && portraitBitmap != null
+        val darkLoaded = !settings.homeBgDarkEnabled ||
+                         (darkLandscapeBitmap != null && darkPortraitBitmap != null)
+
+        if (!forceReload && normalLoaded && darkLoaded) {
             Log.d(TAG, "Background bitmaps already loaded, skipping reload")
             return
         }
@@ -117,8 +125,16 @@ class BackgroundManager(
         // 기존 비트맵 리사이클
         recycleBitmaps()
 
-        landscapeBitmap = ImageCropUtil.loadBackgroundBitmap(context, true)
-        portraitBitmap = ImageCropUtil.loadBackgroundBitmap(context, false)
+        // 일반 배경 로드
+        landscapeBitmap = ImageCropUtil.loadBackgroundBitmap(context, true, false)
+        portraitBitmap = ImageCropUtil.loadBackgroundBitmap(context, false, false)
+
+        // 다크 모드 배경 로드 (설정이 활성화된 경우)
+        if (settings.homeBgDarkEnabled) {
+            darkLandscapeBitmap = ImageCropUtil.loadBackgroundBitmap(context, true, true)
+            darkPortraitBitmap = ImageCropUtil.loadBackgroundBitmap(context, false, true)
+            Log.d(TAG, "Dark mode bitmaps loaded: landscape=${darkLandscapeBitmap?.hashCode()}, portrait=${darkPortraitBitmap?.hashCode()}")
+        }
 
         Log.d(TAG, "Background bitmaps loaded: landscape=${landscapeBitmap?.hashCode()}, portrait=${portraitBitmap?.hashCode()}")
     }
@@ -140,22 +156,61 @@ class BackgroundManager(
             }
         }
         portraitBitmap = null
+
+        // 다크 모드 비트맵 리사이클
+        darkLandscapeBitmap?.let { bitmap ->
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+        }
+        darkLandscapeBitmap = null
+
+        darkPortraitBitmap?.let { bitmap ->
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+        }
+        darkPortraitBitmap = null
     }
 
     /**
-     * 현재 방향에 맞는 비트맵 가져오기
+     * 현재 방향 및 다크 모드 상태에 맞는 비트맵 가져오기
+     * 다크 모드 배경이 활성화되어 있고 다크 모드일 때:
+     * - 다크 모드 전용 배경이 있으면 사용
+     * - 없으면 일반 배경으로 폴백
      */
     fun getCurrentBitmap(): Bitmap? {
         val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
-        val bitmap = if (isLandscape) landscapeBitmap else portraitBitmap
-        return bitmap
+
+        // 다크 모드이고 다크 모드 배경이 활성화된 경우
+        if (_isDarkMode && settings.homeBgDarkEnabled) {
+            val darkBitmap = if (isLandscape) darkLandscapeBitmap else darkPortraitBitmap
+            if (darkBitmap != null) {
+                return darkBitmap
+            }
+            // 다크 모드 배경이 없으면 일반 배경으로 폴백
+            Log.d(TAG, "Dark mode bitmap not found, falling back to normal bitmap")
+        }
+
+        // 일반 배경 반환
+        return if (isLandscape) landscapeBitmap else portraitBitmap
     }
 
     /**
      * 비트맵이 로드되었는지 확인
+     * 다크 모드일 때는 다크 모드 비트맵도 확인 (설정된 경우)
      */
     fun hasBitmaps(): Boolean {
-        return landscapeBitmap != null || portraitBitmap != null
+        val hasNormalBitmaps = landscapeBitmap != null || portraitBitmap != null
+
+        // 다크 모드이고 다크 모드 배경이 활성화된 경우
+        if (_isDarkMode && settings.homeBgDarkEnabled) {
+            val hasDarkBitmaps = darkLandscapeBitmap != null || darkPortraitBitmap != null
+            // 다크 모드 비트맵이 있거나 일반 비트맵이 있으면 true (폴백)
+            return hasDarkBitmaps || hasNormalBitmaps
+        }
+
+        return hasNormalBitmaps
     }
 
     // ===== 방향 처리 =====

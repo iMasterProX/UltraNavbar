@@ -60,8 +60,19 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnHomeBgColorWhite: MaterialButton
     private lateinit var btnHomeBgColorBlack: MaterialButton
 
+    // 다크 모드 배경 관련
+    private lateinit var switchHomeBgDark: SwitchMaterial
+    private lateinit var layoutDarkLandscape: View
+    private lateinit var layoutDarkPortrait: View
+    private lateinit var btnGenerateDarkLandscape: MaterialButton
+    private lateinit var btnGenerateDarkPortrait: MaterialButton
+    private lateinit var txtDarkLandscapeStatus: TextView
+    private lateinit var txtDarkPortraitStatus: TextView
+
     // 이미지 선택 모드 (true = 가로, false = 세로)
     private var selectingLandscape = true
+    // 다크 모드 배경 선택 모드
+    private var selectingDarkMode = false
 
     // 이미지 선택 런처
     private val imagePickerLauncher = registerForActivityResult(
@@ -247,12 +258,37 @@ class MainActivity : AppCompatActivity() {
         // 가로 이미지 선택 버튼
         findViewById<MaterialButton>(R.id.btnSelectLandscape).setOnClickListener {
             selectingLandscape = true
+            selectingDarkMode = false
             imagePickerLauncher.launch("image/*")
         }
 
         // 세로 이미지 선택 버튼
         findViewById<MaterialButton>(R.id.btnSelectPortrait).setOnClickListener {
             selectingLandscape = false
+            selectingDarkMode = false
+            imagePickerLauncher.launch("image/*")
+        }
+
+        // 다크 모드 배경 UI 초기화
+        switchHomeBgDark = findViewById(R.id.switchHomeBgDark)
+        layoutDarkLandscape = findViewById(R.id.layoutDarkLandscape)
+        layoutDarkPortrait = findViewById(R.id.layoutDarkPortrait)
+        btnGenerateDarkLandscape = findViewById(R.id.btnGenerateDarkLandscape)
+        btnGenerateDarkPortrait = findViewById(R.id.btnGenerateDarkPortrait)
+        txtDarkLandscapeStatus = findViewById(R.id.txtDarkLandscapeStatus)
+        txtDarkPortraitStatus = findViewById(R.id.txtDarkPortraitStatus)
+
+        // 다크 모드 가로 이미지 선택 버튼
+        findViewById<MaterialButton>(R.id.btnSelectDarkLandscape).setOnClickListener {
+            selectingLandscape = true
+            selectingDarkMode = true
+            imagePickerLauncher.launch("image/*")
+        }
+
+        // 다크 모드 세로 이미지 선택 버튼
+        findViewById<MaterialButton>(R.id.btnSelectDarkPortrait).setOnClickListener {
+            selectingLandscape = false
+            selectingDarkMode = true
             imagePickerLauncher.launch("image/*")
         }
 
@@ -272,6 +308,10 @@ class MainActivity : AppCompatActivity() {
         switchHomeBg.isChecked = settings.homeBgEnabled
         updateHomeBgButtonColorUi(settings.homeBgButtonColorMode)
         setHomeBgButtonColorControlsEnabled(settings.homeBgEnabled)
+
+        // 다크 모드 배경 설정 로드
+        switchHomeBgDark.isChecked = settings.homeBgDarkEnabled
+        setDarkBgControlsEnabled(settings.homeBgDarkEnabled)
     }
 
     private fun updateHomeBgButtonColorUi(mode: SettingsManager.HomeBgButtonColorMode) {
@@ -290,6 +330,15 @@ class MainActivity : AppCompatActivity() {
         btnHomeBgColorAuto.isEnabled = enabled
         btnHomeBgColorWhite.isEnabled = enabled
         btnHomeBgColorBlack.isEnabled = enabled
+    }
+
+    private fun setDarkBgControlsEnabled(enabled: Boolean) {
+        layoutDarkLandscape.alpha = if (enabled) 1f else 0.5f
+        layoutDarkPortrait.alpha = if (enabled) 1f else 0.5f
+        btnGenerateDarkLandscape.isEnabled = enabled
+        btnGenerateDarkPortrait.isEnabled = enabled
+        findViewById<MaterialButton>(R.id.btnSelectDarkLandscape).isEnabled = enabled
+        findViewById<MaterialButton>(R.id.btnSelectDarkPortrait).isEnabled = enabled
     }
 
     private fun setupListeners() {
@@ -327,19 +376,31 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnGenerateLandscape.setOnClickListener { generateBackground(isLandscape = true) }
-        btnGeneratePortrait.setOnClickListener { generateBackground(isLandscape = false) }
+        btnGenerateLandscape.setOnClickListener { generateBackground(isLandscape = true, isDarkMode = false) }
+        btnGeneratePortrait.setOnClickListener { generateBackground(isLandscape = false, isDarkMode = false) }
+
+        // 다크 모드 배경 리스너
+        switchHomeBgDark.setOnCheckedChangeListener { _, isChecked ->
+            settings.homeBgDarkEnabled = isChecked
+            setDarkBgControlsEnabled(isChecked)
+            notifySettingsChanged()
+        }
+
+        btnGenerateDarkLandscape.setOnClickListener { generateBackground(isLandscape = true, isDarkMode = true) }
+        btnGenerateDarkPortrait.setOnClickListener { generateBackground(isLandscape = false, isDarkMode = true) }
     }
 
-    private fun generateBackground(isLandscape: Boolean) {
+    private fun generateBackground(isLandscape: Boolean, isDarkMode: Boolean = false) {
+        selectingDarkMode = isDarkMode
         val intent = Intent(this, WallpaperPreviewActivity::class.java).apply {
             putExtra("is_landscape", isLandscape)
+            putExtra("is_dark_mode", isDarkMode)
         }
         wallpaperPreviewLauncher.launch(intent)
     }
 
     private fun handleImageSelected(uri: Uri) {
-        val success = ImageCropUtil.cropAndSaveFromUri(this, uri, selectingLandscape)
+        val success = ImageCropUtil.cropAndSaveFromUri(this, uri, selectingLandscape, selectingDarkMode)
 
         if (success) {
             Toast.makeText(this, R.string.image_crop_success, Toast.LENGTH_SHORT).show()
@@ -351,8 +412,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateBgImageStatus() {
-        val hasLandscape = ImageCropUtil.hasBackgroundImage(this, true)
-        val hasPortrait = ImageCropUtil.hasBackgroundImage(this, false)
+        // 일반 배경 상태
+        val hasLandscape = ImageCropUtil.hasBackgroundImage(this, true, false)
+        val hasPortrait = ImageCropUtil.hasBackgroundImage(this, false, false)
 
         txtLandscapeStatus.text = if (hasLandscape) {
             getString(R.string.home_bg_set)
@@ -361,6 +423,22 @@ class MainActivity : AppCompatActivity() {
         }
 
         txtPortraitStatus.text = if (hasPortrait) {
+            getString(R.string.home_bg_set)
+        } else {
+            getString(R.string.home_bg_not_set)
+        }
+
+        // 다크 모드 배경 상태
+        val hasDarkLandscape = ImageCropUtil.hasBackgroundImage(this, true, true)
+        val hasDarkPortrait = ImageCropUtil.hasBackgroundImage(this, false, true)
+
+        txtDarkLandscapeStatus.text = if (hasDarkLandscape) {
+            getString(R.string.home_bg_set)
+        } else {
+            getString(R.string.home_bg_not_set)
+        }
+
+        txtDarkPortraitStatus.text = if (hasDarkPortrait) {
             getString(R.string.home_bg_set)
         } else {
             getString(R.string.home_bg_not_set)

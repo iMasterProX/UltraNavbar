@@ -1,5 +1,6 @@
 package com.minsoo.ultranavbar.ui
 
+import android.app.Activity
 import android.app.WallpaperManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -21,9 +22,11 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.settings.SettingsManager
+import com.minsoo.ultranavbar.util.WallpaperProcessor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,8 +38,13 @@ class WallpaperPreviewActivity : AppCompatActivity() {
     private lateinit var previewControlsCard: View
     private lateinit var sliderPreviewFilterOverlay: Slider
     private lateinit var txtPreviewFilterOverlayValue: TextView
+    private lateinit var btnApplyWallpaper: MaterialButton
 
     private var previewFilterDrawable: BitmapDrawable? = null
+
+    // 인텐트로 받은 파라미터
+    private var isLandscape: Boolean = false
+    private var isDarkMode: Boolean = false
 
     private data class PreviewLayer(val layer: LayerDrawable, val filterDrawable: BitmapDrawable?)
 
@@ -44,12 +52,17 @@ class WallpaperPreviewActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_wallpaper_preview)
 
+        // 인텐트 파라미터 읽기
+        isLandscape = intent.getBooleanExtra("is_landscape", false)
+        isDarkMode = intent.getBooleanExtra("is_dark_mode", false)
+
         hideBottomNavigationBar()
 
         imagePreview = findViewById(R.id.image_preview)
         previewControlsCard = findViewById(R.id.previewControlsCard)
         sliderPreviewFilterOverlay = findViewById(R.id.sliderPreviewFilterOverlay)
         txtPreviewFilterOverlayValue = findViewById(R.id.txtPreviewFilterOverlayValue)
+        btnApplyWallpaper = findViewById(R.id.btnApplyWallpaper)
 
         sliderPreviewFilterOverlay.valueFrom = 0f
         sliderPreviewFilterOverlay.valueTo = 100f
@@ -70,6 +83,10 @@ class WallpaperPreviewActivity : AppCompatActivity() {
             togglePreviewControls()
         }
 
+        btnApplyWallpaper.setOnClickListener {
+            applyWallpaperBackground()
+        }
+
         Toast.makeText(
             this,
             R.string.wallpaper_preview_hint,
@@ -77,6 +94,35 @@ class WallpaperPreviewActivity : AppCompatActivity() {
         ).show()
 
         loadWallpaperPreview()
+    }
+
+    /**
+     * 배경화면 이미지 적용 (WallpaperProcessor를 사용하여 저장)
+     */
+    private fun applyWallpaperBackground() {
+        btnApplyWallpaper.isEnabled = false
+        btnApplyWallpaper.text = getString(R.string.generating_wallpaper)
+
+        lifecycleScope.launch {
+            val success = WallpaperProcessor.generate(
+                this@WallpaperPreviewActivity,
+                isLandscape,
+                isDarkMode
+            )
+
+            if (success) {
+                setResult(Activity.RESULT_OK)
+                finish()
+            } else {
+                Toast.makeText(
+                    this@WallpaperPreviewActivity,
+                    R.string.wallpaper_preview_failed,
+                    Toast.LENGTH_SHORT
+                ).show()
+                btnApplyWallpaper.isEnabled = true
+                btnApplyWallpaper.text = getString(R.string.apply_wallpaper)
+            }
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

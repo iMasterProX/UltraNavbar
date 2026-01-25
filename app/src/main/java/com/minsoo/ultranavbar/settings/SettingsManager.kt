@@ -31,6 +31,11 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_HOME_BG_LANDSCAPE = "home_bg_landscape"
         private const val KEY_HOME_BG_PORTRAIT = "home_bg_portrait"
 
+        // Dark Mode Background Image Filenames
+        private const val KEY_HOME_BG_DARK_LANDSCAPE = "home_bg_dark_landscape"
+        private const val KEY_HOME_BG_DARK_PORTRAIT = "home_bg_dark_portrait"
+        private const val KEY_HOME_BG_DARK_ENABLED = "home_bg_dark_enabled"
+
         @Volatile
         private var instance: SettingsManager? = null
 
@@ -102,6 +107,19 @@ class SettingsManager private constructor(context: Context) {
     var homeBgPortrait: String?
         get() = prefs.getString(KEY_HOME_BG_PORTRAIT, null)
         set(value) = prefs.edit().putString(KEY_HOME_BG_PORTRAIT, value).apply()
+
+    // 다크 모드 전용 배경 이미지 설정
+    var homeBgDarkEnabled: Boolean
+        get() = prefs.getBoolean(KEY_HOME_BG_DARK_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_HOME_BG_DARK_ENABLED, value).apply()
+
+    var homeBgDarkLandscape: String?
+        get() = prefs.getString(KEY_HOME_BG_DARK_LANDSCAPE, null)
+        set(value) = prefs.edit().putString(KEY_HOME_BG_DARK_LANDSCAPE, value).apply()
+
+    var homeBgDarkPortrait: String?
+        get() = prefs.getString(KEY_HOME_BG_DARK_PORTRAIT, null)
+        set(value) = prefs.edit().putString(KEY_HOME_BG_DARK_PORTRAIT, value).apply()
 
     /**
      * 해당 패키지에서 커스텀 네비바를 비활성화해야 하는지 확인
