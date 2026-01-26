@@ -880,7 +880,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             }
 
             if (wasHomeExitPending) {
-                startHomeExitSuppression()
+                // 홈 이탈이 취소됨 (패널/앱 서랍이 빠르게 열렸다 닫힌 경우)
+                // 억제를 해제하고 올바른 배경 상태를 즉시 적용
+                clearHomeExitSuppression()
+                val shouldUseCustom = shouldUseCustomBackground()
+                if (shouldUseCustom != backgroundManager.wasLastAppliedCustom()) {
+                    applyBackgroundImmediate(shouldUseCustom, animate = true)
+                }
                 return
             }
 
@@ -928,12 +934,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     return
                 }
                 if (isOnHomeScreen) {
-                    // 이미 기본 배경으로 전환된 경우 복원하지 않음 (앱 실행 중 런처 잠깐 감지 케이스)
-                    if (!backgroundManager.wasLastAppliedCustom()) {
-                        Log.d(TAG, "Skipping custom background restoration (already at default)")
-                        return
+                    // 억제 만료 후 올바른 배경 상태 적용
+                    // 현재 상태와 목표 상태가 다르면 전환
+                    val shouldUseCustom = shouldUseCustomBackground()
+                    if (shouldUseCustom != backgroundManager.wasLastAppliedCustom()) {
+                        Log.d(TAG, "Restoring background after suppression: custom=$shouldUseCustom")
+                        applyBackgroundImmediate(shouldUseCustom, animate = true)
                     }
-                    applyBackgroundImmediate(shouldUseCustomBackground())
                 }
             }
         }

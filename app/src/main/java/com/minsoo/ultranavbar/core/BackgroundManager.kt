@@ -182,6 +182,10 @@ class BackgroundManager(
     fun getCurrentBitmap(): Bitmap? {
         val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
 
+        // 실제 시스템 다크 모드 상태를 직접 확인 (캐시된 값 대신)
+        // onConfigurationChanged가 호출되지 않는 경우에도 정확한 상태를 반영
+        syncDarkModeState()
+
         // 다크 모드이고 다크 모드 배경이 활성화된 경우
         if (_isDarkMode && settings.homeBgDarkEnabled) {
             val darkBitmap = if (isLandscape) darkLandscapeBitmap else darkPortraitBitmap
@@ -306,6 +310,8 @@ class BackgroundManager(
     }
 
     fun getDefaultBackgroundColor(): Int {
+        // 실제 시스템 다크 모드 상태를 직접 확인
+        syncDarkModeState()
         return if (_isDarkMode) Color.BLACK else Color.WHITE
     }
 
@@ -313,7 +319,20 @@ class BackgroundManager(
      * 다크 모드에 따른 기본 버튼 색상
      */
     fun getDefaultButtonColor(): Int {
+        // 실제 시스템 다크 모드 상태를 직접 확인
+        syncDarkModeState()
         return if (_isDarkMode) Color.WHITE else Color.DKGRAY
+    }
+
+    /**
+     * 캐시된 다크 모드 상태를 실제 시스템 상태와 동기화
+     */
+    private fun syncDarkModeState() {
+        val actualDarkMode = isSystemDarkMode()
+        if (_isDarkMode != actualDarkMode) {
+            Log.d(TAG, "Dark mode state synced: $actualDarkMode")
+            _isDarkMode = actualDarkMode
+        }
     }
 
     /**
