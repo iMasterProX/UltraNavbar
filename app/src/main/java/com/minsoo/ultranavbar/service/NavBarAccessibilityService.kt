@@ -343,7 +343,14 @@ class NavBarAccessibilityService : AccessibilityService() {
             !hasVisibleNonLauncherApp &&
             !hasNonLauncherForeground &&
             !shouldSuppressHome
-        updateHomeScreenState(newOnHomeScreen, "event")
+
+        // 이미 홈 화면이고 런처 이벤트인 경우, 잔류 앱 윈도우로 인한 잘못된 홈 이탈 방지
+        if (!newOnHomeScreen && isOnHomeScreen && isLauncherPackage && !isRecents) {
+            Log.d(TAG, "Home exit from event suppressed (launcher event, " +
+                    "hasNonLauncherApp=$hasVisibleNonLauncherApp, suppressHome=$shouldSuppressHome)")
+        } else {
+            updateHomeScreenState(newOnHomeScreen, "event")
+        }
 
         if (packageChanged) {
             handler.post {
@@ -532,7 +539,16 @@ class NavBarAccessibilityService : AccessibilityService() {
             !hasVisibleNonLauncherApp &&
             !hasNonLauncherForeground &&
             !shouldSuppressHome
-        updateHomeScreenState(newOnHomeScreen, "windows")
+
+        // 이미 홈 화면이고 런처가 최상위 윈도우인 경우,
+        // 잔류 앱 윈도우(hasVisibleNonLauncherApp)나 최근 앱 이벤트(shouldSuppressHome)로 인한
+        // 잘못된 홈 이탈 방지 (플레이스토어 등 일부 앱은 홈 전환 후에도 윈도우가 잔류할 수 있음)
+        if (!newOnHomeScreen && isOnHomeScreen && isLauncherPackage && !recentsVisible) {
+            Log.d(TAG, "Home exit from windows suppressed (launcher is top, " +
+                    "hasNonLauncherApp=$hasVisibleNonLauncherApp, suppressHome=$shouldSuppressHome)")
+        } else {
+            updateHomeScreenState(newOnHomeScreen, "windows")
+        }
 
         if (isOnHomeScreen) {
             val appDrawerOpen = windowAnalyzer.isAppDrawerOpen(root)
