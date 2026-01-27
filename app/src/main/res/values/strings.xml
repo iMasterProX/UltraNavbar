@@ -52,7 +52,7 @@
     <string name="home_bg_not_set">Not set</string>
     <string name="home_bg_set">Set</string>
     <string name="select_image">Select image</string>
-    <string name="home_bg_note">When a screenshot is selected, the bottom 72px is cropped and used as the bar background. Other screens use a black background.</string>
+    <string name="home_bg_note">Tap Auto to preview your current wallpaper and capture the bottom 72px as the navigation bar background.</string>
 
     <!-- Dark mode background settings -->
     <string name="home_bg_dark_section">Dark mode background</string>
@@ -86,7 +86,7 @@
     <string name="wallpaper_generated">Wallpaper background created.</string>
     <string name="battery_opt_already_ignored">Already excluded from battery optimization.</string>
     <string name="battery_opt_open_failed">Unable to open battery optimization settings.</string>
-    <string name="wallpaper_preview_hint">If the preview looks good, tap Select image to apply.</string>
+    <string name="wallpaper_preview_hint">This is a preview of your current wallpaper. Tap Apply to capture and use it as a custom background.</string>
     <string name="wallpaper_preview_failed">Failed to load the wallpaper preview.</string>
 
     <string name="preview_title">Wallpaper preview</string>
@@ -99,6 +99,67 @@
 
     <string name="notification_panel_open">Open notification shade</string>
     <string name="notification_panel_close">Close notification shade</string>
+
+    <!-- Navigation menu -->
+    <string name="nav_menu_navbar">Navigation Bar</string>
+    <string name="nav_menu_keyboard">Keyboard</string>
+    <string name="nav_menu_wacom_pen">Wacom Pen</string>
+    <string name="nav_menu_app_settings">App Settings</string>
+
+    <!-- App settings screen -->
+    <string name="app_settings_permissions">Permission status</string>
+    <string name="app_settings_permissions_summary">Check the status of permissions required for the app.</string>
+    <string name="permission_accessibility">Accessibility service</string>
+    <string name="permission_accessibility_summary">Required for navigation buttons and window detection.</string>
+    <string name="permission_storage">Storage access</string>
+    <string name="permission_storage_summary">Required for wallpaper access to generate auto backgrounds.</string>
+    <string name="permission_battery">Battery optimization exemption</string>
+    <string name="permission_battery_summary">Prevents the service from being stopped in the background.</string>
+    <string name="permission_bluetooth">Bluetooth access</string>
+    <string name="permission_bluetooth_summary">Required for keyboard shortcuts and device detection.</string>
+    <string name="permission_status_granted">Granted</string>
+    <string name="permission_status_not_granted">Not granted</string>
+    <string name="about_title">About</string>
+    <string name="about_version">Version</string>
+    <string name="about_developer">Developer</string>
+    <string name="about_developer_name">iMasterProX</string>
+    <string name="about_github">GitHub</string>
+    <string name="about_description">Extension features app for LG UltraTab devices.</string>
+
+    <!-- Keyboard Settings -->
+    <string name="keyboard_settings_title">Bluetooth Keyboard Settings</string>
+    <string name="keyboard_connected_devices">Connected Devices</string>
+    <string name="keyboard_no_devices">No Bluetooth keyboard connected</string>
+    <string name="keyboard_device_name">Device Name</string>
+    <string name="keyboard_device_type">Type</string>
+    <string name="keyboard_battery_level">Battery Level</string>
+    <string name="keyboard_battery_unknown">Unknown</string>
+    <string name="keyboard_connection_status">Connection Status</string>
+    <string name="keyboard_connected">Connected</string>
+    <string name="keyboard_disconnected">Disconnected</string>
+    <string name="keyboard_refresh">Refresh</string>
+    <string name="keyboard_bluetooth_settings">Open Bluetooth Settings</string>
+
+    <!-- Placeholders -->
+    <string name="wacom_pen_settings_title">Wacom Pen Settings</string>
+    <string name="wacom_pen_settings_desc">Settings for LG UltraTab Wacom pen including device configuration and custom features will be available in a future update.</string>
+    <string name="coming_soon">Coming in a future update</string>
+
+    <!-- Setup screen -->
+    <string name="setup_welcome_title">Welcome to LG UltraTab Extension</string>
+    <string name="setup_welcome_desc">A few permissions are needed to get started.</string>
+    <string name="setup_accessibility_title">Enable accessibility service</string>
+    <string name="setup_accessibility_desc">Accessibility service permission is required to display the custom navigation bar and detect window states.</string>
+    <string name="setup_storage_title">Storage access permission</string>
+    <string name="setup_storage_desc">Wallpaper access is required to auto-generate home screen backgrounds.</string>
+    <string name="setup_battery_title">Battery optimization exemption</string>
+    <string name="setup_battery_desc">Exclude the app from battery optimization so the service runs reliably in the background.</string>
+    <string name="setup_bluetooth_title">Bluetooth access permission</string>
+    <string name="setup_bluetooth_desc">Bluetooth permission is required to detect connected keyboards and use keyboard shortcuts.</string>
+    <string name="setup_grant_permission">Grant permission</string>
+    <string name="setup_complete">Done</string>
+    <string name="setup_skip">Skip</string>
+    <string name="setup_next">Next</string>
 
     <string name="credits_text">Creator: iMasterProX with Vibe Coding (AI used), GitHub: https://github.com/iMasterProX/UltraNavbar</string>
 </resources>

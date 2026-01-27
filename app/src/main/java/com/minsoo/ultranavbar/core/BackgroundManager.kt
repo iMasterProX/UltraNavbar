@@ -482,14 +482,21 @@ class BackgroundManager(
     /**
      * 커스텀 이미지 배경 사용 여부 판단
      * 모든 방해 요소(최근 앱, 앱 서랍, 알림 패널, 키보드)가 없을 때만 홈 배경 표시
+     * 앱 설정 화면에서는 일반 배경 사용
      */
     fun shouldUseCustomBackground(
         isOnHomeScreen: Boolean,
         isRecentsVisible: Boolean,
         isAppDrawerOpen: Boolean,
         isPanelOpen: Boolean,
-        isImeVisible: Boolean
+        isImeVisible: Boolean,
+        currentPackage: String = ""
     ): Boolean {
+        // 앱 설정 화면(자신의 패키지)에서는 커스텀 배경 사용 안 함
+        if (currentPackage == context.packageName) {
+            return false
+        }
+
         // 홈 화면에 있고, 홈 배경 설정이 켜져 있으며, 방해 요소가 없어야 함
         return isOnHomeScreen && settings.homeBgEnabled &&
                 !isRecentsVisible && !isAppDrawerOpen && !isPanelOpen && !isImeVisible

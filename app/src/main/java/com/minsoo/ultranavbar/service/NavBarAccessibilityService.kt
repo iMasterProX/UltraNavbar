@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import com.minsoo.ultranavbar.core.Constants
 import com.minsoo.ultranavbar.core.WindowAnalyzer
@@ -45,6 +46,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var overlay: NavBarOverlay? = null
     private lateinit var settings: SettingsManager
     private lateinit var windowAnalyzer: WindowAnalyzer
+    private lateinit var keyEventHandler: KeyEventHandler
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -157,6 +159,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun initializeComponents() {
         settings = SettingsManager.getInstance(this)
         windowAnalyzer = WindowAnalyzer(this)
+        keyEventHandler = KeyEventHandler(this)
     }
 
     private fun setupServiceInfo() {
@@ -438,6 +441,9 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (wasDisabled || isDisabled) {
             Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
         }
+
+        // NavBarOverlay에 현재 패키지 전달
+        overlay?.setForegroundPackage(packageName)
 
         return true
     }
@@ -768,5 +774,10 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         Log.w(TAG, "Service interrupted")
+    }
+
+    override fun onKeyEvent(event: KeyEvent?): Boolean {
+        if (event == null) return false
+        return keyEventHandler.handleKeyEvent(event)
     }
 }

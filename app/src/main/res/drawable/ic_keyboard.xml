@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 키보드 키 배경 -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.5"
+        android:pathData="M4,6 L20,6 A2,2 0,0,1 22,8 L22,16 A2,2 0,0,1 20,18 L4,18 A2,2 0,0,1 2,16 L2,8 A2,2 0,0,1 4,6 Z" />
+
+    <!-- 상단 키 행 -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M5,8.5 h2 v1.5 h-2 z M8,8.5 h2 v1.5 h-2 z M11,8.5 h2 v1.5 h-2 z M14,8.5 h2 v1.5 h-2 z M17,8.5 h2 v1.5 h-2 z" />
+
+    <!-- 중간 키 행 -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M5,11 h2 v1.5 h-2 z M8,11 h2 v1.5 h-2 z M11,11 h2 v1.5 h-2 z M14,11 h2 v1.5 h-2 z M17,11 h2 v1.5 h-2 z" />
+
+    <!-- 하단 스페이스바 -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M7,14 h10 v1.5 h-10 z" />
+</vector>

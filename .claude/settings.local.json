@@ -22,7 +22,9 @@
       "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/java\" -version)",
       "Bash(export JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\")",
       "Bash(cmd.exe /c \"adb shell uiautomator dump && adb pull /sdcard/window_dump.xml C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar\\\\uidump_nova_home.xml\":*)",
-      "Bash(cmd.exe /c \"cd /d C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar && gradlew.bat assembleDebug --no-daemon 2>&1\")"
+      "Bash(cmd.exe /c \"cd /d C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar && gradlew.bat assembleDebug --no-daemon 2>&1\")",
+      "Bash(test:*)",
+      "Bash(cmd /c gradlew.bat assembleDebug --stacktrace)"
     ]
   }
 }

@@ -8,10 +8,18 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <!-- 배경화면 접근 및 저장을 위한 저장소 읽기 권한 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+    <!-- 태블릿 전용 앱 (600dp 이상 화면 필요) -->
+    <supports-screens
+        android:requiresSmallestWidthDp="600"
+        android:largeScreens="true"
+        android:xlargeScreens="true" />
 
     <application
         android:name=".UltraNavbarApplication"
@@ -42,6 +50,11 @@
             android:name=".ui.WallpaperPreviewActivity"
             android:exported="false"
             android:theme="@style/Theme.UltraNavbar.Fullscreen" />
+
+        <activity
+            android:name=".ui.SetupActivity"
+            android:exported="false"
+            android:theme="@style/Theme.UltraNavbar" />
 
         <service
             android:name=".service.NavBarAccessibilityService"

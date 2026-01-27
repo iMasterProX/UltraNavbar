@@ -36,6 +36,9 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_HOME_BG_DARK_PORTRAIT = "home_bg_dark_portrait"
         private const val KEY_HOME_BG_DARK_ENABLED = "home_bg_dark_enabled"
 
+        // Setup wizard completion
+        private const val KEY_SETUP_COMPLETE = "setup_complete"
+
         @Volatile
         private var instance: SettingsManager? = null
 
@@ -120,6 +123,11 @@ class SettingsManager private constructor(context: Context) {
     var homeBgDarkPortrait: String?
         get() = prefs.getString(KEY_HOME_BG_DARK_PORTRAIT, null)
         set(value) = prefs.edit().putString(KEY_HOME_BG_DARK_PORTRAIT, value).apply()
+
+    // 초기 설정 완료 여부
+    var setupComplete: Boolean
+        get() = prefs.getBoolean(KEY_SETUP_COMPLETE, false)
+        set(value) = prefs.edit().putBoolean(KEY_SETUP_COMPLETE, value).apply()
 
     /**
      * 해당 패키지에서 커스텀 네비바를 비활성화해야 하는지 확인

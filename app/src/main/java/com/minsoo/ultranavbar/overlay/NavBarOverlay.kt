@@ -77,6 +77,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var currentOrientation = Configuration.ORIENTATION_LANDSCAPE
 
     // 시스템 상태
+    private var currentPackage: String = ""
     private var isOnHomeScreen = false
     private var isRecentsVisible = false
     private var isAppDrawerOpen = false
@@ -1104,6 +1105,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         updateNavBarBackground()
     }
 
+    fun setForegroundPackage(packageName: String) {
+        if (currentPackage == packageName) return
+        currentPackage = packageName
+        Log.d(TAG, "Foreground package changed: $packageName")
+        updateNavBarBackground()
+    }
+
     fun setPanelStates(isNotificationOpen: Boolean, isQuickSettingsOpen: Boolean) {
         if (this.isNotificationPanelOpen == isNotificationOpen &&
             this.isQuickSettingsOpen == isQuickSettingsOpen) {
@@ -1213,7 +1221,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             isRecentsVisible = isRecentsVisible,
             isAppDrawerOpen = isAppDrawerOpen,
             isPanelOpen = isPanelOpen(),
-            isImeVisible = isImeVisible
+            isImeVisible = isImeVisible,
+            currentPackage = currentPackage
         )
     }
 
