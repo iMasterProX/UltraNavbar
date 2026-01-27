@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LG UltraTab Extension</string>
+    <string name="accessibility_service_description">화면 하단에 커스텀 네비게이션 바를 표시합니다. 뒤로가기, 홈, 최근 앱 및 추가 작업 버튼을 제공합니다.</string>
+
+    <string name="settings_title">UltraNavbar 설정</string>
+    <string name="enable_service">접근성 서비스 활성화</string>
+    <string name="service_status">서비스 상태</string>
+    <string name="service_enabled">활성화됨</string>
+    <string name="service_disabled">비활성화됨</string>
+    <string name="open_accessibility_settings">접근성 설정 열기</string>
+
+    <string name="overlay_settings">오버레이 설정</string>
+    <string name="bar_height">바 높이</string>
+    <string name="button_size">버튼 크기</string>
+    <string name="button_spacing">버튼 간격</string>
+    <string name="bar_opacity">바 투명도</string>
+    <string name="bar_color">바 배경색</string>
+
+    <string name="disabled_apps_settings">비활성화 앱</string>
+    <string name="disabled_apps_summary">커스텀 네비게이션 바를 비활성화할 앱을 선택합니다. 해당 앱에서는 기본 네비게이션 바만 사용됩니다.</string>
+    <string name="manage_disabled_apps">비활성화 앱 관리</string>
+
+    <string name="app_list_title">앱 목록</string>
+    <string name="select_apps">앱 선택</string>
+    <string name="no_apps">앱을 찾을 수 없습니다</string>
+    <string name="loading_apps">앱 불러오는 중...</string>
+    <string name="save">저장</string>
+    <string name="cancel">취소</string>
+    <string name="search_hint">검색...</string>
+
+    <string name="recall_settings">재호출 설정</string>
+    <string name="recall_hotspot">재호출 핫스팟</string>
+    <string name="recall_hotspot_summary">하단에 작은 핫스팟을 표시하여 네비게이션 바를 다시 불러올 수 있습니다.</string>
+
+    <string name="onboarding_title">시작하기</string>
+    <string name="onboarding_step1">1. 아래 버튼을 눌러 접근성 설정을 엽니다.</string>
+    <string name="onboarding_step2">2. 다운로드한 서비스에서 UltraNavbar를 찾습니다.</string>
+    <string name="onboarding_step3">3. UltraNavbar를 켜고 확인합니다.</string>
+    <string name="onboarding_note">네비게이션 버튼을 실행하려면 접근성 권한이 필요합니다.</string>
+
+    <string name="home_bg_settings">홈 화면 배경</string>
+    <string name="home_bg_enable">커스텀 배경 사용</string>
+    <string name="home_bg_enable_summary">홈 화면에서 네비게이션 바에 배경 이미지를 사용합니다.</string>
+    <string name="home_bg_button_color">홈 배경 버튼 색상</string>
+    <string name="home_bg_button_color_summary">홈 배경에서의 버튼 색상을 선택합니다 (다크 모드 무시).</string>
+    <string name="home_bg_button_color_auto">자동</string>
+    <string name="home_bg_button_color_white">흰색</string>
+    <string name="home_bg_button_color_black">검정</string>
+    <string name="home_bg_landscape">가로 모드 배경</string>
+    <string name="home_bg_portrait">세로 모드 배경</string>
+    <string name="home_bg_not_set">설정 안 됨</string>
+    <string name="home_bg_set">설정됨</string>
+    <string name="select_image">이미지 선택</string>
+    <string name="home_bg_note">Auto 버튼을 누르면 현재 배경화면을 미리보고, 하단 72px를 잘라 네비게이션 바 배경으로 사용할 수 있습니다.</string>
+
+    <!-- 다크 모드 배경 설정 -->
+    <string name="home_bg_dark_section">다크 모드 배경</string>
+    <string name="home_bg_dark_enable">다크 모드 전용 배경 사용</string>
+    <string name="home_bg_dark_enable_summary">다크 모드 활성화 시 별도의 배경 이미지를 사용합니다. 설정하지 않으면 일반 배경으로 대체됩니다.</string>
+    <string name="home_bg_dark_landscape">다크 모드 가로 배경</string>
+    <string name="home_bg_dark_portrait">다크 모드 세로 배경</string>
+
+    <string name="image_crop_success">배경 이미지가 저장되었습니다.</string>
+    <string name="image_crop_failed">이미지 처리에 실패했습니다.</string>
+    <string name="stability_settings">안정성 설정</string>
+    <string name="battery_optimization">배터리 최적화</string>
+    <string name="battery_optimization_summary">UltraNavbar가 중단되지 않도록 배터리 최적화에서 제외합니다.</string>
+
+    <string name="long_press_action_title">홈 버튼 길게 누르기 동작</string>
+    <string name="long_press_action_default">기본 (Google 어시스턴트)</string>
+    <string name="long_press_action_app">앱</string>
+    <string name="long_press_action_shortcut">바로가기</string>
+    <string name="long_press_action_reset">초기화</string>
+    <string name="shortcut_selected">바로가기 선택됨: %s</string>
+    <string name="shortcut_not_available">바로가기를 사용할 수 없습니다.</string>
+    <string name="ignore_stylus_title">스타일러스 입력 무시</string>
+    <string name="ignore_stylus_summary">펜 입력이 네비게이션 바 동작을 트리거하지 않도록 합니다.</string>
+    <string name="auto_button_label">Auto</string>
+
+    <string name="app_not_found">앱을 찾을 수 없습니다</string>
+    <string name="default_action_set">기본 동작으로 설정되었습니다.</string>
+    <string name="tablet_only">태블릿 전용 앱입니다. 이 기기는 지원되지 않습니다.</string>
+    <string name="permission_granted">권한이 승인되었습니다. 자동 배경 생성을 사용할 수 있습니다.</string>
+    <string name="permission_denied">권한이 거부되었습니다. 저장소 접근 권한이 필요합니다.</string>
+    <string name="wallpaper_generated">배경화면 배경이 생성되었습니다.</string>
+    <string name="battery_opt_already_ignored">이미 배터리 최적화에서 제외되어 있습니다.</string>
+    <string name="battery_opt_open_failed">배터리 최적화 설정을 열 수 없습니다.</string>
+    <string name="wallpaper_preview_hint">현재 배경화면의 하단부를 미리보고 있습니다. Apply를 눌러 커스텀 배경으로 적용하세요.</string>
+    <string name="wallpaper_preview_failed">배경화면 미리보기를 불러올 수 없습니다.</string>
+
+    <string name="preview_title">배경화면 미리보기</string>
+    <string name="preview_filter_title">미리보기 블랙 필터</string>
+    <string name="preview_opacity_label">불투명도</string>
+    <string name="preview_opacity_default">100%</string>
+    <string name="preview_filter_opacity_desc">미리보기 필터 불투명도</string>
+    <string name="apply_wallpaper">적용</string>
+    <string name="generating_wallpaper">생성 중…</string>
+
+    <string name="notification_panel_open">알림 창 열기</string>
+    <string name="notification_panel_close">알림 창 닫기</string>
+
+    <string name="credits_text">제작: iMasterProX with Vibe Coding (AI 활용), GitHub: https://github.com/iMasterProX/UltraNavbar</string>
+
+    <!-- 네비게이션 메뉴 -->
+    <string name="nav_menu_navbar">네비게이션 바</string>
+    <string name="nav_menu_keyboard">키보드</string>
+    <string name="nav_menu_wacom_pen">와콤 펜</string>
+    <string name="nav_menu_app_settings">앱 설정</string>
+
+    <!-- 앱 설정 화면 -->
+    <string name="app_settings_permissions">권한 상태</string>
+    <string name="app_settings_permissions_summary">앱 동작에 필요한 권한 상태를 확인합니다.</string>
+    <string name="permission_accessibility">접근성 서비스</string>
+    <string name="permission_accessibility_summary">네비게이션 버튼 및 윈도우 감지에 필요합니다.</string>
+    <string name="permission_storage">저장소 접근</string>
+    <string name="permission_storage_summary">자동 배경 생성을 위한 배경화면 접근에 필요합니다.</string>
+    <string name="permission_battery">배터리 최적화 제외</string>
+    <string name="permission_battery_summary">서비스가 백그라운드에서 중단되지 않도록 합니다.</string>
+    <string name="permission_status_granted">승인됨</string>
+    <string name="permission_status_not_granted">미승인</string>
+    <string name="about_title">소개</string>
+    <string name="about_version">버전</string>
+    <string name="about_developer">개발자</string>
+    <string name="about_developer_name">iMasterProX</string>
+    <string name="about_github">GitHub</string>
+    <string name="about_description">LG UltraTab 기기를 위한 커스텀 네비게이션 바 및 확장 기능 앱입니다.</string>
+
+    <!-- 플레이스홀더 -->
+    <string name="keyboard_settings_title">블루투스 키보드 설정</string>
+    <string name="keyboard_settings_desc">LG UltraTab 전용 블루투스 키보드의 기기 인식, 배터리 상태 확인 등의 설정이 제공될 예정입니다.</string>
+    <string name="wacom_pen_settings_title">와콤 펜 설정</string>
+    <string name="wacom_pen_settings_desc">LG UltraTab 전용 와콤 펜의 기기 설정 및 커스텀 기능이 제공될 예정입니다.</string>
+    <string name="coming_soon">추후 업데이트 예정</string>
+
+    <!-- 초기 설정 -->
+    <string name="setup_welcome_title">LG UltraTab Extension에 오신 것을 환영합니다</string>
+    <string name="setup_welcome_desc">앱을 사용하기 위해 몇 가지 권한이 필요합니다.</string>
+    <string name="setup_accessibility_title">접근성 서비스 활성화</string>
+    <string name="setup_accessibility_desc">커스텀 네비게이션 바를 표시하고 윈도우 상태를 감지하기 위해 접근성 서비스 권한이 필요합니다.</string>
+    <string name="setup_storage_title">저장소 접근 권한</string>
+    <string name="setup_storage_desc">홈 화면 배경을 자동으로 생성하기 위해 배경화면 접근 권한이 필요합니다.</string>
+    <string name="setup_battery_title">배터리 최적화 제외</string>
+    <string name="setup_battery_desc">서비스가 백그라운드에서 안정적으로 동작하도록 배터리 최적화에서 제외해 주세요.</string>
+    <string name="setup_grant_permission">권한 허용</string>
+    <string name="setup_complete">설정 완료</string>
+    <string name="setup_skip">건너뛰기</string>
+    <string name="setup_next">다음</string>
+</resources>
