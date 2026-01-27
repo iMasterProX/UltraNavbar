@@ -407,10 +407,9 @@ class BackgroundManager(
             return
         }
 
-        buttonColorAnimationTarget = targetColor
-
         if (!animate) {
             buttonColorAnimator?.cancel()
+            buttonColorAnimationTarget = targetColor
             _currentButtonColor = targetColor
             listener.onButtonColorChanged(targetColor)
             Log.d(TAG, "Button color set immediately: ${getColorName(targetColor)}")
@@ -418,10 +417,13 @@ class BackgroundManager(
         }
 
         // 이미 같은 목표로 애니메이션 중이면 스킵
+        // buttonColorAnimationTarget은 이 체크 이후에 업데이트해야
+        // 방향 전환 시 (예: WHITE→BLACK 중 다시 WHITE) 새 애니메이션이 정상 시작됨
         if (buttonColorAnimator?.isRunning == true && buttonColorAnimationTarget == targetColor) {
             return
         }
 
+        buttonColorAnimationTarget = targetColor
         buttonColorAnimator?.cancel()
 
         val startColor = _currentButtonColor

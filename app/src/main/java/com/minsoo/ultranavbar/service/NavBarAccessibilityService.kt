@@ -32,6 +32,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "NavBarAccessibility"
         private const val HOME_ENTRY_STABILIZE_MS = 400L  // 홈 진입 후 안정화 시간
+        private const val HOME_EXIT_STABILIZE_MS = 500L   // 홈 이탈 후 안정화 시간 (windows 소스의 잘못된 재진입 방지)
 
         @Volatile
         var instance: NavBarAccessibilityService? = null
@@ -61,6 +62,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var lastImeEventAt: Long = 0
     private var lastNonLauncherEventAt: Long = 0
     private var lastHomeEntryAt: Long = 0  // 홈 진입 안정화용
+    private var lastHomeExitAt: Long = 0   // 홈 이탈 안정화용
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
@@ -382,9 +384,25 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
         }
 
+        // 홈 이탈 안정화: 홈을 떠난 직후 windows 소스의 잘못된 홈 재진입 방지
+        // 앱 실행 시 event 소스가 먼저 홈 이탈을 감지하지만, windows 소스는
+        // 앱 윈도우가 아직 나타나지 않아 런처가 최상위로 보여 잘못된 홈 재진입을 시도함
+        if (isHome && !isOnHomeScreen && source == "windows") {
+            val elapsed = now - lastHomeExitAt
+            if (elapsed < HOME_EXIT_STABILIZE_MS) {
+                Log.d(TAG, "Home re-entry from windows ignored (stabilizing, ${elapsed}ms < ${HOME_EXIT_STABILIZE_MS}ms)")
+                return
+            }
+        }
+
         // 홈 진입 시 타임스탬프 기록
         if (isHome && !isOnHomeScreen) {
             lastHomeEntryAt = now
+        }
+
+        // 홈 이탈 시 타임스탬프 기록
+        if (!isHome && isOnHomeScreen) {
+            lastHomeExitAt = now
         }
 
         isOnHomeScreen = isHome
