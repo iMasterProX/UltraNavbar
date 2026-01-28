@@ -121,15 +121,13 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
             }
 
             // 권한 확인
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (ActivityCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    Log.w(TAG, "BLUETOOTH_CONNECT permission not granted")
-                    return null
-                }
+            if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.w(TAG, "BLUETOOTH_CONNECT permission not granted")
+                return null
             }
 
             // 연결된 키보드 찾기

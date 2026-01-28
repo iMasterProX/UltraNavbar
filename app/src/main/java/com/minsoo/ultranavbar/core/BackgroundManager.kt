@@ -252,14 +252,9 @@ class BackgroundManager(
 
         val rotation = display.rotation
         val size = Point()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = windowManager.currentWindowMetrics.bounds
-            size.x = bounds.width()
-            size.y = bounds.height()
-        } else {
-            @Suppress("DEPRECATION")
-            display.getRealSize(size)
-        }
+        val bounds = windowManager.currentWindowMetrics.bounds
+        size.x = bounds.width()
+        size.y = bounds.height()
 
         val naturalPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
             size.x < size.y

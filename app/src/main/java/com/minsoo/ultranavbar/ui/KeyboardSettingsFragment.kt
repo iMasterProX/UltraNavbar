@@ -144,16 +144,14 @@ class KeyboardSettingsFragment : Fragment() {
         }
 
         // 블루투스 권한 확인
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ActivityCompat.checkSelfPermission(
-                    requireContext(),
-                    Manifest.permission.BLUETOOTH_CONNECT
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                // 권한 요청
-                requestBluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                return
-            }
+        if (ActivityCompat.checkSelfPermission(
+                requireContext(),
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // 권한 요청
+            requestBluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            return
         }
 
         try {

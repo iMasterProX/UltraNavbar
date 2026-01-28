@@ -140,14 +140,10 @@ class SetupActivity : AppCompatActivity() {
             }
             3 -> {
                 // 블루투스 권한 확인
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    ContextCompat.checkSelfPermission(
-                        this,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) == PackageManager.PERMISSION_GRANTED
-                } else {
-                    true  // Android 12 미만에서는 매니페스트 권한만으로 충분
-                }
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) == PackageManager.PERMISSION_GRANTED
             }
             else -> false
         }
@@ -184,16 +180,12 @@ class SetupActivity : AppCompatActivity() {
             }
             3 -> {
                 // 블루투스 권한 요청
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    if (ContextCompat.checkSelfPermission(
-                            this,
-                            Manifest.permission.BLUETOOTH_CONNECT
-                        ) != PackageManager.PERMISSION_GRANTED
-                    ) {
-                        requestPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                    } else {
-                        Toast.makeText(this, R.string.permission_granted, Toast.LENGTH_SHORT).show()
-                    }
+                if (ContextCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.BLUETOOTH_CONNECT
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    requestPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
                 } else {
                     Toast.makeText(this, R.string.permission_granted, Toast.LENGTH_SHORT).show()
                 }
