@@ -57,6 +57,7 @@ class AddShortcutDialog : DialogFragment() {
     private lateinit var editName: TextInputEditText
     private lateinit var btnSelectApp: MaterialButton
     private lateinit var layoutSettings: View
+    private lateinit var layoutShortcuts: View
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_shortcut, null)
@@ -124,6 +125,7 @@ class AddShortcutDialog : DialogFragment() {
         editName = step3View.findViewById(R.id.editName)
         btnSelectApp = step3View.findViewById(R.id.btnSelectApp)
         layoutSettings = step3View.findViewById(R.id.layoutSettings)
+        layoutShortcuts = step3View.findViewById(R.id.layoutShortcuts)
 
         // Set suggested name
         val suggestedName = buildString {

@@ -203,6 +203,13 @@
     <string name="settings_apps">앱</string>
     <string name="settings_accessibility_menu">접근성</string>
 
+    <!-- 바로가기 동작 -->
+    <string name="shortcut_screenshot">스크린샷 찍기</string>
+    <string name="shortcut_notifications">알림 패널</string>
+    <string name="shortcut_quick_settings">빠른 설정</string>
+    <string name="shortcut_power_menu">전원 메뉴</string>
+    <string name="shortcut_lock_screen">화면 잠금</string>
+
     <!-- 위젯 -->
     <string name="widget_description">홈 화면에 키보드 배터리 잔량 표시</string>
     <string name="widget_no_keyboard">연결된 키보드 없음</string>

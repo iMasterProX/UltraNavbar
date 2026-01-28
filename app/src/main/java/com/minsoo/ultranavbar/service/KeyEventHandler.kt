@@ -29,13 +29,22 @@ class KeyEventHandler(private val context: Context) {
      */
     fun handleKeyEvent(event: KeyEvent): Boolean {
         val keyCode = event.keyCode
+        val action = if (event.action == KeyEvent.ACTION_DOWN) "DOWN" else "UP"
+
+        Log.d(TAG, "Key event: keyCode=$keyCode, action=$action, modifiers=$pressedModifiers")
 
         // 수정자 키 추적 (좌/우 정규화)
         if (isModifierKey(keyCode)) {
             val normalizedKey = normalizeModifier(keyCode)
             when (event.action) {
-                KeyEvent.ACTION_DOWN -> pressedModifiers.add(normalizedKey)
-                KeyEvent.ACTION_UP -> pressedModifiers.remove(normalizedKey)
+                KeyEvent.ACTION_DOWN -> {
+                    pressedModifiers.add(normalizedKey)
+                    Log.d(TAG, "Modifier pressed: $normalizedKey, current modifiers: $pressedModifiers")
+                }
+                KeyEvent.ACTION_UP -> {
+                    pressedModifiers.remove(normalizedKey)
+                    Log.d(TAG, "Modifier released: $normalizedKey, current modifiers: $pressedModifiers")
+                }
             }
             // 수정자 키 자체는 전파
             return false
@@ -43,11 +52,20 @@ class KeyEventHandler(private val context: Context) {
 
         // 일반 키 눌림 시 단축키 확인
         if (event.action == KeyEvent.ACTION_DOWN) {
+            Log.d(TAG, "Searching for shortcut with modifiers=$pressedModifiers, keyCode=$keyCode")
             val shortcut = shortcutManager.findShortcut(pressedModifiers.toSet(), keyCode)
             if (shortcut != null) {
                 Log.d(TAG, "Shortcut matched: ${shortcut.name} (${shortcut.getDisplayString()})")
                 executeShortcut(shortcut)
                 return true  // 이벤트 소비
+            } else {
+                Log.d(TAG, "No shortcut found for modifiers=$pressedModifiers, keyCode=$keyCode")
+                // 등록된 모든 단축키 출력
+                val allShortcuts = shortcutManager.getAllShortcuts()
+                Log.d(TAG, "Registered shortcuts: ${allShortcuts.size}")
+                allShortcuts.forEach { s ->
+                    Log.d(TAG, "  - ${s.name}: modifiers=${s.modifiers}, keyCode=${s.keyCode}")
+                }
             }
         }
 

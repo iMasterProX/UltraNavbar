@@ -169,7 +169,23 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun setupServiceInfo() {
         try {
             val info = serviceInfo
-            info.flags = info.flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+
+            // Ensure key event filtering is explicitly enabled
+            info.flags = info.flags or
+                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+
+            // Verify key event filtering is enabled
+            if (info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS != 0) {
+                Log.i(TAG, "Key event filtering is ENABLED")
+            } else {
+                Log.w(TAG, "Key event filtering is DISABLED - keyboard shortcuts will not work!")
+            }
+
+            Log.d(TAG, "Service flags: ${info.flags}")
+            Log.d(TAG, "Event types: ${info.eventTypes}")
+            Log.i(TAG, "Keyboard shortcut handling initialized")
+
             serviceInfo = info
         } catch (e: Exception) {
             Log.w(TAG, "Could not update serviceInfo flags", e)
@@ -800,7 +816,16 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     override fun onKeyEvent(event: KeyEvent?): Boolean {
-        if (event == null) return false
-        return keyEventHandler.handleKeyEvent(event)
+        if (event == null) {
+            Log.d(TAG, "onKeyEvent: event is null")
+            return false
+        }
+
+        val action = if (event.action == KeyEvent.ACTION_DOWN) "DOWN" else "UP"
+        Log.d(TAG, "onKeyEvent: keyCode=${event.keyCode}, action=$action")
+
+        val result = keyEventHandler.handleKeyEvent(event)
+        Log.d(TAG, "onKeyEvent: result=$result (consumed=$result)")
+        return result
     }
 }

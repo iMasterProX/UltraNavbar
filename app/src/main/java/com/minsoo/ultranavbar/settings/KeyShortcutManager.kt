@@ -140,7 +140,14 @@ class KeyShortcutManager private constructor(context: Context) {
      */
     fun findShortcut(modifiers: Set<Int>, keyCode: Int): KeyShortcut? {
         loadShortcuts()
-        return shortcuts.firstOrNull { it.matches(modifiers, keyCode) }
+        Log.d(TAG, "findShortcut: looking for modifiers=$modifiers, keyCode=$keyCode in ${shortcuts.size} shortcuts")
+        shortcuts.forEach { shortcut ->
+            val matches = shortcut.matches(modifiers, keyCode)
+            Log.d(TAG, "  Checking ${shortcut.name}: modifiers=${shortcut.modifiers}, keyCode=${shortcut.keyCode}, matches=$matches")
+        }
+        val result = shortcuts.firstOrNull { it.matches(modifiers, keyCode) }
+        Log.d(TAG, "findShortcut: result=${result?.name ?: "null"}")
+        return result
     }
 
     /**

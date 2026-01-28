@@ -203,6 +203,13 @@
     <string name="settings_apps">Apps</string>
     <string name="settings_accessibility_menu">Accessibility</string>
 
+    <!-- Shortcut actions -->
+    <string name="shortcut_screenshot">Take Screenshot</string>
+    <string name="shortcut_notifications">Notification Shade</string>
+    <string name="shortcut_quick_settings">Quick Settings</string>
+    <string name="shortcut_power_menu">Power Menu</string>
+    <string name="shortcut_lock_screen">Lock Screen</string>
+
     <!-- Widget -->
     <string name="widget_description">Show keyboard battery level on home screen</string>
     <string name="widget_no_keyboard">No keyboard connected</string>
