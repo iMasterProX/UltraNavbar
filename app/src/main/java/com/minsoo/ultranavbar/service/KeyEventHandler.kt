@@ -30,11 +30,12 @@ class KeyEventHandler(private val context: Context) {
     fun handleKeyEvent(event: KeyEvent): Boolean {
         val keyCode = event.keyCode
 
-        // 수정자 키 추적
+        // 수정자 키 추적 (좌/우 정규화)
         if (isModifierKey(keyCode)) {
+            val normalizedKey = normalizeModifier(keyCode)
             when (event.action) {
-                KeyEvent.ACTION_DOWN -> pressedModifiers.add(keyCode)
-                KeyEvent.ACTION_UP -> pressedModifiers.remove(keyCode)
+                KeyEvent.ACTION_DOWN -> pressedModifiers.add(normalizedKey)
+                KeyEvent.ACTION_UP -> pressedModifiers.remove(normalizedKey)
             }
             // 수정자 키 자체는 전파
             return false
@@ -64,6 +65,17 @@ class KeyEventHandler(private val context: Context) {
             KeyEvent.KEYCODE_META_LEFT, KeyEvent.KEYCODE_META_RIGHT -> true
             else -> false
         }
+    }
+
+    /**
+     * 수정자 키 정규화 (RIGHT -> LEFT)
+     */
+    private fun normalizeModifier(keyCode: Int): Int = when (keyCode) {
+        KeyEvent.KEYCODE_CTRL_RIGHT -> KeyEvent.KEYCODE_CTRL_LEFT
+        KeyEvent.KEYCODE_SHIFT_RIGHT -> KeyEvent.KEYCODE_SHIFT_LEFT
+        KeyEvent.KEYCODE_ALT_RIGHT -> KeyEvent.KEYCODE_ALT_LEFT
+        KeyEvent.KEYCODE_META_RIGHT -> KeyEvent.KEYCODE_META_LEFT
+        else -> keyCode
     }
 
     /**

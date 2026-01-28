@@ -56,7 +56,7 @@ data class KeyShortcut(
         return JSONObject().apply {
             put("id", id)
             put("name", name)
-            put("modifiers", modifiers.toList())
+            put("modifiers", JSONArray(modifiers.toList()))
             put("keyCode", keyCode)
             put("actionType", actionType.name)
             put("actionData", actionData)

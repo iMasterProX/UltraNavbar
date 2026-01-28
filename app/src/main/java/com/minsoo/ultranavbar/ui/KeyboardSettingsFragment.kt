@@ -17,6 +17,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
@@ -204,7 +205,7 @@ class KeyboardSettingsFragment : Fragment() {
             val statusTextView = TextView(requireContext()).apply {
                 text = "${getString(R.string.keyboard_connection_status)}: ${getString(R.string.keyboard_connected)}"
                 textSize = 14f
-                setTextColor(resources.getColor(android.R.color.darker_gray, null))
+                setTextColor(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
                 setPadding(0, 8, 0, 0)
             }
             cardLayout.addView(statusTextView)
@@ -213,7 +214,7 @@ class KeyboardSettingsFragment : Fragment() {
             val addressTextView = TextView(requireContext()).apply {
                 text = device.address
                 textSize = 12f
-                setTextColor(resources.getColor(android.R.color.darker_gray, null))
+                setTextColor(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
                 setPadding(0, 4, 0, 0)
             }
             cardLayout.addView(addressTextView)
@@ -223,7 +224,7 @@ class KeyboardSettingsFragment : Fragment() {
             val errorTextView = TextView(requireContext()).apply {
                 text = "Bluetooth permission required"
                 textSize = 14f
-                setTextColor(resources.getColor(android.R.color.holo_red_dark, null))
+                setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
             }
             cardLayout.addView(errorTextView)
         }
