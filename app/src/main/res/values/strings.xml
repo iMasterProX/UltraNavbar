@@ -139,6 +139,7 @@
     <string name="keyboard_battery_unknown">Unknown</string>
     <string name="keyboard_connection_status">Connection Status</string>
     <string name="keyboard_connected">Connected</string>
+    <string name="keyboard_paired">Paired</string>
     <string name="keyboard_disconnected">Disconnected</string>
     <string name="keyboard_refresh">Refresh</string>
     <string name="keyboard_bluetooth_settings">Open Bluetooth Settings</string>

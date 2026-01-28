@@ -229,6 +229,19 @@ class KeyboardSettingsFragment : Fragment() {
         }
     }
 
+    /**
+     * 기기의 실제 연결 상태 확인 (리플렉션 사용)
+     */
+    private fun isDeviceConnected(device: BluetoothDevice): Boolean {
+        return try {
+            val method = device.javaClass.getMethod("isConnected")
+            method.invoke(device) as? Boolean ?: false
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not determine connection status for ${device.address}")
+            false
+        }
+    }
+
     private fun addDeviceCard(device: BluetoothDevice) {
         val cardView = MaterialCardView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -276,10 +289,21 @@ class KeyboardSettingsFragment : Fragment() {
             cardLayout.addView(nameTextView)
 
             // 연결 상태
+            val isConnected = isDeviceConnected(device)
             val statusTextView = TextView(requireContext()).apply {
-                text = "${getString(R.string.keyboard_connection_status)}: ${getString(R.string.keyboard_connected)}"
+                val statusString = if (isConnected) {
+                    getString(R.string.keyboard_connected)
+                } else {
+                    getString(R.string.keyboard_paired)
+                }
+                text = "${getString(R.string.keyboard_connection_status)}: $statusString"
                 textSize = 14f
-                setTextColor(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
+                val statusColor = if (isConnected) {
+                    android.R.color.holo_green_dark
+                } else {
+                    android.R.color.darker_gray
+                }
+                setTextColor(ContextCompat.getColor(requireContext(), statusColor))
                 setPadding(0, 8, 0, 0)
             }
             cardLayout.addView(statusTextView)
