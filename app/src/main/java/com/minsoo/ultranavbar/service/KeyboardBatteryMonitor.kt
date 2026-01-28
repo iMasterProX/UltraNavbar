@@ -78,11 +78,16 @@ object KeyboardBatteryMonitor {
 
             bondedDevices.forEach { device ->
                 val deviceName = BluetoothUtils.getDeviceName(device, context)
+                val isConnected = BluetoothUtils.isDeviceConnected(device)
                 val isKeyboard = BluetoothUtils.isKeyboardDevice(device, context)
-                Log.d(TAG, "Checking device: $deviceName (${device.address}) - isKeyboard=$isKeyboard")
 
-                if (isKeyboard) {
+                Log.d(TAG, "Device: $deviceName (${device.address}) - isKeyboard=$isKeyboard, isConnected=$isConnected")
+
+                // 연결된 키보드만 배터리 체크
+                if (isKeyboard && isConnected) {
                     checkDeviceBattery(context, device)
+                } else if (isKeyboard && !isConnected) {
+                    Log.d(TAG, "Skipping $deviceName - not connected")
                 }
             }
         } catch (e: Exception) {
@@ -103,6 +108,12 @@ object KeyboardBatteryMonitor {
             val threshold = settings.batteryLowThreshold
             val batteryLevel = BluetoothUtils.getDeviceBatteryLevel(device)
             val deviceName = BluetoothUtils.getDeviceName(device, context)
+
+            if (batteryLevel < 0) {
+                Log.w(TAG, "Device $deviceName (${device.address}): Battery information not available. " +
+                        "This keyboard may not support battery reporting via Bluetooth.")
+                return
+            }
 
             Log.d(TAG, "Device $deviceName (${device.address}): battery=$batteryLevel%, threshold=$threshold%")
 

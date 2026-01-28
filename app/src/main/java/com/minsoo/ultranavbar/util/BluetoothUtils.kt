@@ -113,14 +113,67 @@ object BluetoothUtils {
     }
 
     /**
-     * 배터리 레벨 가져오기 (리플렉션 사용)
+     * 배터리 레벨 가져오기 (여러 방법 시도)
+     *
+     * 시도 순서:
+     * 1. getBatteryLevel() - Android 13+ 공식 API
+     * 2. getBattery() - 일부 제조사 hidden API
+     * 3. getMetadata(6) - METADATA_UNTETHERED_LEFT_BATTERY
+     * 4. getMetadata(7) - METADATA_UNTETHERED_RIGHT_BATTERY
+     * 5. getMetadata(8) - METADATA_UNTETHERED_CASE_BATTERY
+     *
+     * @return 배터리 레벨 (0-100) 또는 -1 (사용 불가)
      */
     fun getDeviceBatteryLevel(device: BluetoothDevice): Int {
-        return try {
+        // 방법 1: 공식 API (Android 13+)
+        try {
             val method = device.javaClass.getMethod("getBatteryLevel")
-            method.invoke(device) as? Int ?: -1
+            val result = method.invoke(device) as? Int
+            if (result != null && result >= 0) {
+                Log.d(TAG, "Battery via getBatteryLevel(): $result%")
+                return result
+            }
         } catch (e: Exception) {
-            -1
+            Log.v(TAG, "getBatteryLevel() failed: ${e.message}")
         }
+
+        // 방법 2: getBattery() hidden API
+        try {
+            val method = device.javaClass.getMethod("getBattery")
+            val result = method.invoke(device) as? Int
+            if (result != null && result >= 0) {
+                Log.d(TAG, "Battery via getBattery(): $result%")
+                return result
+            }
+        } catch (e: Exception) {
+            Log.v(TAG, "getBattery() failed: ${e.message}")
+        }
+
+        // 방법 3-5: getMetadata() - 일부 기기에서 사용
+        val metadataKeys = listOf(
+            6,  // METADATA_UNTETHERED_LEFT_BATTERY
+            7,  // METADATA_UNTETHERED_RIGHT_BATTERY
+            8   // METADATA_UNTETHERED_CASE_BATTERY
+        )
+
+        for (key in metadataKeys) {
+            try {
+                val method = device.javaClass.getMethod("getMetadata", Int::class.javaPrimitiveType)
+                val result = method.invoke(device, key) as? ByteArray
+                if (result != null && result.isNotEmpty()) {
+                    val batteryStr = String(result)
+                    val battery = batteryStr.toIntOrNull()
+                    if (battery != null && battery >= 0 && battery <= 100) {
+                        Log.d(TAG, "Battery via getMetadata($key): $battery%")
+                        return battery
+                    }
+                }
+            } catch (e: Exception) {
+                // 다음 방법 시도
+            }
+        }
+
+        Log.w(TAG, "Could not get battery level for ${device.address} using any method")
+        return -1
     }
 }

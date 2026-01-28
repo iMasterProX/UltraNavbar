@@ -141,27 +141,32 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
                 Log.d(TAG, "Device: $deviceName (${device.address}), isKeyboard=$isKeyboard")
             }
 
+            // 연결된 키보드 찾기
             val keyboardDevice = bondedDevices.firstOrNull { device ->
-                BluetoothUtils.isKeyboardDevice(device, context)
+                val isKeyboard = BluetoothUtils.isKeyboardDevice(device, context)
+                val isConnected = BluetoothUtils.isDeviceConnected(device)
+                isKeyboard && isConnected
             }
 
             if (keyboardDevice != null) {
                 val deviceName = BluetoothUtils.getDeviceName(keyboardDevice, context)
-                Log.d(TAG, "Found keyboard device: $deviceName")
+                Log.d(TAG, "Found connected keyboard: $deviceName")
+
                 val batteryLevel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     BluetoothUtils.getDeviceBatteryLevel(keyboardDevice)
                 } else {
                     -1
                 }
 
-                Log.d(TAG, "Battery level: $batteryLevel")
+                Log.d(TAG, "Battery level for $deviceName: $batteryLevel")
 
                 if (batteryLevel >= 0) {
-                    val deviceName = keyboardDevice.name ?: "Keyboard"
-                    return KeyboardInfo(deviceName, batteryLevel)
+                    return KeyboardInfo(deviceName ?: "Keyboard", batteryLevel)
+                } else {
+                    Log.w(TAG, "Battery info not available for $deviceName")
                 }
             } else {
-                Log.w(TAG, "No keyboard device found")
+                Log.d(TAG, "No connected keyboard found")
             }
 
             return null
