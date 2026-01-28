@@ -28,7 +28,6 @@ object KeyboardBatteryMonitor {
     private const val TAG = "KeyboardBatteryMonitor"
     private const val CHANNEL_ID = "keyboard_battery_alerts"
     private const val NOTIFICATION_ID = 1001
-    private const val BATTERY_LOW_THRESHOLD = 20
 
     // 마지막 알림 표시 시간 추적 (중복 방지)
     private val lastNotificationTimes = mutableMapOf<String, Long>()
@@ -97,8 +96,13 @@ object KeyboardBatteryMonitor {
         }
 
         try {
+            val settings = SettingsManager.getInstance(context)
+            val threshold = settings.batteryLowThreshold
             val batteryLevel = getDeviceBatteryLevel(device)
-            if (batteryLevel in 0..BATTERY_LOW_THRESHOLD) {
+
+            Log.d(TAG, "Device ${device.address}: battery=$batteryLevel%, threshold=$threshold%")
+
+            if (batteryLevel in 0..threshold) {
                 showLowBatteryNotification(context, device, batteryLevel)
             }
         } catch (e: Exception) {
@@ -195,9 +199,17 @@ object KeyboardBatteryMonitor {
             val majorDeviceClass = deviceClass.majorDeviceClass
             val deviceClassCode = deviceClass.deviceClass
 
-            // Major Device Class: PERIPHERAL (0x500) 및 Keyboard (0x40)
-            return majorDeviceClass == 0x500 || (deviceClassCode and 0x40) != 0
+            // Major Device Class: PERIPHERAL (0x500)
+            // Minor Device Class: Keyboard (0x40)
+            val isPeripheral = majorDeviceClass == 0x500
+            val isKeyboard = (deviceClassCode and 0x40) != 0
+
+            Log.d(TAG, "Device ${device.address}: class=$deviceClassCode, major=$majorDeviceClass, " +
+                    "isPeripheral=$isPeripheral, isKeyboard=$isKeyboard")
+
+            return isPeripheral && isKeyboard
         } catch (e: Exception) {
+            Log.e(TAG, "Error checking device class: ${device.address}", e)
             return false
         }
     }

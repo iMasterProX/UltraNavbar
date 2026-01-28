@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -21,9 +22,14 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.slider.Slider
 import com.minsoo.ultranavbar.R
 
 class KeyboardSettingsFragment : Fragment() {
+
+    companion object {
+        private const val TAG = "KeyboardSettings"
+    }
 
     private lateinit var deviceListContainer: LinearLayout
     private lateinit var txtNoDevices: TextView
@@ -31,6 +37,9 @@ class KeyboardSettingsFragment : Fragment() {
     private lateinit var btnBluetoothSettings: MaterialButton
     private lateinit var btnManageShortcuts: MaterialButton
     private lateinit var switchBatteryNotification: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var sliderBatteryThreshold: Slider
+    private lateinit var txtThresholdValue: TextView
+    private lateinit var layoutBatteryThreshold: View
 
     private var bluetoothAdapter: BluetoothAdapter? = null
 
@@ -73,6 +82,9 @@ class KeyboardSettingsFragment : Fragment() {
         btnBluetoothSettings = view.findViewById(R.id.btnBluetoothSettings)
         btnManageShortcuts = view.findViewById(R.id.btnManageShortcuts)
         switchBatteryNotification = view.findViewById(R.id.switchBatteryNotification)
+        sliderBatteryThreshold = view.findViewById(R.id.sliderBatteryThreshold)
+        txtThresholdValue = view.findViewById(R.id.txtThresholdValue)
+        layoutBatteryThreshold = view.findViewById(R.id.layoutBatteryThreshold)
 
         btnRefresh.setOnClickListener {
             loadDevices()
@@ -86,12 +98,31 @@ class KeyboardSettingsFragment : Fragment() {
             openShortcutManagement()
         }
 
-        // 배터리 알림 스위치
+        // 배터리 알림 설정
         val settings = com.minsoo.ultranavbar.settings.SettingsManager.getInstance(requireContext())
+
+        // 배터리 알림 스위치
         switchBatteryNotification.isChecked = settings.batteryNotificationEnabled
         switchBatteryNotification.setOnCheckedChangeListener { _, isChecked ->
             settings.batteryNotificationEnabled = isChecked
+            layoutBatteryThreshold.visibility = if (isChecked) View.VISIBLE else View.GONE
         }
+
+        // 배터리 임계값 슬라이더
+        sliderBatteryThreshold.value = settings.batteryLowThreshold.toFloat()
+        updateThresholdText(settings.batteryLowThreshold)
+        sliderBatteryThreshold.addOnChangeListener { _, value, _ ->
+            val threshold = value.toInt()
+            settings.batteryLowThreshold = threshold
+            updateThresholdText(threshold)
+        }
+
+        // 초기 가시성 설정
+        layoutBatteryThreshold.visibility = if (settings.batteryNotificationEnabled) View.VISIBLE else View.GONE
+    }
+
+    private fun updateThresholdText(threshold: Int) {
+        txtThresholdValue.text = getString(R.string.battery_low_threshold_summary, threshold)
     }
 
     private fun openShortcutManagement() {
@@ -164,13 +195,24 @@ class KeyboardSettingsFragment : Fragment() {
     private fun isKeyboardDevice(device: BluetoothDevice): Boolean {
         try {
             // BluetoothDevice의 클래스를 확인하여 키보드 여부 판단
-            val deviceClass = device.bluetoothClass ?: return false
+            val deviceClass = device.bluetoothClass ?: run {
+                Log.w(TAG, "Device ${device.address} has no Bluetooth class")
+                return false
+            }
             val majorDeviceClass = deviceClass.majorDeviceClass
             val deviceClassCode = deviceClass.deviceClass
 
-            // Major Device Class: PERIPHERAL (0x500) 및 Keyboard (0x40)
-            return majorDeviceClass == 0x500 || (deviceClassCode and 0x40) != 0
+            // Major Device Class: PERIPHERAL (0x500)
+            // Minor Device Class: Keyboard (0x40)
+            val isPeripheral = majorDeviceClass == 0x500
+            val isKeyboard = (deviceClassCode and 0x40) != 0
+
+            Log.d(TAG, "Device ${device.address}: class=$deviceClassCode, major=$majorDeviceClass, " +
+                    "isPeripheral=$isPeripheral, isKeyboard=$isKeyboard")
+
+            return isPeripheral && isKeyboard
         } catch (e: Exception) {
+            Log.e(TAG, "Error checking device class: ${device.address}", e)
             return false
         }
     }

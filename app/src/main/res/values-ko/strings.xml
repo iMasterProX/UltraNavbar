@@ -207,6 +207,8 @@
     <!-- 배터리 알림 -->
     <string name="battery_notification_title">배터리 알림</string>
     <string name="battery_notification_summary">키보드 배터리가 부족할 때 알림</string>
+    <string name="battery_low_threshold_title">배터리 부족 기준</string>
+    <string name="battery_low_threshold_summary">배터리가 %d%% 이하로 떨어지면 알림</string>
     <string name="battery_notification_channel_name">키보드 배터리 알림</string>
     <string name="battery_notification_channel_description">키보드 배터리 부족 알림</string>
     <string name="battery_low_title">키보드 배터리 부족</string>

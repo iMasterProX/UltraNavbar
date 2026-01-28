@@ -207,6 +207,8 @@
     <!-- Battery Notifications -->
     <string name="battery_notification_title">Battery Notifications</string>
     <string name="battery_notification_summary">Alert when keyboard battery is low</string>
+    <string name="battery_low_threshold_title">Low Battery Threshold</string>
+    <string name="battery_low_threshold_summary">Alert when battery drops below %d%%</string>
     <string name="battery_notification_channel_name">Keyboard Battery Alerts</string>
     <string name="battery_notification_channel_description">Notifications for low keyboard battery</string>
     <string name="battery_low_title">Keyboard Battery Low</string>

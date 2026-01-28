@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.ActivityCompat
 import com.minsoo.ultranavbar.MainActivity
@@ -114,7 +115,10 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
     private fun getKeyboardBatteryInfo(context: Context): KeyboardInfo? {
         try {
             val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-            val bluetoothAdapter = bluetoothManager?.adapter ?: return null
+            val bluetoothAdapter = bluetoothManager?.adapter ?: run {
+                Log.w(TAG, "Bluetooth adapter not available")
+                return null
+            }
 
             // 권한 확인
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -123,44 +127,69 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
                         Manifest.permission.BLUETOOTH_CONNECT
                     ) != PackageManager.PERMISSION_GRANTED
                 ) {
+                    Log.w(TAG, "BLUETOOTH_CONNECT permission not granted")
                     return null
                 }
             }
 
             // 연결된 키보드 찾기
             val bondedDevices = bluetoothAdapter.bondedDevices
+            Log.d(TAG, "Found ${bondedDevices.size} bonded devices")
+
+            bondedDevices.forEach { device ->
+                val isKeyboard = isKeyboardDevice(device)
+                Log.d(TAG, "Device: ${device.name} (${device.address}), isKeyboard=$isKeyboard")
+            }
+
             val keyboardDevice = bondedDevices.firstOrNull { device ->
                 isKeyboardDevice(device)
             }
 
             if (keyboardDevice != null) {
+                Log.d(TAG, "Found keyboard device: ${keyboardDevice.name}")
                 val batteryLevel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     getDeviceBatteryLevel(keyboardDevice)
                 } else {
                     -1
                 }
 
+                Log.d(TAG, "Battery level: $batteryLevel")
+
                 if (batteryLevel >= 0) {
                     val deviceName = keyboardDevice.name ?: "Keyboard"
                     return KeyboardInfo(deviceName, batteryLevel)
                 }
+            } else {
+                Log.w(TAG, "No keyboard device found")
             }
 
             return null
         } catch (e: Exception) {
+            Log.e(TAG, "Error getting keyboard battery info", e)
             return null
         }
     }
 
     private fun isKeyboardDevice(device: BluetoothDevice): Boolean {
         try {
-            val deviceClass = device.bluetoothClass ?: return false
+            val deviceClass = device.bluetoothClass ?: run {
+                Log.w(TAG, "Device ${device.address} has no Bluetooth class")
+                return false
+            }
             val majorDeviceClass = deviceClass.majorDeviceClass
             val deviceClassCode = deviceClass.deviceClass
 
-            // Major Device Class: PERIPHERAL (0x500) 및 Keyboard (0x40)
-            return majorDeviceClass == 0x500 || (deviceClassCode and 0x40) != 0
+            // Major Device Class: PERIPHERAL (0x500)
+            // Minor Device Class: Keyboard (0x40)
+            val isPeripheral = majorDeviceClass == 0x500
+            val isKeyboard = (deviceClassCode and 0x40) != 0
+
+            Log.d(TAG, "Device ${device.address}: class=$deviceClassCode, major=$majorDeviceClass, " +
+                    "isPeripheral=$isPeripheral, isKeyboard=$isKeyboard")
+
+            return isPeripheral && isKeyboard
         } catch (e: Exception) {
+            Log.e(TAG, "Error checking device class: ${device.address}", e)
             return false
         }
     }

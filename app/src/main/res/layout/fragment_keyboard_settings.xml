@@ -128,36 +128,77 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="16dp"
-                android:gravity="center_vertical">
+                android:orientation="vertical"
+                android:padding="16dp">
 
+                <!-- 배터리 알림 토글 -->
                 <LinearLayout
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/battery_notification_title"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="@string/battery_notification_summary"
+                            android:textSize="12sp"
+                            android:textColor="?android:textColorSecondary" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchBatteryNotification"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- 배터리 임계값 슬라이더 -->
+                <LinearLayout
+                    android:id="@+id/layoutBatteryThreshold"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="16dp">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/battery_notification_title"
-                        android:textSize="16sp"
+                        android:text="@string/battery_low_threshold_title"
+                        android:textSize="14sp"
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/txtThresholdValue"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="@string/battery_notification_summary"
                         android:textSize="12sp"
                         android:textColor="?android:textColorSecondary" />
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/sliderBatteryThreshold"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="5"
+                        android:valueTo="50"
+                        android:stepSize="5"
+                        android:value="20" />
                 </LinearLayout>
 
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switchBatteryNotification"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>
