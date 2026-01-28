@@ -136,6 +136,7 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
             if (keyboardDevice != null) {
                 val batteryLevel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     try {
+                        @Suppress("NewApi")
                         keyboardDevice.getBatteryLevel()
                     } catch (e: Exception) {
                         -1

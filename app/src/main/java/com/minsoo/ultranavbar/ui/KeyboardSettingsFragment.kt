@@ -242,11 +242,8 @@ class KeyboardSettingsFragment : Fragment() {
             // 배터리 정보 (API 33+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 try {
-                    val batteryLevel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        device.getBatteryLevel()
-                    } else {
-                        -1
-                    }
+                    @Suppress("NewApi")
+                    val batteryLevel = device.getBatteryLevel()
 
                     val batteryText = if (batteryLevel >= 0) {
                         "${getString(R.string.keyboard_battery_level)}: $batteryLevel%"

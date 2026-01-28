@@ -244,54 +244,59 @@ class AddShortcutDialog(
         dismiss()
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (currentStep != 1) return super.onKeyDown(keyCode, event)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (currentStep != 1) {
+            return super.dispatchKeyEvent(event)
+        }
 
-        when (keyCode) {
-            KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> {
-                pressedModifiers.add(KeyEvent.KEYCODE_CTRL_LEFT)
-            }
-            KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> {
-                pressedModifiers.add(KeyEvent.KEYCODE_SHIFT_LEFT)
-            }
-            KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_ALT_RIGHT -> {
-                pressedModifiers.add(KeyEvent.KEYCODE_ALT_LEFT)
-            }
-            KeyEvent.KEYCODE_META_LEFT, KeyEvent.KEYCODE_META_RIGHT -> {
-                pressedModifiers.add(KeyEvent.KEYCODE_META_LEFT)
-            }
-            else -> {
-                if (pressedModifiers.isNotEmpty()) {
-                    mainKeyCode = keyCode
-                    btnNext.isEnabled = true
+        val keyCode = event.keyCode
+
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> {
+                        pressedModifiers.add(KeyEvent.KEYCODE_CTRL_LEFT)
+                    }
+                    KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> {
+                        pressedModifiers.add(KeyEvent.KEYCODE_SHIFT_LEFT)
+                    }
+                    KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_ALT_RIGHT -> {
+                        pressedModifiers.add(KeyEvent.KEYCODE_ALT_LEFT)
+                    }
+                    KeyEvent.KEYCODE_META_LEFT, KeyEvent.KEYCODE_META_RIGHT -> {
+                        pressedModifiers.add(KeyEvent.KEYCODE_META_LEFT)
+                    }
+                    else -> {
+                        if (pressedModifiers.isNotEmpty()) {
+                            mainKeyCode = keyCode
+                            btnNext.isEnabled = true
+                        }
+                    }
                 }
+                updateKeyCombinationDisplay()
+                return true
+            }
+            KeyEvent.ACTION_UP -> {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> {
+                        pressedModifiers.remove(KeyEvent.KEYCODE_CTRL_LEFT)
+                    }
+                    KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> {
+                        pressedModifiers.remove(KeyEvent.KEYCODE_SHIFT_LEFT)
+                    }
+                    KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_ALT_RIGHT -> {
+                        pressedModifiers.remove(KeyEvent.KEYCODE_ALT_LEFT)
+                    }
+                    KeyEvent.KEYCODE_META_LEFT, KeyEvent.KEYCODE_META_RIGHT -> {
+                        pressedModifiers.remove(KeyEvent.KEYCODE_META_LEFT)
+                    }
+                }
+                updateKeyCombinationDisplay()
+                return true
             }
         }
 
-        updateKeyCombinationDisplay()
-        return true
-    }
-
-    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        if (currentStep != 1) return super.onKeyUp(keyCode, event)
-
-        when (keyCode) {
-            KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> {
-                pressedModifiers.remove(KeyEvent.KEYCODE_CTRL_LEFT)
-            }
-            KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> {
-                pressedModifiers.remove(KeyEvent.KEYCODE_SHIFT_LEFT)
-            }
-            KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_ALT_RIGHT -> {
-                pressedModifiers.remove(KeyEvent.KEYCODE_ALT_LEFT)
-            }
-            KeyEvent.KEYCODE_META_LEFT, KeyEvent.KEYCODE_META_RIGHT -> {
-                pressedModifiers.remove(KeyEvent.KEYCODE_META_LEFT)
-            }
-        }
-
-        updateKeyCombinationDisplay()
-        return true
+        return super.dispatchKeyEvent(event)
     }
 
     private fun updateKeyCombinationDisplay() {

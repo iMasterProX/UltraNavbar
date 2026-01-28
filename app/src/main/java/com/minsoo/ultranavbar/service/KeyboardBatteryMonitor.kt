@@ -97,6 +97,7 @@ object KeyboardBatteryMonitor {
         }
 
         try {
+            @Suppress("NewApi")
             val batteryLevel = device.getBatteryLevel()
             if (batteryLevel in 0..BATTERY_LOW_THRESHOLD) {
                 showLowBatteryNotification(context, device, batteryLevel)
