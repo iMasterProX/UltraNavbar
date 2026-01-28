@@ -26,6 +26,7 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_BATTERY_OPT_REQUESTED = "battery_opt_requested"
         private const val KEY_PREVIEW_FILTER_OPACITY = "preview_filter_opacity"
         private const val KEY_DISABLED_APPS = "disabled_apps" // 비활성화할 앱 목록 (패키지명 set)
+        private const val KEY_SHORTCUT_DISABLED_APPS = "shortcut_disabled_apps" // 키보드 단축키 비활성화 앱 목록
 
         // Background Image Filenames (Stored in prefs to track validity, though file existence is primary check)
         private const val KEY_HOME_BG_LANDSCAPE = "home_bg_landscape"
@@ -106,6 +107,11 @@ class SettingsManager private constructor(context: Context) {
         get() = prefs.getStringSet(KEY_DISABLED_APPS, emptySet()) ?: emptySet()
         set(value) = prefs.edit().putStringSet(KEY_DISABLED_APPS, value).apply()
 
+    // 키보드 단축키를 비활성화할 앱 목록
+    var shortcutDisabledApps: Set<String>
+        get() = prefs.getStringSet(KEY_SHORTCUT_DISABLED_APPS, emptySet()) ?: emptySet()
+        set(value) = prefs.edit().putStringSet(KEY_SHORTCUT_DISABLED_APPS, value).apply()
+
     // 배경 이미지 설정 여부/경로 (실제 로딩은 ImageCropUtil에서 파일 유무로 판단하지만 설정값 유지용)
     var homeBgLandscape: String?
         get() = prefs.getString(KEY_HOME_BG_LANDSCAPE, null)
@@ -146,5 +152,12 @@ class SettingsManager private constructor(context: Context) {
      */
     fun isAppDisabled(packageName: String): Boolean {
         return disabledApps.contains(packageName)
+    }
+
+    /**
+     * 해당 패키지에서 키보드 단축키를 비활성화해야 하는지 확인
+     */
+    fun isShortcutDisabledForApp(packageName: String): Boolean {
+        return shortcutDisabledApps.contains(packageName)
     }
 }

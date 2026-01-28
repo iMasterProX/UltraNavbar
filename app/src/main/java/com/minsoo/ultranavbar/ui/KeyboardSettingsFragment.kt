@@ -24,6 +24,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.slider.Slider
 import com.minsoo.ultranavbar.R
+import com.minsoo.ultranavbar.util.BleGattBatteryReader
 import com.minsoo.ultranavbar.util.BluetoothUtils
 
 class KeyboardSettingsFragment : Fragment() {
@@ -37,6 +38,7 @@ class KeyboardSettingsFragment : Fragment() {
     private lateinit var btnRefresh: MaterialButton
     private lateinit var btnBluetoothSettings: MaterialButton
     private lateinit var btnManageShortcuts: MaterialButton
+    private lateinit var btnShortcutDisabledApps: MaterialButton
     private lateinit var switchBatteryNotification: com.google.android.material.switchmaterial.SwitchMaterial
     private lateinit var sliderBatteryThreshold: Slider
     private lateinit var txtThresholdValue: TextView
@@ -88,6 +90,8 @@ class KeyboardSettingsFragment : Fragment() {
         layoutBatteryThreshold = view.findViewById(R.id.layoutBatteryThreshold)
 
         btnRefresh.setOnClickListener {
+            // 캐시 클리어 후 새로 로드 (BLE GATT 배터리 새로 읽기)
+            BleGattBatteryReader.clearCache()
             loadDevices()
         }
 
@@ -97,6 +101,11 @@ class KeyboardSettingsFragment : Fragment() {
 
         btnManageShortcuts.setOnClickListener {
             openShortcutManagement()
+        }
+
+        btnShortcutDisabledApps = view.findViewById(R.id.btnShortcutDisabledApps)
+        btnShortcutDisabledApps.setOnClickListener {
+            openShortcutDisabledApps()
         }
 
         // 배터리 알림 설정
@@ -128,6 +137,13 @@ class KeyboardSettingsFragment : Fragment() {
 
     private fun openShortcutManagement() {
         val intent = Intent(requireContext(), KeyboardShortcutActivity::class.java)
+        startActivity(intent)
+    }
+
+    private fun openShortcutDisabledApps() {
+        val intent = Intent(requireContext(), AppListActivity::class.java).apply {
+            putExtra(AppListActivity.EXTRA_SELECTION_MODE, AppListActivity.MODE_SHORTCUT_DISABLED_APPS)
+        }
         startActivity(intent)
     }
 
@@ -184,6 +200,18 @@ class KeyboardSettingsFragment : Fragment() {
                 }
                 sortedDevices.forEach { device ->
                     addDeviceCard(device)
+                    // BLE 기기일 경우 캐시가 없을 때만 GATT 배터리 읽기 트리거
+                    if (BleGattBatteryReader.isBleOnlyDevice(device) &&
+                        BleGattBatteryReader.getCachedBatteryLevel(device.address) == null) {
+                        BluetoothUtils.triggerBleGattBatteryRead(requireContext(), device) { batteryLevel ->
+                            // 배터리 정보가 새로 읽혔으면 UI 갱신 (한 번만)
+                            if (batteryLevel != null && isAdded) {
+                                activity?.runOnUiThread {
+                                    loadDevices()
+                                }
+                            }
+                        }
+                    }
                 }
             }
         } catch (e: SecurityException) {
@@ -266,33 +294,31 @@ class KeyboardSettingsFragment : Fragment() {
             }
             cardLayout.addView(addressTextView)
 
-            // 배터리 정보 (API 33+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                try {
-                    val batteryLevel = BluetoothUtils.getDeviceBatteryLevel(device)
+            // 배터리 정보
+            try {
+                val batteryLevel = BluetoothUtils.getDeviceBatteryLevel(device)
 
-                    val batteryText = if (batteryLevel >= 0) {
-                        "${getString(R.string.keyboard_battery_level)}: $batteryLevel%"
-                    } else {
-                        "${getString(R.string.keyboard_battery_level)}: ${getString(R.string.keyboard_battery_unknown)}"
-                    }
-
-                    val batteryTextView = TextView(requireContext()).apply {
-                        text = batteryText
-                        textSize = 14f
-                        val color = when {
-                            batteryLevel < 0 -> ContextCompat.getColor(requireContext(), android.R.color.darker_gray)
-                            batteryLevel <= 20 -> ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark)
-                            batteryLevel <= 50 -> ContextCompat.getColor(requireContext(), android.R.color.holo_orange_dark)
-                            else -> ContextCompat.getColor(requireContext(), android.R.color.holo_green_dark)
-                        }
-                        setTextColor(color)
-                        setPadding(0, 8, 0, 0)
-                    }
-                    cardLayout.addView(batteryTextView)
-                } catch (e: Exception) {
-                    // getBatteryLevel() 실패 시 무시
+                val batteryText = if (batteryLevel >= 0) {
+                    "${getString(R.string.keyboard_battery_level)}: $batteryLevel%"
+                } else {
+                    "${getString(R.string.keyboard_battery_level)}: ${getString(R.string.keyboard_battery_unknown)}"
                 }
+
+                val batteryTextView = TextView(requireContext()).apply {
+                    text = batteryText
+                    textSize = 14f
+                    val color = when {
+                        batteryLevel < 0 -> ContextCompat.getColor(requireContext(), android.R.color.darker_gray)
+                        batteryLevel <= 20 -> ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark)
+                        batteryLevel <= 50 -> ContextCompat.getColor(requireContext(), android.R.color.holo_orange_dark)
+                        else -> ContextCompat.getColor(requireContext(), android.R.color.holo_green_dark)
+                    }
+                    setTextColor(color)
+                    setPadding(0, 8, 0, 0)
+                }
+                cardLayout.addView(batteryTextView)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to get battery level for ${device.address}", e)
             }
 
         } catch (e: SecurityException) {

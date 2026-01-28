@@ -18,6 +18,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.minsoo.ultranavbar.MainActivity
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.settings.SettingsManager
+import com.minsoo.ultranavbar.util.BleGattBatteryReader
 import com.minsoo.ultranavbar.util.BluetoothUtils
 
 /**
@@ -99,26 +100,38 @@ object KeyboardBatteryMonitor {
      * 특정 기기의 배터리 확인
      */
     private fun checkDeviceBattery(context: Context, device: BluetoothDevice) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            return
-        }
-
         try {
             val settings = SettingsManager.getInstance(context)
             val threshold = settings.batteryLowThreshold
-            val batteryLevel = BluetoothUtils.getDeviceBatteryLevel(device)
             val deviceName = BluetoothUtils.getDeviceName(device, context)
 
-            if (batteryLevel < 0) {
-                Log.w(TAG, "Device $deviceName (${device.address}): Battery information not available. " +
-                        "This keyboard may not support battery reporting via Bluetooth.")
+            // 먼저 일반적인 방법으로 배터리 확인
+            val batteryLevel = BluetoothUtils.getDeviceBatteryLevel(device)
+
+            if (batteryLevel >= 0) {
+                Log.d(TAG, "Device $deviceName (${device.address}): battery=$batteryLevel%, threshold=$threshold%")
+                if (batteryLevel in 0..threshold) {
+                    showLowBatteryNotification(context, device, batteryLevel)
+                }
                 return
             }
 
-            Log.d(TAG, "Device $deviceName (${device.address}): battery=$batteryLevel%, threshold=$threshold%")
-
-            if (batteryLevel in 0..threshold) {
-                showLowBatteryNotification(context, device, batteryLevel)
+            // 일반 방법으로 읽을 수 없으면 BLE GATT 시도
+            if (BleGattBatteryReader.isBleOnlyDevice(device)) {
+                Log.d(TAG, "Device $deviceName (${device.address}): Trying BLE GATT battery read")
+                BleGattBatteryReader.readBatteryLevel(context, device) { bleBatteryLevel ->
+                    if (bleBatteryLevel != null) {
+                        Log.d(TAG, "Device $deviceName (${device.address}): BLE battery=$bleBatteryLevel%, threshold=$threshold%")
+                        if (bleBatteryLevel in 0..threshold) {
+                            showLowBatteryNotification(context, device, bleBatteryLevel)
+                        }
+                    } else {
+                        Log.w(TAG, "Device $deviceName (${device.address}): Battery information not available via BLE GATT")
+                    }
+                }
+            } else {
+                Log.w(TAG, "Device $deviceName (${device.address}): Battery information not available. " +
+                        "This keyboard may not support battery reporting via Bluetooth.")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error getting battery level for device: ${device.address}", e)

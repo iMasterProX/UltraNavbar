@@ -11,12 +11,12 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.ActivityCompat
 import com.minsoo.ultranavbar.MainActivity
 import com.minsoo.ultranavbar.R
+import com.minsoo.ultranavbar.util.BleGattBatteryReader
 import com.minsoo.ultranavbar.util.BluetoothUtils
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -79,15 +79,19 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
 
         if (keyboardInfo != null) {
             views.setTextViewText(R.id.txtKeyboardName, keyboardInfo.name)
-            views.setTextViewText(R.id.txtBatteryLevel, "${keyboardInfo.batteryLevel}%")
 
-            // 배터리 레벨에 따른 색상 설정
-            val batteryColor = when {
-                keyboardInfo.batteryLevel <= 20 -> android.R.color.holo_red_dark
-                keyboardInfo.batteryLevel <= 50 -> android.R.color.holo_orange_dark
-                else -> android.R.color.holo_green_dark
+            if (keyboardInfo.batteryLevel >= 0) {
+                views.setTextViewText(R.id.txtBatteryLevel, "${keyboardInfo.batteryLevel}%")
+                val batteryColor = when {
+                    keyboardInfo.batteryLevel <= 20 -> android.R.color.holo_red_dark
+                    keyboardInfo.batteryLevel <= 50 -> android.R.color.holo_orange_dark
+                    else -> android.R.color.holo_green_dark
+                }
+                views.setTextColor(R.id.txtBatteryLevel, context.getColor(batteryColor))
+            } else {
+                views.setTextViewText(R.id.txtBatteryLevel, "--")
+                views.setTextColor(R.id.txtBatteryLevel, context.getColor(android.R.color.darker_gray))
             }
-            views.setTextColor(R.id.txtBatteryLevel, context.getColor(batteryColor))
 
             // 마지막 업데이트 시간
             val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -152,19 +156,23 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
                 val deviceName = BluetoothUtils.getDeviceName(keyboardDevice, context)
                 Log.d(TAG, "Found connected keyboard: $deviceName")
 
-                val batteryLevel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    BluetoothUtils.getDeviceBatteryLevel(keyboardDevice)
-                } else {
-                    -1
-                }
-
+                var batteryLevel = BluetoothUtils.getDeviceBatteryLevel(keyboardDevice)
                 Log.d(TAG, "Battery level for $deviceName: $batteryLevel")
 
-                if (batteryLevel >= 0) {
-                    return KeyboardInfo(deviceName ?: "Keyboard", batteryLevel)
-                } else {
-                    Log.w(TAG, "Battery info not available for $deviceName")
+                // 배터리 정보를 읽을 수 없고 BLE 기기인 경우 GATT 읽기 트리거
+                if (batteryLevel < 0 && BleGattBatteryReader.isBleOnlyDevice(keyboardDevice)) {
+                    Log.d(TAG, "Triggering BLE GATT battery read for $deviceName")
+                    // 비동기로 BLE GATT 읽기 트리거 (캐시 업데이트용)
+                    BleGattBatteryReader.readBatteryLevel(context, keyboardDevice) { bleBatteryLevel ->
+                        if (bleBatteryLevel != null) {
+                            Log.d(TAG, "BLE GATT battery read complete: $bleBatteryLevel%")
+                            // 위젯 업데이트를 다시 트리거
+                            updateAllWidgets(context)
+                        }
+                    }
                 }
+
+                return KeyboardInfo(deviceName ?: "Keyboard", batteryLevel)
             } else {
                 Log.d(TAG, "No connected keyboard found")
             }

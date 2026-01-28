@@ -176,13 +176,20 @@ class NavBarAccessibilityService : AccessibilityService() {
                 AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
 
             // Verify key event filtering is enabled
-            if (info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS != 0) {
-                Log.i(TAG, "Key event filtering is ENABLED")
+            val hasFlag = info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS != 0
+            val hasCapability = info.capabilities and AccessibilityServiceInfo.CAPABILITY_CAN_REQUEST_FILTER_KEY_EVENTS != 0
+
+            if (hasFlag && hasCapability) {
+                Log.i(TAG, "Key event filtering is ENABLED (flag=true, capability=true)")
             } else {
-                Log.w(TAG, "Key event filtering is DISABLED - keyboard shortcuts will not work!")
+                Log.w(TAG, "Key event filtering issue - flag=$hasFlag, capability=$hasCapability")
+                if (!hasCapability) {
+                    Log.w(TAG, "Missing CAPABILITY_CAN_REQUEST_FILTER_KEY_EVENTS - ensure canRequestFilterKeyEvents=true in XML")
+                }
             }
 
             Log.d(TAG, "Service flags: ${info.flags}")
+            Log.d(TAG, "Service capabilities: ${info.capabilities}")
             Log.d(TAG, "Event types: ${info.eventTypes}")
             Log.i(TAG, "Keyboard shortcut handling initialized")
 
@@ -339,7 +346,11 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         updateRecentsState(isRecents, "event")
 
-        if (packageName == this.packageName) return
+        // 이 앱이 열리면 홈 화면 상태를 false로 설정 후 리턴
+        if (packageName == this.packageName) {
+            updateHomeScreenState(false, "self_app")
+            return
+        }
 
         val isSystemUi = packageName == "com.android.systemui"
         if (handleSystemUiState(isSystemUi, isRecents, "event")) {
@@ -555,7 +566,13 @@ class NavBarAccessibilityService : AccessibilityService() {
             packageName = root?.packageName?.toString()
         }
 
-        if (packageName.isNullOrEmpty() || packageName == this.packageName) return
+        // 이 앱이 열리면 홈 화면 상태를 false로 설정 후 리턴
+        if (packageName.isNullOrEmpty() || packageName == this.packageName) {
+            if (packageName == this.packageName) {
+                updateHomeScreenState(false, "self_app_windows")
+            }
+            return
+        }
 
         val isSystemUi = packageName == "com.android.systemui"
         if (handleSystemUiState(isSystemUi, recentsVisible, "windows")) {
@@ -640,11 +657,11 @@ class NavBarAccessibilityService : AccessibilityService() {
     // ===== 배터리 모니터링 =====
 
     private fun startBatteryMonitoring() {
-        // 1시간마다 배터리 체크
+        // 30분마다 배터리 체크 (BLE GATT 캐시는 10분 유효)
         batteryMonitorRunnable = object : Runnable {
             override fun run() {
                 KeyboardBatteryMonitor.checkBatteryLevels(this@NavBarAccessibilityService)
-                handler.postDelayed(this, 3600000L) // 1 hour
+                handler.postDelayed(this, 1800000L) // 30 minutes
             }
         }
         handler.post(batteryMonitorRunnable!!)
@@ -818,6 +835,12 @@ class NavBarAccessibilityService : AccessibilityService() {
     override fun onKeyEvent(event: KeyEvent?): Boolean {
         if (event == null) {
             Log.d(TAG, "onKeyEvent: event is null")
+            return false
+        }
+
+        // 현재 앱에서 키보드 단축키가 비활성화되어 있으면 이벤트 전파
+        if (currentPackage.isNotEmpty() && settings.isShortcutDisabledForApp(currentPackage)) {
+            Log.d(TAG, "onKeyEvent: shortcuts disabled for $currentPackage, passing through")
             return false
         }
 

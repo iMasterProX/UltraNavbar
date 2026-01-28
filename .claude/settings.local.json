@@ -36,7 +36,11 @@
       "Bash(git restore:*)",
       "Bash(cmd.exe:*)",
       "Bash(timeout 60 bash -c 'cmd.exe /c \"\"gradlew.bat :app:assembleDebug --no-daemon 2>&1\"\"')",
-      "Bash(timeout 90 bash -c 'cmd.exe /c \"\"gradlew.bat :app:assembleDebug --no-daemon 2>&1\"\"')"
+      "Bash(timeout 90 bash -c 'cmd.exe /c \"\"gradlew.bat :app:assembleDebug --no-daemon 2>&1\"\"')",
+      "Bash(.gradlew.bat assembleDebug)",
+      "Bash(./gradlew.bat:*)",
+      "Bash(where:*)",
+      "Bash(adb:*)"
     ]
   }
 }

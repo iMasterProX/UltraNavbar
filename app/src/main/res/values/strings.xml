@@ -144,10 +144,13 @@
     <string name="keyboard_refresh">Refresh</string>
     <string name="keyboard_bluetooth_settings">Open Bluetooth Settings</string>
 
-    <!-- Placeholders -->
+    <!-- Wacom Pen -->
     <string name="wacom_pen_settings_title">Wacom Pen Settings</string>
-    <string name="wacom_pen_settings_desc">Settings for LG UltraTab Wacom pen including device configuration and custom features will be available in a future update.</string>
+    <string name="wacom_pen_settings_desc">Open system pen settings to configure Wacom pen features.</string>
     <string name="coming_soon">Coming in a future update</string>
+    <string name="open_pen_settings">Open Pen Settings</string>
+    <string name="pen_settings_fallback">Pen settings not found. Opening main settings.</string>
+    <string name="pen_settings_failed">Failed to open settings.</string>
 
     <!-- Setup screen -->
     <string name="setup_welcome_title">Welcome to LG UltraTab Extension</string>
@@ -186,6 +189,7 @@
     <string name="action_shortcut">Shortcut</string>
     <string name="select_app">Select App</string>
     <string name="select_action">Select Action</string>
+    <string name="select_shortcut_app">Select Shortcut</string>
     <string name="shortcut_saved">Shortcut saved</string>
     <string name="shortcut_deleted">Shortcut deleted</string>
     <string name="shortcut_duplicate">This key combination is already in use</string>
@@ -203,12 +207,9 @@
     <string name="settings_apps">Apps</string>
     <string name="settings_accessibility_menu">Accessibility</string>
 
-    <!-- Shortcut actions -->
-    <string name="shortcut_screenshot">Take Screenshot</string>
-    <string name="shortcut_notifications">Notification Shade</string>
-    <string name="shortcut_quick_settings">Quick Settings</string>
-    <string name="shortcut_power_menu">Power Menu</string>
-    <string name="shortcut_lock_screen">Lock Screen</string>
+    <!-- Shortcut disabled apps -->
+    <string name="shortcut_disabled_apps">Disabled Apps for Shortcuts</string>
+    <string name="shortcut_disabled_apps_summary">Select apps where keyboard shortcuts will not work.</string>
 
     <!-- Widget -->
     <string name="widget_description">Show keyboard battery level on home screen</string>

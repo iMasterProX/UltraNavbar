@@ -4,6 +4,8 @@ import android.Manifest
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.ActivityCompat
 
@@ -116,15 +118,25 @@ object BluetoothUtils {
      * 배터리 레벨 가져오기 (여러 방법 시도)
      *
      * 시도 순서:
-     * 1. getBatteryLevel() - Android 13+ 공식 API
-     * 2. getBattery() - 일부 제조사 hidden API
-     * 3. getMetadata(6) - METADATA_UNTETHERED_LEFT_BATTERY
-     * 4. getMetadata(7) - METADATA_UNTETHERED_RIGHT_BATTERY
-     * 5. getMetadata(8) - METADATA_UNTETHERED_CASE_BATTERY
+     * 1. BLE GATT 캐시 (BLE 기기일 경우)
+     * 2. getBatteryLevel() - Android 13+ 공식 API
+     * 3. getBattery() - 일부 제조사 hidden API
+     * 4. getMetadata(6) - METADATA_UNTETHERED_LEFT_BATTERY
+     * 5. getMetadata(7) - METADATA_UNTETHERED_RIGHT_BATTERY
+     * 6. getMetadata(8) - METADATA_UNTETHERED_CASE_BATTERY
      *
      * @return 배터리 레벨 (0-100) 또는 -1 (사용 불가)
      */
     fun getDeviceBatteryLevel(device: BluetoothDevice): Int {
+        val address = device.address
+
+        // 방법 0: BLE GATT 캐시 확인 (BLE 기기일 경우)
+        val cachedLevel = BleGattBatteryReader.getCachedBatteryLevel(address)
+        if (cachedLevel != null) {
+            Log.d(TAG, "Battery via BLE GATT cache: $cachedLevel%")
+            return cachedLevel
+        }
+
         // 방법 1: 공식 API (Android 13+)
         try {
             val method = device.javaClass.getMethod("getBatteryLevel")
@@ -175,5 +187,20 @@ object BluetoothUtils {
 
         Log.w(TAG, "Could not get battery level for ${device.address} using any method")
         return -1
+    }
+
+    /**
+     * BLE GATT를 통해 배터리 레벨 읽기 시작 (비동기)
+     * UI 업데이트가 필요한 경우 callback 사용
+     */
+    fun triggerBleGattBatteryRead(context: Context, device: BluetoothDevice, callback: ((Int?) -> Unit)? = null) {
+        if (BleGattBatteryReader.isBleOnlyDevice(device)) {
+            Log.d(TAG, "Triggering BLE GATT battery read for ${device.address}")
+            BleGattBatteryReader.readBatteryLevel(context, device, callback)
+        } else {
+            // BLE 전용 기기가 아니면 일반 방법으로 읽기
+            val level = getDeviceBatteryLevel(device)
+            callback?.invoke(if (level >= 0) level else null)
+        }
     }
 }

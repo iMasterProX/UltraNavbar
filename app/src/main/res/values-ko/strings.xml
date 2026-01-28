@@ -103,8 +103,6 @@
     <string name="notification_panel_open">알림 창 열기</string>
     <string name="notification_panel_close">알림 창 닫기</string>
 
-    <string name="credits_text">제작: iMasterProX with Vibe Coding (AI 활용), GitHub: https://github.com/iMasterProX/UltraNavbar</string>
-
     <!-- 네비게이션 메뉴 -->
     <string name="nav_menu_navbar">네비게이션 바</string>
     <string name="nav_menu_keyboard">키보드</string>
@@ -146,12 +144,15 @@
     <string name="keyboard_refresh">새로고침</string>
     <string name="keyboard_bluetooth_settings">블루투스 설정 열기</string>
 
-    <!-- 플레이스홀더 -->
+    <!-- 와콤 펜 -->
     <string name="wacom_pen_settings_title">와콤 펜 설정</string>
-    <string name="wacom_pen_settings_desc">LG UltraTab 전용 와콤 펜의 기기 설정 및 커스텀 기능이 제공될 예정입니다.</string>
+    <string name="wacom_pen_settings_desc">시스템 펜 설정을 열어 와콤 펜 기능을 설정합니다.</string>
     <string name="coming_soon">추후 업데이트 예정</string>
+    <string name="open_pen_settings">펜 설정 열기</string>
+    <string name="pen_settings_fallback">펜 설정을 찾을 수 없습니다. 메인 설정을 엽니다.</string>
+    <string name="pen_settings_failed">설정을 열 수 없습니다.</string>
 
-    <!-- 초기 설정 -->
+    <!-- 초기 설정 화면 -->
     <string name="setup_welcome_title">LG UltraTab Extension에 오신 것을 환영합니다</string>
     <string name="setup_welcome_desc">앱을 사용하기 위해 몇 가지 권한이 필요합니다.</string>
     <string name="setup_accessibility_title">접근성 서비스 활성화</string>
@@ -166,6 +167,8 @@
     <string name="setup_complete">설정 완료</string>
     <string name="setup_skip">건너뛰기</string>
     <string name="setup_next">다음</string>
+
+    <string name="credits_text">제작: iMasterProX with Vibe Coding (AI 활용), GitHub: https://github.com/iMasterProX/UltraNavbar</string>
 
     <!-- 키보드 단축키 -->
     <string name="shortcut_management">단축키 관리</string>
@@ -186,6 +189,7 @@
     <string name="action_shortcut">바로가기</string>
     <string name="select_app">앱 선택</string>
     <string name="select_action">동작 선택</string>
+    <string name="select_shortcut_app">바로가기 선택</string>
     <string name="shortcut_saved">단축키 저장됨</string>
     <string name="shortcut_deleted">단축키 삭제됨</string>
     <string name="shortcut_duplicate">이 키 조합은 이미 사용 중입니다</string>
@@ -203,12 +207,9 @@
     <string name="settings_apps">앱</string>
     <string name="settings_accessibility_menu">접근성</string>
 
-    <!-- 바로가기 동작 -->
-    <string name="shortcut_screenshot">스크린샷 찍기</string>
-    <string name="shortcut_notifications">알림 패널</string>
-    <string name="shortcut_quick_settings">빠른 설정</string>
-    <string name="shortcut_power_menu">전원 메뉴</string>
-    <string name="shortcut_lock_screen">화면 잠금</string>
+    <!-- 단축키 비활성화 앱 -->
+    <string name="shortcut_disabled_apps">단축키 비활성화 앱</string>
+    <string name="shortcut_disabled_apps_summary">키보드 단축키가 작동하지 않을 앱을 선택합니다.</string>
 
     <!-- 위젯 -->
     <string name="widget_description">홈 화면에 키보드 배터리 잔량 표시</string>

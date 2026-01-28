@@ -26,6 +26,7 @@ class AddShortcutDialog : DialogFragment() {
     interface DialogListener {
         fun onShortcutAdded(shortcut: KeyShortcut)
         fun onAppSelectionRequested()
+        fun onShortcutSelectionRequested()
     }
 
     private var listener: DialogListener? = null
@@ -57,7 +58,6 @@ class AddShortcutDialog : DialogFragment() {
     private lateinit var editName: TextInputEditText
     private lateinit var btnSelectApp: MaterialButton
     private lateinit var layoutSettings: View
-    private lateinit var layoutShortcuts: View
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_shortcut, null)
@@ -125,7 +125,6 @@ class AddShortcutDialog : DialogFragment() {
         editName = step3View.findViewById(R.id.editName)
         btnSelectApp = step3View.findViewById(R.id.btnSelectApp)
         layoutSettings = step3View.findViewById(R.id.layoutSettings)
-        layoutShortcuts = step3View.findViewById(R.id.layoutShortcuts)
 
         // Set suggested name
         val suggestedName = buildString {
@@ -150,12 +149,13 @@ class AddShortcutDialog : DialogFragment() {
                 setupSettingsCards()
             }
             KeyShortcut.ActionType.SHORTCUT -> {
-                btnSelectApp.visibility = View.GONE
+                btnSelectApp.visibility = View.VISIBLE
+                btnSelectApp.text = requireContext().getString(R.string.select_action)
                 layoutSettings.visibility = View.GONE
-                // For SHORTCUT type, user can just enter the name
-                // The shortcut URI will be set programmatically when needed
-                selectedActionData = "shortcut_placeholder"
-                btnNext.isEnabled = true
+                btnSelectApp.setOnClickListener {
+                    listener?.onShortcutSelectionRequested()
+                }
+                btnNext.isEnabled = false
             }
             else -> {}
         }
@@ -193,6 +193,12 @@ class AddShortcutDialog : DialogFragment() {
         } catch (e: Exception) {
             btnSelectApp.text = packageName
         }
+        btnNext.isEnabled = true
+    }
+
+    fun setSelectedShortcut(shortcutData: String, shortcutName: String) {
+        selectedActionData = shortcutData
+        btnSelectApp.text = shortcutName
         btnNext.isEnabled = true
     }
 
