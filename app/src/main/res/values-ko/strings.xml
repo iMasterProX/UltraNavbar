@@ -198,4 +198,9 @@
     <string name="settings_sound">소리</string>
     <string name="settings_apps">앱</string>
     <string name="settings_accessibility_menu">접근성</string>
+
+    <!-- 위젯 -->
+    <string name="widget_description">홈 화면에 키보드 배터리 잔량 표시</string>
+    <string name="widget_no_keyboard">연결된 키보드 없음</string>
+    <string name="widget_updated">업데이트됨</string>
 </resources>

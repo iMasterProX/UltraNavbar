@@ -75,6 +75,18 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- 키보드 배터리 위젯 -->
+        <receiver
+            android:name=".widget.KeyboardBatteryWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/keyboard_battery_widget_info" />
+        </receiver>
+
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

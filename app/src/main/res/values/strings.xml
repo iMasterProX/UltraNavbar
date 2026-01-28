@@ -198,4 +198,9 @@
     <string name="settings_sound">Sound</string>
     <string name="settings_apps">Apps</string>
     <string name="settings_accessibility_menu">Accessibility</string>
+
+    <!-- Widget -->
+    <string name="widget_description">Show keyboard battery level on home screen</string>
+    <string name="widget_no_keyboard">No keyboard connected</string>
+    <string name="widget_updated">Updated</string>
 </resources>
