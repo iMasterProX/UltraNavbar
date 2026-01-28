@@ -65,6 +65,14 @@
                 android:layout_marginTop="6dp"
                 android:contentDescription="@string/preview_filter_opacity_desc" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnApplyWallpaper"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/apply_wallpaper"
+                style="@style/Widget.Material3.Button" />
+
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 

@@ -8,10 +8,21 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
-    <!-- 배경화면 접근 및 저장을 위한 저장소 읽기 권한 -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- 배경화면 접근을 위한 미디어 읽기 권한 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
+        android:minSdkVersion="33" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- 태블릿 전용 앱 (600dp 이상 화면 필요) -->
+    <supports-screens
+        android:requiresSmallestWidthDp="600"
+        android:largeScreens="true"
+        android:xlargeScreens="true" />
 
     <application
         android:name=".UltraNavbarApplication"
@@ -43,6 +54,17 @@
             android:exported="false"
             android:theme="@style/Theme.UltraNavbar.Fullscreen" />
 
+        <activity
+            android:name=".ui.SetupActivity"
+            android:exported="false"
+            android:theme="@style/Theme.UltraNavbar" />
+
+        <activity
+            android:name=".ui.KeyboardShortcutActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.UltraNavbar" />
+
         <service
             android:name=".service.NavBarAccessibilityService"
             android:label="@string/app_name"
@@ -55,6 +77,18 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- 키보드 배터리 위젯 -->
+        <receiver
+            android:name=".widget.KeyboardBatteryWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/keyboard_battery_widget_info" />
+        </receiver>
 
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>

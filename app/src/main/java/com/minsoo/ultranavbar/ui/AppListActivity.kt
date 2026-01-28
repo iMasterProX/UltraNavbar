@@ -31,6 +31,7 @@ class AppListActivity : AppCompatActivity() {
         const val MODE_SINGLE = "single"
         const val MODE_MULTIPLE = "multiple"
         const val MODE_DISABLED_APPS = "disabled_apps"
+        const val MODE_SHORTCUT_DISABLED_APPS = "shortcut_disabled_apps"
     }
 
     private lateinit var settings: SettingsManager
@@ -51,9 +52,10 @@ class AppListActivity : AppCompatActivity() {
         settings = SettingsManager.getInstance(this)
         selectionMode = intent.getStringExtra(EXTRA_SELECTION_MODE) ?: MODE_DISABLED_APPS
 
-        // MODE_DISABLED_APPS 모드에서 비활성화된 앱 목록 로드
-        if (selectionMode == MODE_DISABLED_APPS) {
-            selectedPackages = settings.disabledApps.toMutableSet()
+        // MODE_DISABLED_APPS 또는 MODE_SHORTCUT_DISABLED_APPS 모드에서 비활성화된 앱 목록 로드
+        when (selectionMode) {
+            MODE_DISABLED_APPS -> selectedPackages = settings.disabledApps.toMutableSet()
+            MODE_SHORTCUT_DISABLED_APPS -> selectedPackages = settings.shortcutDisabledApps.toMutableSet()
         }
 
         initViews()
@@ -107,8 +109,11 @@ class AppListActivity : AppCompatActivity() {
             saveAndFinish()
         }
         
-        // MODE_SINGLE에서만 저장 버튼 숨기기
-        btnSave.visibility = if (selectionMode == MODE_SINGLE) View.GONE else View.VISIBLE
+        // MODE_SINGLE에서만 저장 버튼 숨기기, 다중 선택 모드에서는 표시
+        btnSave.visibility = when (selectionMode) {
+            MODE_SINGLE -> View.GONE
+            else -> View.VISIBLE
+        }
     }
 
     private fun loadApps() {
@@ -187,9 +192,10 @@ class AppListActivity : AppCompatActivity() {
     }
 
     private fun saveAndFinish() {
-        // MODE_DISABLED_APPS 모드에서 비활성화된 앱 목록 저장
-        if (selectionMode == MODE_DISABLED_APPS) {
-            settings.disabledApps = selectedPackages
+        // 모드에 따라 비활성화된 앱 목록 저장
+        when (selectionMode) {
+            MODE_DISABLED_APPS -> settings.disabledApps = selectedPackages
+            MODE_SHORTCUT_DISABLED_APPS -> settings.shortcutDisabledApps = selectedPackages
         }
         finish()
     }

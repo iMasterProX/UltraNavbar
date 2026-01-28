@@ -1,0 +1,266 @@
+package com.minsoo.ultranavbar.ui
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.minsoo.ultranavbar.R
+import com.minsoo.ultranavbar.service.NavBarAccessibilityService
+import com.minsoo.ultranavbar.settings.SettingsManager
+
+/**
+ * AppSettingsFragment - 앱 전반적인 설정 및 권한 관리를 담당하는 Fragment
+ *
+ * 포함 기능:
+ * - 서비스 상태 표시
+ * - 권한 상태 확인 및 요청 (접근성, 저장소, 배터리 최적화)
+ * - 앱 정보 표시 (버전, 개발자, GitHub 등)
+ */
+class AppSettingsFragment : Fragment() {
+
+    companion object {
+        /**
+         * API 레벨에 따라 적절한 저장소 권한 반환
+         */
+        private fun getStoragePermission(): String {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Manifest.permission.READ_MEDIA_IMAGES
+            } else {
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            }
+        }
+    }
+
+    private lateinit var settings: SettingsManager
+
+    // 서비스 상태 UI
+    private lateinit var statusIndicator: View
+    private lateinit var statusText: TextView
+    private lateinit var onboardingCard: MaterialCardView
+
+    // 권한 상태 UI
+    private lateinit var txtPermAccessibility: TextView
+    private lateinit var txtPermStorage: TextView
+    private lateinit var txtPermBattery: TextView
+    private lateinit var txtPermBluetooth: TextView
+
+    // 버전 정보 UI
+    private lateinit var txtVersion: TextView
+
+    // 저장소 읽기 권한 요청 런처
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Toast.makeText(requireContext(), R.string.permission_granted, Toast.LENGTH_SHORT).show()
+            updatePermissionStatus()
+        } else {
+            Toast.makeText(requireContext(), R.string.permission_denied, Toast.LENGTH_SHORT).show()
+            updatePermissionStatus()
+        }
+    }
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        return inflater.inflate(R.layout.fragment_app_settings, container, false)
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        settings = SettingsManager.getInstance(requireContext())
+
+        initViews(view)
+        updateServiceStatus()
+        updatePermissionStatus()
+        loadVersionInfo()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateServiceStatus()
+        updatePermissionStatus()
+    }
+
+    private fun initViews(view: View) {
+        // 서비스 상태 UI
+        statusIndicator = view.findViewById(R.id.statusIndicator)
+        statusText = view.findViewById(R.id.statusText)
+        onboardingCard = view.findViewById(R.id.onboardingCard)
+
+        // 접근성 설정 버튼
+        view.findViewById<MaterialButton>(R.id.btnOpenAccessibility).setOnClickListener {
+            openAccessibilitySettings()
+        }
+
+        // 권한 상태 UI
+        txtPermAccessibility = view.findViewById(R.id.txtPermAccessibility)
+        txtPermStorage = view.findViewById(R.id.txtPermStorage)
+        txtPermBattery = view.findViewById(R.id.txtPermBattery)
+        txtPermBluetooth = view.findViewById(R.id.txtPermBluetooth)
+
+        // 접근성 권한 버튼
+        view.findViewById<MaterialButton>(R.id.btnPermAccessibility).setOnClickListener {
+            openAccessibilitySettings()
+        }
+
+        // 저장소 권한 버튼
+        view.findViewById<MaterialButton>(R.id.btnPermStorage).setOnClickListener {
+            requestStoragePermission()
+        }
+
+        // 배터리 최적화 버튼
+        view.findViewById<MaterialButton>(R.id.btnPermBattery).setOnClickListener {
+            requestIgnoreBatteryOptimizations(isTriggeredByUser = true)
+        }
+
+        // 블루투스 권한 버튼
+        view.findViewById<MaterialButton>(R.id.btnPermBluetooth).setOnClickListener {
+            requestBluetoothPermission()
+        }
+
+        // 버전 정보 UI
+        txtVersion = view.findViewById(R.id.txtVersion)
+    }
+
+    private fun updateServiceStatus() {
+        val isRunning = NavBarAccessibilityService.isRunning()
+
+        if (isRunning) {
+            statusIndicator.setBackgroundResource(R.drawable.status_indicator_active)
+            statusText.text = getString(R.string.service_enabled)
+            onboardingCard.visibility = View.GONE
+        } else {
+            statusIndicator.setBackgroundResource(R.drawable.status_indicator)
+            statusText.text = getString(R.string.service_disabled)
+            onboardingCard.visibility = View.VISIBLE
+        }
+    }
+
+    private fun updatePermissionStatus() {
+        // 접근성 서비스 상태 확인
+        val isAccessibilityGranted = NavBarAccessibilityService.isRunning()
+        txtPermAccessibility.text = if (isAccessibilityGranted) {
+            getString(R.string.permission_status_granted)
+        } else {
+            getString(R.string.permission_status_not_granted)
+        }
+
+        // 저장소 권한 상태 확인
+        val isStorageGranted = ContextCompat.checkSelfPermission(
+            requireContext(),
+            getStoragePermission()
+        ) == PackageManager.PERMISSION_GRANTED
+
+        txtPermStorage.text = if (isStorageGranted) {
+            getString(R.string.permission_status_granted)
+        } else {
+            getString(R.string.permission_status_not_granted)
+        }
+
+        // 배터리 최적화 제외 상태 확인
+        val powerManager = requireContext().getSystemService(PowerManager::class.java)
+        val isBatteryOptimizationGranted = powerManager?.isIgnoringBatteryOptimizations(requireContext().packageName) ?: false
+
+        txtPermBattery.text = if (isBatteryOptimizationGranted) {
+            getString(R.string.permission_status_granted)
+        } else {
+            getString(R.string.permission_status_not_granted)
+        }
+
+        // 블루투스 권한 상태 확인
+        val isBluetoothGranted = ContextCompat.checkSelfPermission(
+            requireContext(),
+            Manifest.permission.BLUETOOTH_CONNECT
+        ) == PackageManager.PERMISSION_GRANTED
+
+        txtPermBluetooth.text = if (isBluetoothGranted) {
+            getString(R.string.permission_status_granted)
+        } else {
+            getString(R.string.permission_status_not_granted)
+        }
+    }
+
+    private fun loadVersionInfo() {
+        try {
+            val packageInfo = requireContext().packageManager.getPackageInfo(requireContext().packageName, 0)
+            txtVersion.text = packageInfo.versionName ?: "1.0.0"
+        } catch (e: PackageManager.NameNotFoundException) {
+            txtVersion.text = "1.0.0"
+        }
+    }
+
+    private fun openAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        startActivity(intent)
+    }
+
+    private fun requestStoragePermission() {
+        if (ContextCompat.checkSelfPermission(
+                requireContext(),
+                getStoragePermission()
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissionLauncher.launch(getStoragePermission())
+        } else {
+            Toast.makeText(requireContext(), R.string.storage_permission_already_granted, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun requestIgnoreBatteryOptimizations(isTriggeredByUser: Boolean = false) {
+        try {
+            val powerManager = requireContext().getSystemService(PowerManager::class.java)
+            if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(requireContext().packageName)) {
+                if (!isTriggeredByUser && settings.batteryOptRequested) {
+                    return
+                }
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:${requireContext().packageName}")
+                }
+                if (intent.resolveActivity(requireContext().packageManager) != null) {
+                    startActivity(intent)
+                } else if (isTriggeredByUser) {
+                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+                settings.batteryOptRequested = true
+            } else {
+                if (isTriggeredByUser) {
+                    Toast.makeText(requireContext(), R.string.battery_opt_already_ignored, Toast.LENGTH_SHORT).show()
+                }
+            }
+        } catch (e: Exception) {
+            if (isTriggeredByUser) {
+                Toast.makeText(requireContext(), R.string.battery_opt_open_failed, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun requestBluetoothPermission() {
+        if (ContextCompat.checkSelfPermission(
+                requireContext(),
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            Toast.makeText(requireContext(), R.string.bluetooth_permission_already_granted, Toast.LENGTH_SHORT).show()
+        }
+    }
+}

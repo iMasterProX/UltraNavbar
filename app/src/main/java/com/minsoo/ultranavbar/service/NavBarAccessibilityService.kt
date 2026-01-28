@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import com.minsoo.ultranavbar.core.Constants
 import com.minsoo.ultranavbar.core.WindowAnalyzer
@@ -32,6 +33,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "NavBarAccessibility"
         private const val HOME_ENTRY_STABILIZE_MS = 400L  // 홈 진입 후 안정화 시간
+        private const val HOME_EXIT_STABILIZE_MS = 500L   // 홈 이탈 후 안정화 시간 (windows 소스의 잘못된 재진입 방지)
 
         @Volatile
         var instance: NavBarAccessibilityService? = null
@@ -44,6 +46,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var overlay: NavBarOverlay? = null
     private lateinit var settings: SettingsManager
     private lateinit var windowAnalyzer: WindowAnalyzer
+    private lateinit var keyEventHandler: KeyEventHandler
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -61,11 +64,13 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var lastImeEventAt: Long = 0
     private var lastNonLauncherEventAt: Long = 0
     private var lastHomeEntryAt: Long = 0  // 홈 진입 안정화용
+    private var lastHomeExitAt: Long = 0   // 홈 이탈 안정화용
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
     private var fullscreenPoll: Runnable? = null
     private var unlockFadeRunnable: Runnable? = null
+    private var batteryMonitorRunnable: Runnable? = null
 
     // === 브로드캐스트 리시버 ===
     private val settingsReceiver = object : BroadcastReceiver() {
@@ -149,18 +154,45 @@ class NavBarAccessibilityService : AccessibilityService() {
         updateOverlayVisibility(forceFade = false)
         checkImeVisibility()
 
+        // 배터리 모니터링 시작
+        startBatteryMonitoring()
+
         Log.i(TAG, "Service fully initialized")
     }
 
     private fun initializeComponents() {
         settings = SettingsManager.getInstance(this)
         windowAnalyzer = WindowAnalyzer(this)
+        keyEventHandler = KeyEventHandler(this)
     }
 
     private fun setupServiceInfo() {
         try {
             val info = serviceInfo
-            info.flags = info.flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+
+            // Ensure key event filtering is explicitly enabled
+            info.flags = info.flags or
+                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+
+            // Verify key event filtering is enabled
+            val hasFlag = info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS != 0
+            val hasCapability = info.capabilities and AccessibilityServiceInfo.CAPABILITY_CAN_REQUEST_FILTER_KEY_EVENTS != 0
+
+            if (hasFlag && hasCapability) {
+                Log.i(TAG, "Key event filtering is ENABLED (flag=true, capability=true)")
+            } else {
+                Log.w(TAG, "Key event filtering issue - flag=$hasFlag, capability=$hasCapability")
+                if (!hasCapability) {
+                    Log.w(TAG, "Missing CAPABILITY_CAN_REQUEST_FILTER_KEY_EVENTS - ensure canRequestFilterKeyEvents=true in XML")
+                }
+            }
+
+            Log.d(TAG, "Service flags: ${info.flags}")
+            Log.d(TAG, "Service capabilities: ${info.capabilities}")
+            Log.d(TAG, "Event types: ${info.eventTypes}")
+            Log.i(TAG, "Keyboard shortcut handling initialized")
+
             serviceInfo = info
         } catch (e: Exception) {
             Log.w(TAG, "Could not update serviceInfo flags", e)
@@ -195,6 +227,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         cancelPendingTasks()
         unregisterReceivers()
         destroyOverlay()
+        stopBatteryMonitoring()
 
         super.onDestroy()
     }
@@ -313,7 +346,11 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         updateRecentsState(isRecents, "event")
 
-        if (packageName == this.packageName) return
+        // 이 앱이 열리면 홈 화면 상태를 false로 설정 후 리턴
+        if (packageName == this.packageName) {
+            updateHomeScreenState(false, "self_app")
+            return
+        }
 
         val isSystemUi = packageName == "com.android.systemui"
         if (handleSystemUiState(isSystemUi, isRecents, "event")) {
@@ -343,7 +380,14 @@ class NavBarAccessibilityService : AccessibilityService() {
             !hasVisibleNonLauncherApp &&
             !hasNonLauncherForeground &&
             !shouldSuppressHome
-        updateHomeScreenState(newOnHomeScreen, "event")
+
+        // 이미 홈 화면이고 런처 이벤트인 경우, 잔류 앱 윈도우로 인한 잘못된 홈 이탈 방지
+        if (!newOnHomeScreen && isOnHomeScreen && isLauncherPackage && !isRecents) {
+            Log.d(TAG, "Home exit from event suppressed (launcher event, " +
+                    "hasNonLauncherApp=$hasVisibleNonLauncherApp, suppressHome=$shouldSuppressHome)")
+        } else {
+            updateHomeScreenState(newOnHomeScreen, "event")
+        }
 
         if (packageChanged) {
             handler.post {
@@ -375,9 +419,25 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
         }
 
+        // 홈 이탈 안정화: 홈을 떠난 직후 windows 소스의 잘못된 홈 재진입 방지
+        // 앱 실행 시 event 소스가 먼저 홈 이탈을 감지하지만, windows 소스는
+        // 앱 윈도우가 아직 나타나지 않아 런처가 최상위로 보여 잘못된 홈 재진입을 시도함
+        if (isHome && !isOnHomeScreen && source == "windows") {
+            val elapsed = now - lastHomeExitAt
+            if (elapsed < HOME_EXIT_STABILIZE_MS) {
+                Log.d(TAG, "Home re-entry from windows ignored (stabilizing, ${elapsed}ms < ${HOME_EXIT_STABILIZE_MS}ms)")
+                return
+            }
+        }
+
         // 홈 진입 시 타임스탬프 기록
         if (isHome && !isOnHomeScreen) {
             lastHomeEntryAt = now
+        }
+
+        // 홈 이탈 시 타임스탬프 기록
+        if (!isHome && isOnHomeScreen) {
+            lastHomeExitAt = now
         }
 
         isOnHomeScreen = isHome
@@ -413,6 +473,9 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (wasDisabled || isDisabled) {
             Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
         }
+
+        // NavBarOverlay에 현재 패키지 전달
+        overlay?.setForegroundPackage(packageName)
 
         return true
     }
@@ -503,7 +566,13 @@ class NavBarAccessibilityService : AccessibilityService() {
             packageName = root?.packageName?.toString()
         }
 
-        if (packageName.isNullOrEmpty() || packageName == this.packageName) return
+        // 이 앱이 열리면 홈 화면 상태를 false로 설정 후 리턴
+        if (packageName.isNullOrEmpty() || packageName == this.packageName) {
+            if (packageName == this.packageName) {
+                updateHomeScreenState(false, "self_app_windows")
+            }
+            return
+        }
 
         val isSystemUi = packageName == "com.android.systemui"
         if (handleSystemUiState(isSystemUi, recentsVisible, "windows")) {
@@ -532,7 +601,16 @@ class NavBarAccessibilityService : AccessibilityService() {
             !hasVisibleNonLauncherApp &&
             !hasNonLauncherForeground &&
             !shouldSuppressHome
-        updateHomeScreenState(newOnHomeScreen, "windows")
+
+        // 이미 홈 화면이고 런처가 최상위 윈도우인 경우,
+        // 잔류 앱 윈도우(hasVisibleNonLauncherApp)나 최근 앱 이벤트(shouldSuppressHome)로 인한
+        // 잘못된 홈 이탈 방지 (플레이스토어 등 일부 앱은 홈 전환 후에도 윈도우가 잔류할 수 있음)
+        if (!newOnHomeScreen && isOnHomeScreen && isLauncherPackage && !recentsVisible) {
+            Log.d(TAG, "Home exit from windows suppressed (launcher is top, " +
+                    "hasNonLauncherApp=$hasVisibleNonLauncherApp, suppressHome=$shouldSuppressHome)")
+        } else {
+            updateHomeScreenState(newOnHomeScreen, "windows")
+        }
 
         if (isOnHomeScreen) {
             val appDrawerOpen = windowAnalyzer.isAppDrawerOpen(root)
@@ -574,6 +652,24 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun stopFullscreenPolling() {
         fullscreenPoll?.let { handler.removeCallbacks(it) }
         fullscreenPoll = null
+    }
+
+    // ===== 배터리 모니터링 =====
+
+    private fun startBatteryMonitoring() {
+        // 30분마다 배터리 체크 (BLE GATT 캐시는 10분 유효)
+        batteryMonitorRunnable = object : Runnable {
+            override fun run() {
+                KeyboardBatteryMonitor.checkBatteryLevels(this@NavBarAccessibilityService)
+                handler.postDelayed(this, 1800000L) // 30 minutes
+            }
+        }
+        handler.post(batteryMonitorRunnable!!)
+    }
+
+    private fun stopBatteryMonitoring() {
+        batteryMonitorRunnable?.let { handler.removeCallbacks(it) }
+        batteryMonitorRunnable = null
     }
 
     // ===== 오버레이 가시성 =====
@@ -734,5 +830,25 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         Log.w(TAG, "Service interrupted")
+    }
+
+    override fun onKeyEvent(event: KeyEvent?): Boolean {
+        if (event == null) {
+            Log.d(TAG, "onKeyEvent: event is null")
+            return false
+        }
+
+        // 현재 앱에서 키보드 단축키가 비활성화되어 있으면 이벤트 전파
+        if (currentPackage.isNotEmpty() && settings.isShortcutDisabledForApp(currentPackage)) {
+            Log.d(TAG, "onKeyEvent: shortcuts disabled for $currentPackage, passing through")
+            return false
+        }
+
+        val action = if (event.action == KeyEvent.ACTION_DOWN) "DOWN" else "UP"
+        Log.d(TAG, "onKeyEvent: keyCode=${event.keyCode}, action=$action")
+
+        val result = keyEventHandler.handleKeyEvent(event)
+        Log.d(TAG, "onKeyEvent: result=$result (consumed=$result)")
+        return result
     }
 }

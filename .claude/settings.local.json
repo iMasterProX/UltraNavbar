@@ -22,7 +22,25 @@
       "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/java\" -version)",
       "Bash(export JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\")",
       "Bash(cmd.exe /c \"adb shell uiautomator dump && adb pull /sdcard/window_dump.xml C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar\\\\uidump_nova_home.xml\":*)",
-      "Bash(cmd.exe /c \"cd /d C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar && gradlew.bat assembleDebug --no-daemon 2>&1\")"
+      "Bash(cmd.exe /c \"cd /d C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar && gradlew.bat assembleDebug --no-daemon 2>&1\")",
+      "Bash(test:*)",
+      "Bash(cmd /c gradlew.bat assembleDebug --stacktrace)",
+      "Bash(git pull:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(cmd.exe /c \"gradlew.bat assembleDebug --no-daemon\")",
+      "Bash(git restore:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(timeout 60 bash -c 'cmd.exe /c \"\"gradlew.bat :app:assembleDebug --no-daemon 2>&1\"\"')",
+      "Bash(timeout 90 bash -c 'cmd.exe /c \"\"gradlew.bat :app:assembleDebug --no-daemon 2>&1\"\"')",
+      "Bash(.gradlew.bat assembleDebug)",
+      "Bash(./gradlew.bat:*)",
+      "Bash(where:*)",
+      "Bash(adb:*)"
     ]
   }
 }

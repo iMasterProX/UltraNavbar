@@ -20,9 +20,7 @@ enum class NavAction(
     // 알림 패널 올리기(닫기) - Android 12(API 31)+
     DISMISS_NOTIFICATION_SHADE(
         "Close notification shade",
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            AccessibilityService.GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE
-        else null
+        AccessibilityService.GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE
     ),
 
     QUICK_SETTINGS("Quick settings", AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS),

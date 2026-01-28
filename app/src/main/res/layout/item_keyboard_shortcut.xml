@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    app:cardElevation="2dp"
+    app:cardCornerRadius="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical">
+
+        <!-- Shortcut info -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <!-- Shortcut name -->
+            <TextView
+                android:id="@+id/txtName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Open Settings"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <!-- Key combination -->
+            <TextView
+                android:id="@+id/txtKeyCombination"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Ctrl + Shift + S"
+                android:textSize="14sp"
+                android:textColor="?attr/colorPrimary" />
+
+            <!-- Action description -->
+            <TextView
+                android:id="@+id/txtAction"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Settings"
+                android:textSize="12sp"
+                android:textColor="?android:textColorSecondary" />
+        </LinearLayout>
+
+        <!-- Delete button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDelete"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/delete_shortcut"
+            android:textColor="?attr/colorError" />
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

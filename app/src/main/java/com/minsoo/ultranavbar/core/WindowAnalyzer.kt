@@ -125,14 +125,9 @@ class WindowAnalyzer(
 
         val rotation = display.rotation
         val size = Point()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = windowManager.currentWindowMetrics.bounds
-            size.x = bounds.width()
-            size.y = bounds.height()
-        } else {
-            @Suppress("DEPRECATION")
-            display.getRealSize(size)
-        }
+        val bounds = windowManager.currentWindowMetrics.bounds
+        size.x = bounds.width()
+        size.y = bounds.height()
 
         val naturalPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
             size.x < size.y
@@ -150,8 +145,6 @@ class WindowAnalyzer(
     }
 
     private fun getNavigationBarInsets(): NavBarInsets? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
-
         return try {
             val metrics = windowManager.currentWindowMetrics
             val insets = metrics.windowInsets
@@ -195,12 +188,7 @@ class WindowAnalyzer(
      * 현재 화면 경계 가져오기
      */
     fun getScreenBounds(): Rect {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            windowManager.currentWindowMetrics.bounds
-        } else {
-            val dm = context.resources.displayMetrics
-            Rect(0, 0, dm.widthPixels, dm.heightPixels)
-        }
+        return windowManager.currentWindowMetrics.bounds
     }
 
     // ===== 앱 서랍 감지 =====
@@ -318,11 +306,7 @@ class WindowAnalyzer(
 
         for (w in windows) {
             val rootPackage = try { w.root?.packageName?.toString() } catch (e: Exception) { null }
-            val title = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                try { w.title?.toString() } catch (e: Exception) { null }
-            } else {
-                null
-            }
+            val title = try { w.title?.toString() } catch (e: Exception) { null }
 
             val isImePackageHint =
                 rootPackage?.contains("inputmethod", ignoreCase = true) == true ||
@@ -510,11 +494,9 @@ class WindowAnalyzer(
                 return true
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                val title = try { window.title?.toString() } catch (e: Exception) { null }
-                if (title != null && isRecentsClassName(title)) {
-                    return true
-                }
+            val title = try { window.title?.toString() } catch (e: Exception) { null }
+            if (title != null && isRecentsClassName(title)) {
+                return true
             }
         }
 
@@ -601,11 +583,7 @@ class WindowAnalyzer(
      * 잠금화면 활성 상태 확인
      */
     fun isLockScreenActive(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            keyguardManager.isDeviceLocked || keyguardManager.isKeyguardLocked
-        } else {
-            keyguardManager.isKeyguardLocked
-        }
+        return keyguardManager.isDeviceLocked || keyguardManager.isKeyguardLocked
     }
 
     // ===== 숨김 여부 판단 =====

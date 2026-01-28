@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <group android:id="@+id/nav_group_features">
+        <item
+            android:id="@+id/nav_navbar"
+            android:icon="@drawable/ic_navigation"
+            android:title="@string/nav_menu_navbar" />
+        <item
+            android:id="@+id/nav_keyboard"
+            android:icon="@drawable/ic_keyboard"
+            android:title="@string/nav_menu_keyboard" />
+        <item
+            android:id="@+id/nav_wacom_pen"
+            android:icon="@drawable/ic_stylus"
+            android:title="@string/nav_menu_wacom_pen" />
+    </group>
+
+    <group android:id="@+id/nav_group_system">
+        <item
+            android:id="@+id/nav_app_settings"
+            android:icon="@drawable/ic_settings"
+            android:title="@string/nav_menu_app_settings" />
+    </group>
+
+</menu>

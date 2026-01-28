@@ -44,9 +44,13 @@ class BackgroundManager(
     // Android 12 표준 애니메이션 인터폴레이터 (버튼 색상 애니메이션용)
     private val android12Interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
 
-    // 배경 비트맵 캐시
+    // 배경 비트맵 캐시 (일반 모드)
     private var landscapeBitmap: Bitmap? = null
     private var portraitBitmap: Bitmap? = null
+
+    // 다크 모드 전용 배경 비트맵 캐시
+    private var darkLandscapeBitmap: Bitmap? = null
+    private var darkPortraitBitmap: Bitmap? = null
 
     // 현재 상태
     private var _isDarkMode: Boolean = false
@@ -109,7 +113,11 @@ class BackgroundManager(
         }
 
         // 이미 로드된 비트맵이 있고 강제 리로드가 아니면 스킵
-        if (!forceReload && landscapeBitmap != null && portraitBitmap != null) {
+        val normalLoaded = landscapeBitmap != null && portraitBitmap != null
+        val darkLoaded = !settings.homeBgDarkEnabled ||
+                         (darkLandscapeBitmap != null && darkPortraitBitmap != null)
+
+        if (!forceReload && normalLoaded && darkLoaded) {
             Log.d(TAG, "Background bitmaps already loaded, skipping reload")
             return
         }
@@ -117,8 +125,16 @@ class BackgroundManager(
         // 기존 비트맵 리사이클
         recycleBitmaps()
 
-        landscapeBitmap = ImageCropUtil.loadBackgroundBitmap(context, true)
-        portraitBitmap = ImageCropUtil.loadBackgroundBitmap(context, false)
+        // 일반 배경 로드
+        landscapeBitmap = ImageCropUtil.loadBackgroundBitmap(context, true, false)
+        portraitBitmap = ImageCropUtil.loadBackgroundBitmap(context, false, false)
+
+        // 다크 모드 배경 로드 (설정이 활성화된 경우)
+        if (settings.homeBgDarkEnabled) {
+            darkLandscapeBitmap = ImageCropUtil.loadBackgroundBitmap(context, true, true)
+            darkPortraitBitmap = ImageCropUtil.loadBackgroundBitmap(context, false, true)
+            Log.d(TAG, "Dark mode bitmaps loaded: landscape=${darkLandscapeBitmap?.hashCode()}, portrait=${darkPortraitBitmap?.hashCode()}")
+        }
 
         Log.d(TAG, "Background bitmaps loaded: landscape=${landscapeBitmap?.hashCode()}, portrait=${portraitBitmap?.hashCode()}")
     }
@@ -140,22 +156,65 @@ class BackgroundManager(
             }
         }
         portraitBitmap = null
+
+        // 다크 모드 비트맵 리사이클
+        darkLandscapeBitmap?.let { bitmap ->
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+        }
+        darkLandscapeBitmap = null
+
+        darkPortraitBitmap?.let { bitmap ->
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+        }
+        darkPortraitBitmap = null
     }
 
     /**
-     * 현재 방향에 맞는 비트맵 가져오기
+     * 현재 방향 및 다크 모드 상태에 맞는 비트맵 가져오기
+     * 다크 모드 배경이 활성화되어 있고 다크 모드일 때:
+     * - 다크 모드 전용 배경이 있으면 사용
+     * - 없으면 일반 배경으로 폴백
      */
     fun getCurrentBitmap(): Bitmap? {
         val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
-        val bitmap = if (isLandscape) landscapeBitmap else portraitBitmap
-        return bitmap
+
+        // 실제 시스템 다크 모드 상태를 직접 확인 (캐시된 값 대신)
+        // onConfigurationChanged가 호출되지 않는 경우에도 정확한 상태를 반영
+        syncDarkModeState()
+
+        // 다크 모드이고 다크 모드 배경이 활성화된 경우
+        if (_isDarkMode && settings.homeBgDarkEnabled) {
+            val darkBitmap = if (isLandscape) darkLandscapeBitmap else darkPortraitBitmap
+            if (darkBitmap != null) {
+                return darkBitmap
+            }
+            // 다크 모드 배경이 없으면 일반 배경으로 폴백
+            Log.d(TAG, "Dark mode bitmap not found, falling back to normal bitmap")
+        }
+
+        // 일반 배경 반환
+        return if (isLandscape) landscapeBitmap else portraitBitmap
     }
 
     /**
      * 비트맵이 로드되었는지 확인
+     * 다크 모드일 때는 다크 모드 비트맵도 확인 (설정된 경우)
      */
     fun hasBitmaps(): Boolean {
-        return landscapeBitmap != null || portraitBitmap != null
+        val hasNormalBitmaps = landscapeBitmap != null || portraitBitmap != null
+
+        // 다크 모드이고 다크 모드 배경이 활성화된 경우
+        if (_isDarkMode && settings.homeBgDarkEnabled) {
+            val hasDarkBitmaps = darkLandscapeBitmap != null || darkPortraitBitmap != null
+            // 다크 모드 비트맵이 있거나 일반 비트맵이 있으면 true (폴백)
+            return hasDarkBitmaps || hasNormalBitmaps
+        }
+
+        return hasNormalBitmaps
     }
 
     // ===== 방향 처리 =====
@@ -193,14 +252,9 @@ class BackgroundManager(
 
         val rotation = display.rotation
         val size = Point()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = windowManager.currentWindowMetrics.bounds
-            size.x = bounds.width()
-            size.y = bounds.height()
-        } else {
-            @Suppress("DEPRECATION")
-            display.getRealSize(size)
-        }
+        val bounds = windowManager.currentWindowMetrics.bounds
+        size.x = bounds.width()
+        size.y = bounds.height()
 
         val naturalPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
             size.x < size.y
@@ -251,6 +305,8 @@ class BackgroundManager(
     }
 
     fun getDefaultBackgroundColor(): Int {
+        // 실제 시스템 다크 모드 상태를 직접 확인
+        syncDarkModeState()
         return if (_isDarkMode) Color.BLACK else Color.WHITE
     }
 
@@ -258,7 +314,20 @@ class BackgroundManager(
      * 다크 모드에 따른 기본 버튼 색상
      */
     fun getDefaultButtonColor(): Int {
+        // 실제 시스템 다크 모드 상태를 직접 확인
+        syncDarkModeState()
         return if (_isDarkMode) Color.WHITE else Color.DKGRAY
+    }
+
+    /**
+     * 캐시된 다크 모드 상태를 실제 시스템 상태와 동기화
+     */
+    private fun syncDarkModeState() {
+        val actualDarkMode = isSystemDarkMode()
+        if (_isDarkMode != actualDarkMode) {
+            Log.d(TAG, "Dark mode state synced: $actualDarkMode")
+            _isDarkMode = actualDarkMode
+        }
     }
 
     /**
@@ -320,37 +389,78 @@ class BackgroundManager(
         return luminance > Constants.Threshold.BRIGHTNESS_THRESHOLD
     }
 
+    // 애니메이션 목표 색상 (취소 시에도 최종 상태 보장용)
+    private var buttonColorAnimationTarget: Int = Color.WHITE
+
     /**
      * 버튼 색상 업데이트 (애니메이션 지원)
+     * 강화된 상태 동기화: 애니메이션 종료/취소 시 최종 상태 보장
      */
     fun updateButtonColor(targetColor: Int, animate: Boolean = true) {
-        if (_currentButtonColor == targetColor) return
-
-        if (!animate) {
-            buttonColorAnimator?.cancel()
-            _currentButtonColor = targetColor
-            listener.onButtonColorChanged(targetColor)
+        // 이미 목표 색상과 같으면 스킵 (애니메이션 중 포함)
+        if (_currentButtonColor == targetColor && buttonColorAnimationTarget == targetColor) {
             return
         }
 
-        // 이미 같은 색상으로 애니메이션 중이면 스킵
-        if (buttonColorAnimator?.isRunning == true && _currentButtonColor == targetColor) return
+        if (!animate) {
+            buttonColorAnimator?.cancel()
+            buttonColorAnimationTarget = targetColor
+            _currentButtonColor = targetColor
+            listener.onButtonColorChanged(targetColor)
+            Log.d(TAG, "Button color set immediately: ${getColorName(targetColor)}")
+            return
+        }
 
+        // 이미 같은 목표로 애니메이션 중이면 스킵
+        // buttonColorAnimationTarget은 이 체크 이후에 업데이트해야
+        // 방향 전환 시 (예: WHITE→BLACK 중 다시 WHITE) 새 애니메이션이 정상 시작됨
+        if (buttonColorAnimator?.isRunning == true && buttonColorAnimationTarget == targetColor) {
+            return
+        }
+
+        buttonColorAnimationTarget = targetColor
         buttonColorAnimator?.cancel()
-        
+
         val startColor = _currentButtonColor
+        val finalTarget = targetColor // 클로저에서 캡처
+
         buttonColorAnimator = ValueAnimator.ofArgb(startColor, targetColor).apply {
-            duration = Constants.Timing.BG_TRANSITION_DURATION_MS // 배경 전환 시간과 맞춤
+            duration = Constants.Timing.BG_TRANSITION_DURATION_MS
             interpolator = android12Interpolator
             addUpdateListener { animator ->
                 val color = animator.animatedValue as Int
                 _currentButtonColor = color
                 listener.onButtonColorChanged(color)
             }
+            // 애니메이션 종료/취소 시 최종 상태 보장
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    // 정상 종료 시 최종 색상 확정
+                    if (_currentButtonColor != finalTarget) {
+                        _currentButtonColor = finalTarget
+                        listener.onButtonColorChanged(finalTarget)
+                        Log.d(TAG, "Button color finalized on end: ${getColorName(finalTarget)}")
+                    }
+                }
+            })
             start()
         }
-        
+
         Log.d(TAG, "Button color transition: ${getColorName(startColor)} -> ${getColorName(targetColor)}")
+    }
+
+    /**
+     * 현재 버튼 색상을 강제로 적용 (상태 동기화용)
+     * 애니메이션 없이 현재 설정된 목표 색상을 즉시 적용
+     */
+    fun forceApplyCurrentButtonColor() {
+        val targetColor = buttonColorAnimationTarget
+        if (_currentButtonColor != targetColor) {
+            buttonColorAnimator?.cancel()
+            _currentButtonColor = targetColor
+            listener.onButtonColorChanged(targetColor)
+            Log.d(TAG, "Button color force applied: ${getColorName(targetColor)}")
+        }
     }
 
     private fun getColorName(color: Int): String {
@@ -367,14 +477,21 @@ class BackgroundManager(
     /**
      * 커스텀 이미지 배경 사용 여부 판단
      * 모든 방해 요소(최근 앱, 앱 서랍, 알림 패널, 키보드)가 없을 때만 홈 배경 표시
+     * 앱 설정 화면에서는 일반 배경 사용
      */
     fun shouldUseCustomBackground(
         isOnHomeScreen: Boolean,
         isRecentsVisible: Boolean,
         isAppDrawerOpen: Boolean,
         isPanelOpen: Boolean,
-        isImeVisible: Boolean
+        isImeVisible: Boolean,
+        currentPackage: String = ""
     ): Boolean {
+        // 앱 설정 화면(자신의 패키지)에서는 커스텀 배경 사용 안 함
+        if (currentPackage == context.packageName) {
+            return false
+        }
+
         // 홈 화면에 있고, 홈 배경 설정이 켜져 있으며, 방해 요소가 없어야 함
         return isOnHomeScreen && settings.homeBgEnabled &&
                 !isRecentsVisible && !isAppDrawerOpen && !isPanelOpen && !isImeVisible
@@ -391,25 +508,12 @@ class BackgroundManager(
         forceUpdate: Boolean = false,
         animate: Boolean = true
     ) {
-        // 연속 앱 전환 시 중복 페이드 방지 (로딩화면 → 실제 앱)
-        // 이미 같은 목표로 설정되어 있고, 트랜지션 진행 중이거나 최근 완료된 경우 스킵
-        if (!forceUpdate && lastAppliedUseCustom == useCustom) {
-            val now = SystemClock.elapsedRealtime()
-            val recentlyCompleted = now < transitionEndAt + Constants.Timing.TRANSITION_DEDUP_GRACE_MS
-            if (isTransitionInProgress() || recentlyCompleted) {
-                Log.d(TAG, "Skipping redundant transition (already useCustom=$useCustom, " +
-                        "inProgress=${isTransitionInProgress()}, recentlyCompleted=$recentlyCompleted)")
-                return
-            }
-        }
-
         val defaultBgColor = getDefaultBackgroundColor()
+
+        // 1. 목표 배경 및 버튼 색상 결정 (dedup 체크 전에 먼저 계산)
         val targetDrawable: Drawable
         val targetButtonColor: Int
-        val previousUseCustom = lastAppliedUseCustom
-        lastAppliedUseCustom = useCustom
 
-        // 1. 목표 배경 및 버튼 색상 결정
         if (useCustom) {
             val bitmap = getCurrentBitmap()
             if (bitmap != null) {
@@ -425,8 +529,24 @@ class BackgroundManager(
             targetButtonColor = getDefaultButtonColor()
         }
 
-        // 2. 버튼 색상 업데이트 (애니메이션 포함)
+        // 2. 버튼 색상은 항상 업데이트 (dedup과 무관하게 상태 동기화 보장)
+        // 배경 전환이 스킵되더라도 버튼 색상은 올바르게 설정되어야 함
         updateButtonColor(targetButtonColor, animate = animate)
+
+        // 연속 앱 전환 시 중복 페이드 방지 (로딩화면 → 실제 앱)
+        // 이미 같은 목표로 설정되어 있고, 트랜지션 진행 중이거나 최근 완료된 경우 스킵
+        if (!forceUpdate && lastAppliedUseCustom == useCustom) {
+            val now = SystemClock.elapsedRealtime()
+            val recentlyCompleted = now < transitionEndAt + Constants.Timing.TRANSITION_DEDUP_GRACE_MS
+            if (isTransitionInProgress() || recentlyCompleted) {
+                Log.d(TAG, "Skipping redundant background transition (already useCustom=$useCustom, " +
+                        "inProgress=${isTransitionInProgress()}, recentlyCompleted=$recentlyCompleted)")
+                return
+            }
+        }
+
+        val previousUseCustom = lastAppliedUseCustom
+        lastAppliedUseCustom = useCustom
 
         // 3. 진행 중인 트랜지션 콜백 취소 (충돌 방지)
         cancelPendingTransitionCallback()

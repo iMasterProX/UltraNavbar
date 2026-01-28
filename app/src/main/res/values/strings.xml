@@ -52,7 +52,14 @@
     <string name="home_bg_not_set">Not set</string>
     <string name="home_bg_set">Set</string>
     <string name="select_image">Select image</string>
-    <string name="home_bg_note">When a screenshot is selected, the bottom 72px is cropped and used as the bar background. Other screens use a black background.</string>
+    <string name="home_bg_note">Tap Auto to preview your current wallpaper and capture the bottom 72px as the navigation bar background.</string>
+
+    <!-- Dark mode background settings -->
+    <string name="home_bg_dark_section">Dark mode background</string>
+    <string name="home_bg_dark_enable">Use separate dark mode background</string>
+    <string name="home_bg_dark_enable_summary">Use a different background image when dark mode is enabled. Falls back to normal background if not set.</string>
+    <string name="home_bg_dark_landscape">Dark mode landscape</string>
+    <string name="home_bg_dark_portrait">Dark mode portrait</string>
 
     <string name="image_crop_success">Background image saved.</string>
     <string name="image_crop_failed">Failed to process image.</string>
@@ -76,10 +83,13 @@
     <string name="tablet_only">Tablet-only app. This device is not supported.</string>
     <string name="permission_granted">Permission granted. Auto background generation is available.</string>
     <string name="permission_denied">Permission denied. Storage access is required.</string>
+    <string name="storage_permission_already_granted">Storage permission already granted. Auto background is available.</string>
+    <string name="bluetooth_permission_already_granted">Bluetooth permission already granted.</string>
+    <string name="accessibility_already_enabled">Accessibility service is already enabled.</string>
     <string name="wallpaper_generated">Wallpaper background created.</string>
     <string name="battery_opt_already_ignored">Already excluded from battery optimization.</string>
     <string name="battery_opt_open_failed">Unable to open battery optimization settings.</string>
-    <string name="wallpaper_preview_hint">If the preview looks good, tap Select image to apply.</string>
+    <string name="wallpaper_preview_hint">This is a preview of your current wallpaper. Tap Apply to capture and use it as a custom background.</string>
     <string name="wallpaper_preview_failed">Failed to load the wallpaper preview.</string>
 
     <string name="preview_title">Wallpaper preview</string>
@@ -87,9 +97,132 @@
     <string name="preview_opacity_label">Opacity</string>
     <string name="preview_opacity_default">100%</string>
     <string name="preview_filter_opacity_desc">Preview filter opacity</string>
+    <string name="apply_wallpaper">Apply</string>
+    <string name="generating_wallpaper">Generating…</string>
 
     <string name="notification_panel_open">Open notification shade</string>
     <string name="notification_panel_close">Close notification shade</string>
 
+    <!-- Navigation menu -->
+    <string name="nav_menu_navbar">Navigation Bar</string>
+    <string name="nav_menu_keyboard">Keyboard</string>
+    <string name="nav_menu_wacom_pen">Wacom Pen</string>
+    <string name="nav_menu_app_settings">App Settings</string>
+
+    <!-- App settings screen -->
+    <string name="app_settings_permissions">Permission status</string>
+    <string name="app_settings_permissions_summary">Check the status of permissions required for the app.</string>
+    <string name="permission_accessibility">Accessibility service</string>
+    <string name="permission_accessibility_summary">Required for navigation buttons and window detection.</string>
+    <string name="permission_storage">Storage access</string>
+    <string name="permission_storage_summary">Required for wallpaper access to generate auto backgrounds.</string>
+    <string name="permission_battery">Battery optimization exemption</string>
+    <string name="permission_battery_summary">Prevents the service from being stopped in the background.</string>
+    <string name="permission_bluetooth">Bluetooth access</string>
+    <string name="permission_bluetooth_summary">Required for keyboard shortcuts and device detection.</string>
+    <string name="permission_status_granted">Granted</string>
+    <string name="permission_status_not_granted">Not granted</string>
+    <string name="about_title">About</string>
+    <string name="about_version">Version</string>
+    <string name="about_developer">Developer</string>
+    <string name="about_developer_name">iMasterProX</string>
+    <string name="about_github">GitHub</string>
+    <string name="about_description">Extension features app for LG UltraTab devices.</string>
+
+    <!-- Keyboard Settings -->
+    <string name="keyboard_settings_title">Bluetooth Keyboard Settings</string>
+    <string name="keyboard_connected_devices">Connected Devices</string>
+    <string name="keyboard_no_devices">No Bluetooth keyboard connected</string>
+    <string name="keyboard_device_name">Device Name</string>
+    <string name="keyboard_device_type">Type</string>
+    <string name="keyboard_battery_level">Battery Level</string>
+    <string name="keyboard_battery_unknown">Unknown</string>
+    <string name="keyboard_connection_status">Connection Status</string>
+    <string name="keyboard_connected">Connected</string>
+    <string name="keyboard_paired">Paired</string>
+    <string name="keyboard_disconnected">Disconnected</string>
+    <string name="keyboard_refresh">Refresh</string>
+    <string name="keyboard_bluetooth_settings">Open Bluetooth Settings</string>
+
+    <!-- Wacom Pen -->
+    <string name="wacom_pen_settings_title">Wacom Pen Settings</string>
+    <string name="wacom_pen_settings_desc">Open system pen settings to configure Wacom pen features.</string>
+    <string name="coming_soon">Coming in a future update</string>
+    <string name="open_pen_settings">Open Pen Settings</string>
+    <string name="pen_settings_fallback">Pen settings not found. Opening main settings.</string>
+    <string name="pen_settings_failed">Failed to open settings.</string>
+
+    <!-- Setup screen -->
+    <string name="setup_welcome_title">Welcome to LG UltraTab Extension</string>
+    <string name="setup_welcome_desc">A few permissions are needed to get started.</string>
+    <string name="setup_accessibility_title">Enable accessibility service</string>
+    <string name="setup_accessibility_desc">Accessibility service permission is required to display the custom navigation bar and detect window states.</string>
+    <string name="setup_storage_title">Storage access permission</string>
+    <string name="setup_storage_desc">Wallpaper access is required to auto-generate home screen backgrounds.</string>
+    <string name="setup_battery_title">Battery optimization exemption</string>
+    <string name="setup_battery_desc">Exclude the app from battery optimization so the service runs reliably in the background.</string>
+    <string name="setup_bluetooth_title">Bluetooth access permission</string>
+    <string name="setup_bluetooth_desc">Bluetooth permission is required to detect connected keyboards and use keyboard shortcuts.</string>
+    <string name="setup_grant_permission">Grant permission</string>
+    <string name="setup_complete">Done</string>
+    <string name="setup_skip">Skip</string>
+    <string name="setup_next">Next</string>
+
     <string name="credits_text">Creator: iMasterProX with Vibe Coding (AI used), GitHub: https://github.com/iMasterProX/UltraNavbar</string>
+
+    <!-- Keyboard Shortcuts -->
+    <string name="shortcut_management">Shortcut Management</string>
+    <string name="manage_shortcuts">Manage Shortcuts</string>
+    <string name="add_shortcut">Add Shortcut</string>
+    <string name="edit_shortcut">Edit Shortcut</string>
+    <string name="delete_shortcut">Delete</string>
+    <string name="no_shortcuts">No keyboard shortcuts configured</string>
+    <string name="no_shortcuts_hint">Tap the + button to add a shortcut</string>
+    <string name="shortcut_name">Shortcut Name</string>
+    <string name="shortcut_name_hint">Enter shortcut name</string>
+    <string name="press_keys">Press Key Combination</string>
+    <string name="press_keys_hint">Press the desired key combination (e.g., Ctrl + 1)</string>
+    <string name="key_combination">Key Combination</string>
+    <string name="action_type">Action Type</string>
+    <string name="action_launch_app">Launch App</string>
+    <string name="action_open_settings">Open Settings</string>
+    <string name="action_shortcut">Shortcut</string>
+    <string name="select_app">Select App</string>
+    <string name="select_action">Select Action</string>
+    <string name="select_shortcut_app">Select Shortcut</string>
+    <string name="shortcut_saved">Shortcut saved</string>
+    <string name="shortcut_deleted">Shortcut deleted</string>
+    <string name="shortcut_duplicate">This key combination is already in use</string>
+    <string name="shortcut_invalid">Invalid key combination</string>
+    <string name="step_1_of_3">Step 1 of 3</string>
+    <string name="step_2_of_3">Step 2 of 3</string>
+    <string name="step_3_of_3">Step 3 of 3</string>
+    <string name="next">Next</string>
+    <string name="back">Back</string>
+    <string name="finish">Finish</string>
+    <string name="settings_wifi">Wi-Fi</string>
+    <string name="settings_bluetooth_menu">Bluetooth</string>
+    <string name="settings_display">Display</string>
+    <string name="settings_sound">Sound</string>
+    <string name="settings_apps">Apps</string>
+    <string name="settings_accessibility_menu">Accessibility</string>
+
+    <!-- Shortcut disabled apps -->
+    <string name="shortcut_disabled_apps">Disabled Apps for Shortcuts</string>
+    <string name="shortcut_disabled_apps_summary">Select apps where keyboard shortcuts will not work.</string>
+
+    <!-- Widget -->
+    <string name="widget_description">Show keyboard battery level on home screen</string>
+    <string name="widget_no_keyboard">No keyboard connected</string>
+    <string name="widget_updated">Updated</string>
+
+    <!-- Battery Notifications -->
+    <string name="battery_notification_title">Battery Notifications</string>
+    <string name="battery_notification_summary">Alert when keyboard battery is low</string>
+    <string name="battery_low_threshold_title">Low Battery Threshold</string>
+    <string name="battery_low_threshold_summary">Alert when battery drops below %d%%</string>
+    <string name="battery_notification_channel_name">Keyboard Battery Alerts</string>
+    <string name="battery_notification_channel_description">Notifications for low keyboard battery</string>
+    <string name="battery_low_title">Keyboard Battery Low</string>
+    <string name="battery_low_message">%s battery is at %d%%. Please charge soon.</string>
 </resources>
