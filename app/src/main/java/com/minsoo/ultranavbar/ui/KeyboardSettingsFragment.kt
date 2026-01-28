@@ -24,6 +24,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.slider.Slider
 import com.minsoo.ultranavbar.R
+import com.minsoo.ultranavbar.util.BluetoothUtils
 
 class KeyboardSettingsFragment : Fragment() {
 
@@ -157,7 +158,7 @@ class KeyboardSettingsFragment : Fragment() {
         try {
             val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter?.bondedDevices
             val keyboardDevices = pairedDevices?.filter { device ->
-                isKeyboardDevice(device)
+                BluetoothUtils.isKeyboardDevice(device, requireContext())
             } ?: emptyList()
 
             if (keyboardDevices.isEmpty()) {
@@ -187,56 +188,6 @@ class KeyboardSettingsFragment : Fragment() {
             }
         } catch (e: SecurityException) {
             showNoDevices()
-        }
-    }
-
-    private fun isKeyboardDevice(device: BluetoothDevice): Boolean {
-        try {
-            // BluetoothDevice의 클래스를 확인하여 키보드 여부 판단
-            val deviceClass = device.bluetoothClass ?: run {
-                Log.w(TAG, "Device ${device.address} has no Bluetooth class")
-                return false
-            }
-            val majorDeviceClass = deviceClass.majorDeviceClass
-            val deviceClassCode = deviceClass.deviceClass
-
-            // Major Device Class: PERIPHERAL (0x500)
-            // Minor Device Class: Keyboard (0x40)
-            val isPeripheral = majorDeviceClass == 0x500
-            val isKeyboard = (deviceClassCode and 0x40) != 0
-
-            Log.d(TAG, "Device ${device.address}: class=$deviceClassCode, major=$majorDeviceClass, " +
-                    "isPeripheral=$isPeripheral, isKeyboard=$isKeyboard")
-
-            return isPeripheral && isKeyboard
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking device class: ${device.address}", e)
-            return false
-        }
-    }
-
-    /**
-     * 배터리 레벨 가져오기 (리플렉션 사용)
-     */
-    private fun getDeviceBatteryLevel(device: BluetoothDevice): Int {
-        return try {
-            val method = device.javaClass.getMethod("getBatteryLevel")
-            method.invoke(device) as? Int ?: -1
-        } catch (e: Exception) {
-            -1
-        }
-    }
-
-    /**
-     * 기기의 실제 연결 상태 확인 (리플렉션 사용)
-     */
-    private fun isDeviceConnected(device: BluetoothDevice): Boolean {
-        return try {
-            val method = device.javaClass.getMethod("isConnected")
-            method.invoke(device) as? Boolean ?: false
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not determine connection status for ${device.address}")
-            false
         }
     }
 
@@ -287,7 +238,7 @@ class KeyboardSettingsFragment : Fragment() {
             cardLayout.addView(nameTextView)
 
             // 연결 상태
-            val isConnected = isDeviceConnected(device)
+            val isConnected = BluetoothUtils.isDeviceConnected(device)
             val statusTextView = TextView(requireContext()).apply {
                 val statusString = if (isConnected) {
                     getString(R.string.keyboard_connected)
@@ -318,7 +269,7 @@ class KeyboardSettingsFragment : Fragment() {
             // 배터리 정보 (API 33+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 try {
-                    val batteryLevel = getDeviceBatteryLevel(device)
+                    val batteryLevel = BluetoothUtils.getDeviceBatteryLevel(device)
 
                     val batteryText = if (batteryLevel >= 0) {
                         "${getString(R.string.keyboard_battery_level)}: $batteryLevel%"

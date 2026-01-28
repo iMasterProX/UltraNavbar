@@ -17,6 +17,7 @@ import android.widget.RemoteViews
 import androidx.core.app.ActivityCompat
 import com.minsoo.ultranavbar.MainActivity
 import com.minsoo.ultranavbar.R
+import com.minsoo.ultranavbar.util.BluetoothUtils
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -135,18 +136,20 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
             Log.d(TAG, "Found ${bondedDevices.size} bonded devices")
 
             bondedDevices.forEach { device ->
-                val isKeyboard = isKeyboardDevice(device)
-                Log.d(TAG, "Device: ${device.name} (${device.address}), isKeyboard=$isKeyboard")
+                val isKeyboard = BluetoothUtils.isKeyboardDevice(device, context)
+                val deviceName = BluetoothUtils.getDeviceName(device, context)
+                Log.d(TAG, "Device: $deviceName (${device.address}), isKeyboard=$isKeyboard")
             }
 
             val keyboardDevice = bondedDevices.firstOrNull { device ->
-                isKeyboardDevice(device)
+                BluetoothUtils.isKeyboardDevice(device, context)
             }
 
             if (keyboardDevice != null) {
-                Log.d(TAG, "Found keyboard device: ${keyboardDevice.name}")
+                val deviceName = BluetoothUtils.getDeviceName(keyboardDevice, context)
+                Log.d(TAG, "Found keyboard device: $deviceName")
                 val batteryLevel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    getDeviceBatteryLevel(keyboardDevice)
+                    BluetoothUtils.getDeviceBatteryLevel(keyboardDevice)
                 } else {
                     -1
                 }
@@ -165,42 +168,6 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
         } catch (e: Exception) {
             Log.e(TAG, "Error getting keyboard battery info", e)
             return null
-        }
-    }
-
-    private fun isKeyboardDevice(device: BluetoothDevice): Boolean {
-        try {
-            val deviceClass = device.bluetoothClass ?: run {
-                Log.w(TAG, "Device ${device.address} has no Bluetooth class")
-                return false
-            }
-            val majorDeviceClass = deviceClass.majorDeviceClass
-            val deviceClassCode = deviceClass.deviceClass
-
-            // Major Device Class: PERIPHERAL (0x500)
-            // Minor Device Class: Keyboard (0x40)
-            val isPeripheral = majorDeviceClass == 0x500
-            val isKeyboard = (deviceClassCode and 0x40) != 0
-
-            Log.d(TAG, "Device ${device.address}: class=$deviceClassCode, major=$majorDeviceClass, " +
-                    "isPeripheral=$isPeripheral, isKeyboard=$isKeyboard")
-
-            return isPeripheral && isKeyboard
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking device class: ${device.address}", e)
-            return false
-        }
-    }
-
-    /**
-     * 배터리 레벨 가져오기 (리플렉션 사용)
-     */
-    private fun getDeviceBatteryLevel(device: BluetoothDevice): Int {
-        return try {
-            val method = device.javaClass.getMethod("getBatteryLevel")
-            method.invoke(device) as? Int ?: -1
-        } catch (e: Exception) {
-            -1
         }
     }
 
