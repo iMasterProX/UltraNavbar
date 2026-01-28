@@ -65,9 +65,16 @@ class AddShortcutDialog : DialogFragment() {
         setupStep1()
         showStep(1)
 
-        return MaterialAlertDialogBuilder(requireContext())
+        val dialog = MaterialAlertDialogBuilder(requireContext())
             .setView(dialogView)
             .create()
+
+        // Set up key event handling for the dialog
+        dialog.setOnKeyListener { _, keyCode, event ->
+            handleKeyEvent(keyCode, event)
+        }
+
+        return dialog
     }
 
     override fun onAttach(context: Context) {
@@ -269,12 +276,10 @@ class AddShortcutDialog : DialogFragment() {
         dismiss()
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    private fun handleKeyEvent(keyCode: Int, event: KeyEvent): Boolean {
         if (currentStep != 1) {
-            return super.dispatchKeyEvent(event)
+            return false
         }
-
-        val keyCode = event.keyCode
 
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
@@ -324,7 +329,7 @@ class AddShortcutDialog : DialogFragment() {
             }
         }
 
-        return super.dispatchKeyEvent(event)
+        return false
     }
 
     private fun updateKeyCombinationDisplay() {
