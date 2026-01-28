@@ -29,6 +29,7 @@ class KeyboardSettingsFragment : Fragment() {
     private lateinit var txtNoDevices: TextView
     private lateinit var btnRefresh: MaterialButton
     private lateinit var btnBluetoothSettings: MaterialButton
+    private lateinit var btnManageShortcuts: MaterialButton
 
     private var bluetoothAdapter: BluetoothAdapter? = null
 
@@ -69,6 +70,7 @@ class KeyboardSettingsFragment : Fragment() {
         txtNoDevices = view.findViewById(R.id.txtNoDevices)
         btnRefresh = view.findViewById(R.id.btnRefresh)
         btnBluetoothSettings = view.findViewById(R.id.btnBluetoothSettings)
+        btnManageShortcuts = view.findViewById(R.id.btnManageShortcuts)
 
         btnRefresh.setOnClickListener {
             loadDevices()
@@ -77,6 +79,15 @@ class KeyboardSettingsFragment : Fragment() {
         btnBluetoothSettings.setOnClickListener {
             openBluetoothSettings()
         }
+
+        btnManageShortcuts.setOnClickListener {
+            openShortcutManagement()
+        }
+    }
+
+    private fun openShortcutManagement() {
+        val intent = Intent(requireContext(), KeyboardShortcutActivity::class.java)
+        startActivity(intent)
     }
 
     private fun initBluetooth() {

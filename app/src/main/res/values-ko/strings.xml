@@ -162,4 +162,40 @@
     <string name="setup_complete">설정 완료</string>
     <string name="setup_skip">건너뛰기</string>
     <string name="setup_next">다음</string>
+
+    <!-- 키보드 단축키 -->
+    <string name="shortcut_management">단축키 관리</string>
+    <string name="manage_shortcuts">단축키 관리</string>
+    <string name="add_shortcut">단축키 추가</string>
+    <string name="edit_shortcut">단축키 편집</string>
+    <string name="delete_shortcut">삭제</string>
+    <string name="no_shortcuts">설정된 키보드 단축키가 없습니다</string>
+    <string name="no_shortcuts_hint">+ 버튼을 눌러 단축키를 추가하세요</string>
+    <string name="shortcut_name">단축키 이름</string>
+    <string name="shortcut_name_hint">단축키 이름을 입력하세요</string>
+    <string name="press_keys">키 조합 누르기</string>
+    <string name="press_keys_hint">원하는 키 조합을 누르세요 (예: Ctrl + 1)</string>
+    <string name="key_combination">키 조합</string>
+    <string name="action_type">동작 유형</string>
+    <string name="action_launch_app">앱 실행</string>
+    <string name="action_open_settings">설정 열기</string>
+    <string name="action_shortcut">바로가기</string>
+    <string name="select_app">앱 선택</string>
+    <string name="select_action">동작 선택</string>
+    <string name="shortcut_saved">단축키 저장됨</string>
+    <string name="shortcut_deleted">단축키 삭제됨</string>
+    <string name="shortcut_duplicate">이 키 조합은 이미 사용 중입니다</string>
+    <string name="shortcut_invalid">유효하지 않은 키 조합입니다</string>
+    <string name="step_1_of_3">1/3 단계</string>
+    <string name="step_2_of_3">2/3 단계</string>
+    <string name="step_3_of_3">3/3 단계</string>
+    <string name="next">다음</string>
+    <string name="back">뒤로</string>
+    <string name="finish">완료</string>
+    <string name="settings_wifi">Wi-Fi</string>
+    <string name="settings_bluetooth_menu">블루투스</string>
+    <string name="settings_display">디스플레이</string>
+    <string name="settings_sound">소리</string>
+    <string name="settings_apps">앱</string>
+    <string name="settings_accessibility_menu">접근성</string>
 </resources>

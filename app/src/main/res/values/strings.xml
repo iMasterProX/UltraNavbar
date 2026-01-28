@@ -162,4 +162,40 @@
     <string name="setup_next">Next</string>
 
     <string name="credits_text">Creator: iMasterProX with Vibe Coding (AI used), GitHub: https://github.com/iMasterProX/UltraNavbar</string>
+
+    <!-- Keyboard Shortcuts -->
+    <string name="shortcut_management">Shortcut Management</string>
+    <string name="manage_shortcuts">Manage Shortcuts</string>
+    <string name="add_shortcut">Add Shortcut</string>
+    <string name="edit_shortcut">Edit Shortcut</string>
+    <string name="delete_shortcut">Delete</string>
+    <string name="no_shortcuts">No keyboard shortcuts configured</string>
+    <string name="no_shortcuts_hint">Tap the + button to add a shortcut</string>
+    <string name="shortcut_name">Shortcut Name</string>
+    <string name="shortcut_name_hint">Enter shortcut name</string>
+    <string name="press_keys">Press Key Combination</string>
+    <string name="press_keys_hint">Press the desired key combination (e.g., Ctrl + 1)</string>
+    <string name="key_combination">Key Combination</string>
+    <string name="action_type">Action Type</string>
+    <string name="action_launch_app">Launch App</string>
+    <string name="action_open_settings">Open Settings</string>
+    <string name="action_shortcut">Shortcut</string>
+    <string name="select_app">Select App</string>
+    <string name="select_action">Select Action</string>
+    <string name="shortcut_saved">Shortcut saved</string>
+    <string name="shortcut_deleted">Shortcut deleted</string>
+    <string name="shortcut_duplicate">This key combination is already in use</string>
+    <string name="shortcut_invalid">Invalid key combination</string>
+    <string name="step_1_of_3">Step 1 of 3</string>
+    <string name="step_2_of_3">Step 2 of 3</string>
+    <string name="step_3_of_3">Step 3 of 3</string>
+    <string name="next">Next</string>
+    <string name="back">Back</string>
+    <string name="finish">Finish</string>
+    <string name="settings_wifi">Wi-Fi</string>
+    <string name="settings_bluetooth_menu">Bluetooth</string>
+    <string name="settings_display">Display</string>
+    <string name="settings_sound">Sound</string>
+    <string name="settings_apps">Apps</string>
+    <string name="settings_accessibility_menu">Accessibility</string>
 </resources>

@@ -56,6 +56,12 @@
             android:exported="false"
             android:theme="@style/Theme.UltraNavbar" />
 
+        <activity
+            android:name=".ui.KeyboardShortcutActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.UltraNavbar" />
+
         <service
             android:name=".service.NavBarAccessibilityService"
             android:label="@string/app_name"
