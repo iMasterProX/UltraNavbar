@@ -83,6 +83,9 @@
     <string name="tablet_only">Tablet-only app. This device is not supported.</string>
     <string name="permission_granted">Permission granted. Auto background generation is available.</string>
     <string name="permission_denied">Permission denied. Storage access is required.</string>
+    <string name="storage_permission_already_granted">Storage permission already granted. Auto background is available.</string>
+    <string name="bluetooth_permission_already_granted">Bluetooth permission already granted.</string>
+    <string name="accessibility_already_enabled">Accessibility service is already enabled.</string>
     <string name="wallpaper_generated">Wallpaper background created.</string>
     <string name="battery_opt_already_ignored">Already excluded from battery optimization.</string>
     <string name="battery_opt_open_failed">Unable to open battery optimization settings.</string>

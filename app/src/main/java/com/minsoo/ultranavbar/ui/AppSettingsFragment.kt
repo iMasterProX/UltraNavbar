@@ -32,6 +32,19 @@ import com.minsoo.ultranavbar.settings.SettingsManager
  */
 class AppSettingsFragment : Fragment() {
 
+    companion object {
+        /**
+         * API 레벨에 따라 적절한 저장소 권한 반환
+         */
+        private fun getStoragePermission(): String {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Manifest.permission.READ_MEDIA_IMAGES
+            } else {
+                getStoragePermission()
+            }
+        }
+    }
+
     private lateinit var settings: SettingsManager
 
     // 서비스 상태 UI
@@ -153,7 +166,7 @@ class AppSettingsFragment : Fragment() {
         // 저장소 권한 상태 확인
         val isStorageGranted = ContextCompat.checkSelfPermission(
             requireContext(),
-            Manifest.permission.READ_EXTERNAL_STORAGE
+            getStoragePermission()
         ) == PackageManager.PERMISSION_GRANTED
 
         txtPermStorage.text = if (isStorageGranted) {
@@ -206,12 +219,12 @@ class AppSettingsFragment : Fragment() {
     private fun requestStoragePermission() {
         if (ContextCompat.checkSelfPermission(
                 requireContext(),
-                Manifest.permission.READ_EXTERNAL_STORAGE
+                getStoragePermission()
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+            requestPermissionLauncher.launch(getStoragePermission())
         } else {
-            Toast.makeText(requireContext(), R.string.permission_granted, Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), R.string.storage_permission_already_granted, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -252,10 +265,10 @@ class AppSettingsFragment : Fragment() {
             ) {
                 requestPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
             } else {
-                Toast.makeText(requireContext(), R.string.permission_granted, Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), R.string.bluetooth_permission_already_granted, Toast.LENGTH_SHORT).show()
             }
         } else {
-            Toast.makeText(requireContext(), R.string.permission_granted, Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), R.string.bluetooth_permission_already_granted, Toast.LENGTH_SHORT).show()
         }
     }
 }

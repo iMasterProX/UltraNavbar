@@ -22,6 +22,19 @@ import com.minsoo.ultranavbar.settings.SettingsManager
 
 class SetupActivity : AppCompatActivity() {
 
+    companion object {
+        /**
+         * API 레벨에 따라 적절한 저장소 권한 반환
+         */
+        private fun getStoragePermission(): String {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Manifest.permission.READ_MEDIA_IMAGES
+            } else {
+                getStoragePermission()
+            }
+        }
+    }
+
     private lateinit var settings: SettingsManager
 
     // UI 요소
@@ -119,7 +132,7 @@ class SetupActivity : AppCompatActivity() {
             0 -> NavBarAccessibilityService.isRunning()
             1 -> ContextCompat.checkSelfPermission(
                 this,
-                Manifest.permission.READ_EXTERNAL_STORAGE
+                getStoragePermission()
             ) == PackageManager.PERMISSION_GRANTED
             2 -> {
                 val powerManager = getSystemService(PowerManager::class.java)
@@ -157,10 +170,10 @@ class SetupActivity : AppCompatActivity() {
                 // 저장소 권한 요청
                 if (ContextCompat.checkSelfPermission(
                         this,
-                        Manifest.permission.READ_EXTERNAL_STORAGE
+                        getStoragePermission()
                     ) != PackageManager.PERMISSION_GRANTED
                 ) {
-                    requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    requestPermissionLauncher.launch(getStoragePermission())
                 } else {
                     Toast.makeText(this, R.string.permission_granted, Toast.LENGTH_SHORT).show()
                 }

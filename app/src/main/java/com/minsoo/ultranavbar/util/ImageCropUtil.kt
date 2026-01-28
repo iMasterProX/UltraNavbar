@@ -15,6 +15,7 @@ import java.io.FileOutputStream
 object ImageCropUtil {
 
     private const val TAG = "ImageCropUtil"
+    private const val FALLBACK_CROP_HEIGHT_PX = 72
 
     // 저장 파일명
     const val LANDSCAPE_BG_FILENAME = "navbar_bg_landscape.png"
@@ -23,6 +24,21 @@ object ImageCropUtil {
     // 다크 모드 전용 배경 파일명
     const val DARK_LANDSCAPE_BG_FILENAME = "navbar_bg_dark_landscape.png"
     const val DARK_PORTRAIT_BG_FILENAME = "navbar_bg_dark_portrait.png"
+
+    /**
+     * 기기의 실제 네비게이션 바 높이를 가져옴
+     */
+    private fun getNavigationBarHeight(context: Context, isLandscape: Boolean): Int {
+        val res = context.resources
+        val resName = if (isLandscape) "navigation_bar_height_landscape" else "navigation_bar_height"
+        val id = res.getIdentifier(resName, "dimen", "android")
+        return if (id > 0) {
+            res.getDimensionPixelSize(id)
+        } else {
+            Log.w(TAG, "Navigation bar height not found, using fallback: $FALLBACK_CROP_HEIGHT_PX")
+            FALLBACK_CROP_HEIGHT_PX
+        }
+    }
 
     /**
      * URI에서 이미지를 로드하고 하단 72px를 크롭하여 저장
@@ -56,21 +72,20 @@ object ImageCropUtil {
     }
 
     /**
-     * 비트맵에서 하단 72px를 크롭하여 저장
+     * 비트맵에서 하단 네비바 높이만큼 크롭하여 저장
      * @param isDarkMode 다크 모드 전용 배경 여부
      */
     fun cropAndSave(context: Context, bitmap: Bitmap, isLandscape: Boolean, isDarkMode: Boolean = false): Boolean {
         return try {
-            val cropHeight = SettingsManager.CROP_HEIGHT_PX
+            val cropHeight = getNavigationBarHeight(context, isLandscape)
             val width = bitmap.width
             val height = bitmap.height
 
-            // 하단에서 72px 크롭
-            // Int - Int 연산 명시
+            // 하단에서 네비바 높이만큼 크롭
             val y = (height - cropHeight).coerceAtLeast(0)
             val actualCropHeight = minOf(cropHeight, height)
 
-            Log.d(TAG, "Cropping: original=${width}x${height}, crop y=$y, cropHeight=$actualCropHeight, isDarkMode=$isDarkMode")
+            Log.d(TAG, "Cropping: original=${width}x${height}, crop y=$y, cropHeight=$actualCropHeight (navbar height for ${if (isLandscape) "landscape" else "portrait"}), isDarkMode=$isDarkMode")
 
             val croppedBitmap = Bitmap.createBitmap(
                 bitmap,

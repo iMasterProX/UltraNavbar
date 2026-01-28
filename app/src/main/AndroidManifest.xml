@@ -12,8 +12,11 @@
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
-    <!-- 배경화면 접근 및 저장을 위한 저장소 읽기 권한 -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- 배경화면 접근을 위한 미디어 읽기 권한 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
+        android:minSdkVersion="33" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <!-- 태블릿 전용 앱 (600dp 이상 화면 필요) -->
     <supports-screens
