@@ -206,25 +206,9 @@ Bug reports, feature suggestions, and code contributions are welcome! Please par
 
 ---
 
-## Screenshots
-
-### Navigation Bar
-![Navigation Bar](screenshots/navbar.png)
-
-### Home Background
-![Home Background](screenshots/home_bg.png)
-
-### Keyboard Settings
-![Keyboard Settings](screenshots/keyboard.png)
-
-### Keyboard Shortcuts
-![Keyboard Shortcuts](screenshots/shortcuts.png)
-
----
-
 ## Changelog
 
-### Version 1.0.0
+### Version 0.2.0
 - Initial release
 - Custom navigation bar with home screen backgrounds
 - Bluetooth keyboard support with battery monitoring
