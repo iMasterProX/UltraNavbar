@@ -16,7 +16,7 @@ import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.model.KeyShortcut
 import com.minsoo.ultranavbar.settings.KeyShortcutManager
 
-class KeyboardShortcutActivity : AppCompatActivity() {
+class KeyboardShortcutActivity : AppCompatActivity(), AddShortcutDialog.DialogListener {
 
     private lateinit var toolbar: MaterialToolbar
     private lateinit var recyclerView: RecyclerView
@@ -25,7 +25,6 @@ class KeyboardShortcutActivity : AppCompatActivity() {
 
     private lateinit var shortcutManager: KeyShortcutManager
     private lateinit var adapter: KeyboardShortcutAdapter
-    private var currentDialog: AddShortcutDialog? = null
 
     private val appPickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -33,9 +32,14 @@ class KeyboardShortcutActivity : AppCompatActivity() {
         if (result.resultCode == RESULT_OK) {
             val packageName = result.data?.getStringExtra(AppListActivity.EXTRA_SELECTED_PACKAGE)
             if (packageName != null) {
-                currentDialog?.setSelectedApp(packageName)
+                val dialog = supportFragmentManager.findFragmentByTag(DIALOG_TAG) as? AddShortcutDialog
+                dialog?.setSelectedApp(packageName)
             }
         }
+    }
+
+    companion object {
+        private const val DIALOG_TAG = "AddShortcutDialog"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,11 +85,19 @@ class KeyboardShortcutActivity : AppCompatActivity() {
     }
 
     private fun showAddShortcutDialog() {
-        val dialog = AddShortcutDialog(this, appPickerLauncher) { shortcut ->
-            addShortcut(shortcut)
+        val dialog = AddShortcutDialog()
+        dialog.show(supportFragmentManager, DIALOG_TAG)
+    }
+
+    override fun onShortcutAdded(shortcut: KeyShortcut) {
+        addShortcut(shortcut)
+    }
+
+    override fun onAppSelectionRequested() {
+        val intent = Intent(this, AppListActivity::class.java).apply {
+            putExtra(AppListActivity.EXTRA_SELECTION_MODE, AppListActivity.MODE_SINGLE)
         }
-        currentDialog = dialog
-        dialog.show()
+        appPickerLauncher.launch(intent)
     }
 
     private fun addShortcut(shortcut: KeyShortcut) {

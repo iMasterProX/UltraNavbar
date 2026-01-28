@@ -7,23 +7,28 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.ActivityResultLauncher
+import androidx.fragment.app.DialogFragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.model.KeyShortcut
 
-class AddShortcutDialog(
-    context: Context,
-    private val appPickerLauncher: ActivityResultLauncher<Intent>,
-    private val onShortcutAdded: (KeyShortcut) -> Unit
-) : Dialog(context) {
+class AddShortcutDialog : DialogFragment() {
+
+    interface DialogListener {
+        fun onShortcutAdded(shortcut: KeyShortcut)
+        fun onAppSelectionRequested()
+    }
+
+    private var listener: DialogListener? = null
 
     private var currentStep = 1
     private val pressedModifiers = mutableSetOf<Int>()  // 실시간 추적 (KEY_UP에서 제거)
@@ -53,22 +58,35 @@ class AddShortcutDialog(
     private lateinit var btnSelectApp: MaterialButton
     private lateinit var layoutSettings: View
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.dialog_add_shortcut)
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_add_shortcut, null)
 
-        initViews()
+        initViews(dialogView)
         setupStep1()
         showStep(1)
+
+        return MaterialAlertDialogBuilder(requireContext())
+            .setView(dialogView)
+            .create()
     }
 
-    private fun initViews() {
-        txtStepIndicator = findViewById(R.id.txtStepIndicator)
-        txtTitle = findViewById(R.id.txtTitle)
-        contentContainer = findViewById(R.id.contentContainer)
-        btnBack = findViewById(R.id.btnBack)
-        btnCancel = findViewById(R.id.btnCancel)
-        btnNext = findViewById(R.id.btnNext)
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        listener = context as? DialogListener
+    }
+
+    override fun onDetach() {
+        super.onDetach()
+        listener = null
+    }
+
+    private fun initViews(view: View) {
+        txtStepIndicator = view.findViewById(R.id.txtStepIndicator)
+        txtTitle = view.findViewById(R.id.txtTitle)
+        contentContainer = view.findViewById(R.id.contentContainer)
+        btnBack = view.findViewById(R.id.btnBack)
+        btnCancel = view.findViewById(R.id.btnCancel)
+        btnNext = view.findViewById(R.id.btnNext)
 
         btnBack.setOnClickListener { previousStep() }
         btnCancel.setOnClickListener { dismiss() }
@@ -76,12 +94,12 @@ class AddShortcutDialog(
     }
 
     private fun setupStep1() {
-        step1View = LayoutInflater.from(context).inflate(R.layout.dialog_step1_key_combination, contentContainer, false)
+        step1View = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_step1_key_combination, contentContainer, false)
         txtKeyCombination = step1View.findViewById(R.id.txtKeyCombination)
     }
 
     private fun setupStep2() {
-        step2View = LayoutInflater.from(context).inflate(R.layout.dialog_step2_action_type, contentContainer, false)
+        step2View = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_step2_action_type, contentContainer, false)
         radioGroup = step2View.findViewById(R.id.radioGroup)
 
         radioGroup.setOnCheckedChangeListener { _, checkedId ->
@@ -95,7 +113,7 @@ class AddShortcutDialog(
     }
 
     private fun setupStep3() {
-        step3View = LayoutInflater.from(context).inflate(R.layout.dialog_step3_select_action, contentContainer, false)
+        step3View = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_step3_select_action, contentContainer, false)
         editName = step3View.findViewById(R.id.editName)
         btnSelectApp = step3View.findViewById(R.id.btnSelectApp)
         layoutSettings = step3View.findViewById(R.id.layoutSettings)
@@ -114,10 +132,7 @@ class AddShortcutDialog(
                 btnSelectApp.visibility = View.VISIBLE
                 layoutSettings.visibility = View.GONE
                 btnSelectApp.setOnClickListener {
-                    val intent = Intent(context, AppListActivity::class.java).apply {
-                        putExtra(AppListActivity.EXTRA_SELECTION_MODE, AppListActivity.MODE_SINGLE)
-                    }
-                    appPickerLauncher.launch(intent)
+                    listener?.onAppSelectionRequested()
                 }
             }
             KeyShortcut.ActionType.SETTINGS -> {
@@ -161,7 +176,7 @@ class AddShortcutDialog(
 
     fun setSelectedApp(packageName: String) {
         selectedActionData = packageName
-        val pm = context.packageManager
+        val pm = requireContext().packageManager
         try {
             val appInfo = pm.getApplicationInfo(packageName, 0)
             val appName = pm.getApplicationLabel(appInfo).toString()
@@ -176,7 +191,7 @@ class AddShortcutDialog(
         currentStep = step
 
         // Update UI
-        txtStepIndicator.text = context.getString(
+        txtStepIndicator.text = requireContext().getString(
             when (step) {
                 1 -> R.string.step_1_of_3
                 2 -> R.string.step_2_of_3
@@ -185,13 +200,13 @@ class AddShortcutDialog(
         )
 
         txtTitle.text = when (step) {
-            1 -> context.getString(R.string.press_keys)
-            2 -> context.getString(R.string.action_type)
-            else -> context.getString(R.string.select_action)
+            1 -> requireContext().getString(R.string.press_keys)
+            2 -> requireContext().getString(R.string.action_type)
+            else -> requireContext().getString(R.string.select_action)
         }
 
         btnBack.visibility = if (step > 1) View.VISIBLE else View.GONE
-        btnNext.text = if (step == 3) context.getString(R.string.finish) else context.getString(R.string.next)
+        btnNext.text = if (step == 3) requireContext().getString(R.string.finish) else requireContext().getString(R.string.next)
 
         // Load content
         contentContainer.removeAllViews()
@@ -232,12 +247,12 @@ class AddShortcutDialog(
     private fun finishShortcut() {
         val name = editName.text?.toString() ?: ""
         if (name.isEmpty()) {
-            Toast.makeText(context, context.getString(R.string.shortcut_name_hint), Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), requireContext().getString(R.string.shortcut_name_hint), Toast.LENGTH_SHORT).show()
             return
         }
 
         if (mainKeyCode == null || capturedModifiers.isEmpty() || selectedActionType == null || selectedActionData == null) {
-            Toast.makeText(context, context.getString(R.string.shortcut_invalid), Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), requireContext().getString(R.string.shortcut_invalid), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -250,7 +265,7 @@ class AddShortcutDialog(
             actionData = selectedActionData!!
         )
 
-        onShortcutAdded(shortcut)
+        listener?.onShortcutAdded(shortcut)
         dismiss()
     }
 
