@@ -26,7 +26,8 @@ class AddShortcutDialog(
 ) : Dialog(context) {
 
     private var currentStep = 1
-    private val pressedModifiers = mutableSetOf<Int>()
+    private val pressedModifiers = mutableSetOf<Int>()  // 실시간 추적 (KEY_UP에서 제거)
+    private val capturedModifiers = mutableSetOf<Int>()  // 메인키 입력 시점에 확정된 modifier
     private var mainKeyCode: Int? = null
     private var selectedActionType: KeyShortcut.ActionType? = null
     private var selectedActionData: String? = null
@@ -100,9 +101,9 @@ class AddShortcutDialog(
 
         // Set suggested name
         val suggestedName = buildString {
-            if (pressedModifiers.contains(KeyEvent.KEYCODE_CTRL_LEFT)) append("Ctrl + ")
-            if (pressedModifiers.contains(KeyEvent.KEYCODE_SHIFT_LEFT)) append("Shift + ")
-            if (pressedModifiers.contains(KeyEvent.KEYCODE_ALT_LEFT)) append("Alt + ")
+            if (capturedModifiers.contains(KeyEvent.KEYCODE_CTRL_LEFT)) append("Ctrl + ")
+            if (capturedModifiers.contains(KeyEvent.KEYCODE_SHIFT_LEFT)) append("Shift + ")
+            if (capturedModifiers.contains(KeyEvent.KEYCODE_ALT_LEFT)) append("Alt + ")
             mainKeyCode?.let { append(getKeyName(it)) }
         }
         editName.setText(suggestedName)
@@ -226,7 +227,7 @@ class AddShortcutDialog(
             return
         }
 
-        if (mainKeyCode == null || selectedActionType == null || selectedActionData == null) {
+        if (mainKeyCode == null || capturedModifiers.isEmpty() || selectedActionType == null || selectedActionData == null) {
             Toast.makeText(context, context.getString(R.string.shortcut_invalid), Toast.LENGTH_SHORT).show()
             return
         }
@@ -234,7 +235,7 @@ class AddShortcutDialog(
         val shortcut = KeyShortcut(
             id = java.util.UUID.randomUUID().toString(),
             name = name,
-            modifiers = pressedModifiers.toSet(),
+            modifiers = capturedModifiers.toSet(),
             keyCode = mainKeyCode!!,
             actionType = selectedActionType!!,
             actionData = selectedActionData!!
@@ -268,6 +269,9 @@ class AddShortcutDialog(
                     }
                     else -> {
                         if (pressedModifiers.isNotEmpty()) {
+                            // 메인키 입력 시 현재 눌린 modifier를 확정 캡처
+                            capturedModifiers.clear()
+                            capturedModifiers.addAll(pressedModifiers)
                             mainKeyCode = keyCode
                             btnNext.isEnabled = true
                         }
@@ -302,10 +306,13 @@ class AddShortcutDialog(
     private fun updateKeyCombinationDisplay() {
         val parts = mutableListOf<String>()
 
-        if (pressedModifiers.contains(KeyEvent.KEYCODE_CTRL_LEFT)) parts.add("Ctrl")
-        if (pressedModifiers.contains(KeyEvent.KEYCODE_SHIFT_LEFT)) parts.add("Shift")
-        if (pressedModifiers.contains(KeyEvent.KEYCODE_ALT_LEFT)) parts.add("Alt")
-        if (pressedModifiers.contains(KeyEvent.KEYCODE_META_LEFT)) parts.add("Meta")
+        // 메인키가 캡처되었으면 확정된 modifier를 보여주고, 아니면 실시간 추적 값 표시
+        val displayModifiers = if (mainKeyCode != null) capturedModifiers else pressedModifiers
+
+        if (displayModifiers.contains(KeyEvent.KEYCODE_CTRL_LEFT)) parts.add("Ctrl")
+        if (displayModifiers.contains(KeyEvent.KEYCODE_SHIFT_LEFT)) parts.add("Shift")
+        if (displayModifiers.contains(KeyEvent.KEYCODE_ALT_LEFT)) parts.add("Alt")
+        if (displayModifiers.contains(KeyEvent.KEYCODE_META_LEFT)) parts.add("Meta")
 
         mainKeyCode?.let { parts.add(getKeyName(it)) }
 
