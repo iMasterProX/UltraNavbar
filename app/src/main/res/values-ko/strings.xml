@@ -203,4 +203,12 @@
     <string name="widget_description">홈 화면에 키보드 배터리 잔량 표시</string>
     <string name="widget_no_keyboard">연결된 키보드 없음</string>
     <string name="widget_updated">업데이트됨</string>
+
+    <!-- 배터리 알림 -->
+    <string name="battery_notification_title">배터리 알림</string>
+    <string name="battery_notification_summary">키보드 배터리가 부족할 때 알림</string>
+    <string name="battery_notification_channel_name">키보드 배터리 알림</string>
+    <string name="battery_notification_channel_description">키보드 배터리 부족 알림</string>
+    <string name="battery_low_title">키보드 배터리 부족</string>
+    <string name="battery_low_message">%s 배터리가 %d%%입니다. 곧 충전해 주세요.</string>
 </resources>

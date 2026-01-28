@@ -70,6 +70,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var pendingStateCheck: Runnable? = null
     private var fullscreenPoll: Runnable? = null
     private var unlockFadeRunnable: Runnable? = null
+    private var batteryMonitorRunnable: Runnable? = null
 
     // === 브로드캐스트 리시버 ===
     private val settingsReceiver = object : BroadcastReceiver() {
@@ -153,6 +154,9 @@ class NavBarAccessibilityService : AccessibilityService() {
         updateOverlayVisibility(forceFade = false)
         checkImeVisibility()
 
+        // 배터리 모니터링 시작
+        startBatteryMonitoring()
+
         Log.i(TAG, "Service fully initialized")
     }
 
@@ -200,6 +204,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         cancelPendingTasks()
         unregisterReceivers()
         destroyOverlay()
+        stopBatteryMonitoring()
 
         super.onDestroy()
     }
@@ -614,6 +619,24 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun stopFullscreenPolling() {
         fullscreenPoll?.let { handler.removeCallbacks(it) }
         fullscreenPoll = null
+    }
+
+    // ===== 배터리 모니터링 =====
+
+    private fun startBatteryMonitoring() {
+        // 1시간마다 배터리 체크
+        batteryMonitorRunnable = object : Runnable {
+            override fun run() {
+                KeyboardBatteryMonitor.checkBatteryLevels(this@NavBarAccessibilityService)
+                handler.postDelayed(this, 3600000L) // 1 hour
+            }
+        }
+        handler.post(batteryMonitorRunnable!!)
+    }
+
+    private fun stopBatteryMonitoring() {
+        batteryMonitorRunnable?.let { handler.removeCallbacks(it) }
+        batteryMonitorRunnable = null
     }
 
     // ===== 오버레이 가시성 =====

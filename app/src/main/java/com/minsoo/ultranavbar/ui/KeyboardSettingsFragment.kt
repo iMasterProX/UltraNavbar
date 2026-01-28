@@ -30,6 +30,7 @@ class KeyboardSettingsFragment : Fragment() {
     private lateinit var btnRefresh: MaterialButton
     private lateinit var btnBluetoothSettings: MaterialButton
     private lateinit var btnManageShortcuts: MaterialButton
+    private lateinit var switchBatteryNotification: com.google.android.material.switchmaterial.SwitchMaterial
 
     private var bluetoothAdapter: BluetoothAdapter? = null
 
@@ -71,6 +72,7 @@ class KeyboardSettingsFragment : Fragment() {
         btnRefresh = view.findViewById(R.id.btnRefresh)
         btnBluetoothSettings = view.findViewById(R.id.btnBluetoothSettings)
         btnManageShortcuts = view.findViewById(R.id.btnManageShortcuts)
+        switchBatteryNotification = view.findViewById(R.id.switchBatteryNotification)
 
         btnRefresh.setOnClickListener {
             loadDevices()
@@ -82,6 +84,13 @@ class KeyboardSettingsFragment : Fragment() {
 
         btnManageShortcuts.setOnClickListener {
             openShortcutManagement()
+        }
+
+        // 배터리 알림 스위치
+        val settings = com.minsoo.ultranavbar.settings.SettingsManager.getInstance(requireContext())
+        switchBatteryNotification.isChecked = settings.batteryNotificationEnabled
+        switchBatteryNotification.setOnCheckedChangeListener { _, isChecked ->
+            settings.batteryNotificationEnabled = isChecked
         }
     }
 

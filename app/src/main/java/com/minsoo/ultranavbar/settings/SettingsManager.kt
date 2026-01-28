@@ -39,6 +39,9 @@ class SettingsManager private constructor(context: Context) {
         // Setup wizard completion
         private const val KEY_SETUP_COMPLETE = "setup_complete"
 
+        // Battery notification
+        private const val KEY_BATTERY_NOTIFICATION_ENABLED = "battery_notification_enabled"
+
         @Volatile
         private var instance: SettingsManager? = null
 
@@ -128,6 +131,10 @@ class SettingsManager private constructor(context: Context) {
     var setupComplete: Boolean
         get() = prefs.getBoolean(KEY_SETUP_COMPLETE, false)
         set(value) = prefs.edit().putBoolean(KEY_SETUP_COMPLETE, value).apply()
+
+    var batteryNotificationEnabled: Boolean
+        get() = prefs.getBoolean(KEY_BATTERY_NOTIFICATION_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_BATTERY_NOTIFICATION_ENABLED, value).apply()
 
     /**
      * 해당 패키지에서 커스텀 네비바를 비활성화해야 하는지 확인
