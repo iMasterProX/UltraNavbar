@@ -97,13 +97,24 @@ object KeyboardBatteryMonitor {
         }
 
         try {
-            @Suppress("NewApi")
-            val batteryLevel = device.getBatteryLevel()
+            val batteryLevel = getDeviceBatteryLevel(device)
             if (batteryLevel in 0..BATTERY_LOW_THRESHOLD) {
                 showLowBatteryNotification(context, device, batteryLevel)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error getting battery level for device: ${device.address}", e)
+        }
+    }
+
+    /**
+     * 배터리 레벨 가져오기 (리플렉션 사용)
+     */
+    private fun getDeviceBatteryLevel(device: BluetoothDevice): Int {
+        return try {
+            val method = device.javaClass.getMethod("getBatteryLevel")
+            method.invoke(device) as? Int ?: -1
+        } catch (e: Exception) {
+            -1
         }
     }
 

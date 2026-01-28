@@ -135,12 +135,7 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
 
             if (keyboardDevice != null) {
                 val batteryLevel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    try {
-                        @Suppress("NewApi")
-                        keyboardDevice.getBatteryLevel()
-                    } catch (e: Exception) {
-                        -1
-                    }
+                    getDeviceBatteryLevel(keyboardDevice)
                 } else {
                     -1
                 }
@@ -167,6 +162,18 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
             return majorDeviceClass == 0x500 || (deviceClassCode and 0x40) != 0
         } catch (e: Exception) {
             return false
+        }
+    }
+
+    /**
+     * 배터리 레벨 가져오기 (리플렉션 사용)
+     */
+    private fun getDeviceBatteryLevel(device: BluetoothDevice): Int {
+        return try {
+            val method = device.javaClass.getMethod("getBatteryLevel")
+            method.invoke(device) as? Int ?: -1
+        } catch (e: Exception) {
+            -1
         }
     }
 

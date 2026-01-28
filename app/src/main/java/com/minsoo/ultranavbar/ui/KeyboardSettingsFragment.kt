@@ -175,6 +175,18 @@ class KeyboardSettingsFragment : Fragment() {
         }
     }
 
+    /**
+     * 배터리 레벨 가져오기 (리플렉션 사용)
+     */
+    private fun getDeviceBatteryLevel(device: BluetoothDevice): Int {
+        return try {
+            val method = device.javaClass.getMethod("getBatteryLevel")
+            method.invoke(device) as? Int ?: -1
+        } catch (e: Exception) {
+            -1
+        }
+    }
+
     private fun addDeviceCard(device: BluetoothDevice) {
         val cardView = MaterialCardView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -242,8 +254,7 @@ class KeyboardSettingsFragment : Fragment() {
             // 배터리 정보 (API 33+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 try {
-                    @Suppress("NewApi")
-                    val batteryLevel = device.getBatteryLevel()
+                    val batteryLevel = getDeviceBatteryLevel(device)
 
                     val batteryText = if (batteryLevel >= 0) {
                         "${getString(R.string.keyboard_battery_level)}: $batteryLevel%"
