@@ -230,6 +230,39 @@ class KeyboardSettingsFragment : Fragment() {
             }
             cardLayout.addView(addressTextView)
 
+            // 배터리 정보 (API 33+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                try {
+                    val batteryLevel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        device.getBatteryLevel()
+                    } else {
+                        -1
+                    }
+
+                    val batteryText = if (batteryLevel >= 0) {
+                        "${getString(R.string.keyboard_battery_level)}: $batteryLevel%"
+                    } else {
+                        "${getString(R.string.keyboard_battery_level)}: ${getString(R.string.keyboard_battery_unknown)}"
+                    }
+
+                    val batteryTextView = TextView(requireContext()).apply {
+                        text = batteryText
+                        textSize = 14f
+                        val color = when {
+                            batteryLevel < 0 -> ContextCompat.getColor(requireContext(), android.R.color.darker_gray)
+                            batteryLevel <= 20 -> ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark)
+                            batteryLevel <= 50 -> ContextCompat.getColor(requireContext(), android.R.color.holo_orange_dark)
+                            else -> ContextCompat.getColor(requireContext(), android.R.color.holo_green_dark)
+                        }
+                        setTextColor(color)
+                        setPadding(0, 8, 0, 0)
+                    }
+                    cardLayout.addView(batteryTextView)
+                } catch (e: Exception) {
+                    // getBatteryLevel() 실패 시 무시
+                }
+            }
+
         } catch (e: SecurityException) {
             // 권한이 없는 경우 기본 정보만 표시
             val errorTextView = TextView(requireContext()).apply {
