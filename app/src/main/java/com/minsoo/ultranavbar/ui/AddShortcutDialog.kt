@@ -88,6 +88,7 @@ class AddShortcutDialog(
             when (checkedId) {
                 R.id.radioApp -> selectedActionType = KeyShortcut.ActionType.APP
                 R.id.radioSettings -> selectedActionType = KeyShortcut.ActionType.SETTINGS
+                R.id.radioShortcut -> selectedActionType = KeyShortcut.ActionType.SHORTCUT
             }
             btnNext.isEnabled = selectedActionType != null
         }
@@ -123,6 +124,14 @@ class AddShortcutDialog(
                 btnSelectApp.visibility = View.GONE
                 layoutSettings.visibility = View.VISIBLE
                 setupSettingsCards()
+            }
+            KeyShortcut.ActionType.SHORTCUT -> {
+                btnSelectApp.visibility = View.GONE
+                layoutSettings.visibility = View.GONE
+                // For SHORTCUT type, user can just enter the name
+                // The shortcut URI will be set programmatically when needed
+                selectedActionData = "shortcut_placeholder"
+                btnNext.isEnabled = true
             }
             else -> {}
         }
