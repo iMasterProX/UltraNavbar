@@ -40,6 +40,7 @@ class KeyboardSettingsFragment : Fragment() {
     private lateinit var btnManageShortcuts: MaterialButton
     private lateinit var btnShortcutDisabledApps: MaterialButton
     private lateinit var switchBatteryNotification: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var switchPersistentNotification: com.google.android.material.switchmaterial.SwitchMaterial
     private lateinit var sliderBatteryThreshold: Slider
     private lateinit var txtThresholdValue: TextView
     private lateinit var layoutBatteryThreshold: View
@@ -85,6 +86,7 @@ class KeyboardSettingsFragment : Fragment() {
         btnBluetoothSettings = view.findViewById(R.id.btnBluetoothSettings)
         btnManageShortcuts = view.findViewById(R.id.btnManageShortcuts)
         switchBatteryNotification = view.findViewById(R.id.switchBatteryNotification)
+        switchPersistentNotification = view.findViewById(R.id.switchPersistentNotification)
         sliderBatteryThreshold = view.findViewById(R.id.sliderBatteryThreshold)
         txtThresholdValue = view.findViewById(R.id.txtThresholdValue)
         layoutBatteryThreshold = view.findViewById(R.id.layoutBatteryThreshold)
@@ -116,6 +118,19 @@ class KeyboardSettingsFragment : Fragment() {
         switchBatteryNotification.setOnCheckedChangeListener { _, isChecked ->
             settings.batteryNotificationEnabled = isChecked
             layoutBatteryThreshold.visibility = if (isChecked) View.VISIBLE else View.GONE
+        }
+
+        // 지속 알림 스위치
+        switchPersistentNotification.isChecked = settings.batteryPersistentNotificationEnabled
+        switchPersistentNotification.setOnCheckedChangeListener { _, isChecked ->
+            settings.batteryPersistentNotificationEnabled = isChecked
+            if (isChecked) {
+                // 활성화 시 즉시 배터리 체크 수행하여 알림 표시
+                com.minsoo.ultranavbar.service.KeyboardBatteryMonitor.checkBatteryLevels(requireContext())
+            } else {
+                // 비활성화 시 지속 알림 취소
+                com.minsoo.ultranavbar.service.KeyboardBatteryMonitor.cancelPersistentNotification(requireContext())
+            }
         }
 
         // 배터리 임계값 슬라이더

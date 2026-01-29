@@ -47,6 +47,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private lateinit var settings: SettingsManager
     private lateinit var windowAnalyzer: WindowAnalyzer
     private lateinit var keyEventHandler: KeyEventHandler
+    private val notificationTracker = NotificationTracker()
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -330,13 +331,35 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun handleNotificationStateChanged(event: AccessibilityEvent) {
-        // 알림 추가 이벤트인지 확인
         val parcelableData = event.parcelableData
-        val text = event.text?.toString() ?: ""
-        val hasNotifications = parcelableData != null || text.isNotEmpty()
+        val packageName = event.packageName?.toString()
 
-        Log.d(TAG, "Notification state: parcelable=${parcelableData != null}, text=$text")
-        overlay?.setNotificationPresent(hasNotifications)
+        // Notification 객체에서 정보 추출
+        var notificationKey: String? = null
+        var category: String? = null
+        var isOngoing = false
+
+        if (parcelableData is android.app.Notification) {
+            notificationKey = "${packageName}:${parcelableData.hashCode()}"
+            category = parcelableData.category
+            isOngoing = (parcelableData.flags and android.app.Notification.FLAG_ONGOING_EVENT) != 0
+        }
+
+        Log.d(TAG, "Notification state: pkg=$packageName, key=$notificationKey, category=$category, ongoing=$isOngoing")
+
+        // NotificationTracker로 새 알림인지 판단
+        val isNewNotification = notificationTracker.processNotificationEvent(
+            key = notificationKey,
+            packageName = packageName,
+            category = category,
+            isOngoing = isOngoing,
+            isRemoval = false
+        )
+
+        // 새 알림이고 확인하지 않은 알림이 있으면 깜빡임 시작
+        if (isNewNotification && notificationTracker.hasUnseenNotifications()) {
+            overlay?.setNotificationPresent(true)
+        }
     }
 
     private fun handleWindowStateChanged(event: AccessibilityEvent) {
@@ -521,6 +544,13 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (isNotificationPanelOpen != panelVisible) {
             isNotificationPanelOpen = panelVisible
             Log.d(TAG, "Notification panel: $isNotificationPanelOpen")
+
+            // 패널이 열리면 모든 알림을 본 것으로 처리하고 깜빡임 중지
+            if (panelVisible) {
+                notificationTracker.markAllAsSeen()
+                overlay?.setNotificationPresent(false)
+            }
+
             handler.post { updatePanelUiState() }
         }
     }
@@ -677,6 +707,13 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun updateOverlayVisibility(forceFade: Boolean = false) {
         val lockScreenActive = windowAnalyzer.isLockScreenActive()
 
+        // 0. 네비게이션 바 전체 비활성화 체크
+        if (!settings.navbarEnabled) {
+            Log.d(TAG, "Navbar disabled globally - hiding overlay completely")
+            overlay?.hide(animate = false, showHotspot = false)
+            return
+        }
+
         // 1. 비활성화된 앱 체크 - 오버레이를 완전히 숨김 (핫스팟 없음, 재호출 불가)
         if (currentPackage.isNotEmpty() && settings.isAppDisabled(currentPackage)) {
             Log.d(TAG, "App disabled: $currentPackage - hiding overlay completely")
@@ -771,7 +808,51 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun executeVoiceAssistant(): Boolean {
-        // 방법 1: ACTION_VOICE_ASSIST (음성 대기 모드로 실행)
+        // 방법 1: Google Assistant 직접 실행 (하단 팝업 형태)
+        try {
+            val assistantIntent = Intent(Intent.ACTION_VOICE_COMMAND).apply {
+                setPackage("com.google.android.googlequicksearchbox")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (assistantIntent.resolveActivity(packageManager) != null) {
+                startActivity(assistantIntent)
+                Log.d(TAG, "Executing Google Assistant via ACTION_VOICE_COMMAND")
+                return true
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Google Assistant ACTION_VOICE_COMMAND failed: ${e.message}")
+        }
+
+        // 방법 2: Google Assistant 앱 직접 실행
+        try {
+            val assistantIntent = Intent(Intent.ACTION_MAIN).apply {
+                setClassName(
+                    "com.google.android.googlequicksearchbox",
+                    "com.google.android.voiceinteraction.GsaVoiceInteractionService"
+                )
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(assistantIntent)
+            Log.d(TAG, "Executing Google Assistant via GsaVoiceInteractionService")
+            return true
+        } catch (e: Exception) {
+            Log.d(TAG, "GsaVoiceInteractionService failed: ${e.message}")
+        }
+
+        // 방법 3: com.google.android.apps.googleassistant 패키지 실행
+        try {
+            val assistantIntent = packageManager.getLaunchIntentForPackage("com.google.android.apps.googleassistant")
+            if (assistantIntent != null) {
+                assistantIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(assistantIntent)
+                Log.d(TAG, "Executing Google Assistant app directly")
+                return true
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Google Assistant app launch failed: ${e.message}")
+        }
+
+        // 방법 4: ACTION_VOICE_ASSIST (음성 대기 모드로 실행)
         try {
             val voiceIntent = Intent("android.intent.action.VOICE_ASSIST").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -785,33 +866,22 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.d(TAG, "VOICE_ASSIST failed: ${e.message}")
         }
 
-        // 방법 2: ACTION_VOICE_COMMAND (음성 명령 모드)
-        try {
-            val voiceCommandIntent = Intent(Intent.ACTION_VOICE_COMMAND).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            if (voiceCommandIntent.resolveActivity(packageManager) != null) {
-                startActivity(voiceCommandIntent)
-                Log.d(TAG, "Executing voice assistant via ACTION_VOICE_COMMAND")
-                return true
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "ACTION_VOICE_COMMAND failed: ${e.message}")
-        }
-
-        // 방법 3: Google Assistant 직접 호출 (폴백)
+        // 방법 5: ACTION_ASSIST (최후의 폴백)
         try {
             val assistIntent = Intent(Intent.ACTION_ASSIST).apply {
-                setPackage("com.google.android.googlequicksearchbox")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            startActivity(assistIntent)
-            Log.d(TAG, "Executing Google Assistant via ACTION_ASSIST (fallback)")
-            return true
+            if (assistIntent.resolveActivity(packageManager) != null) {
+                startActivity(assistIntent)
+                Log.d(TAG, "Executing assistant via ACTION_ASSIST (fallback)")
+                return true
+            }
         } catch (e: Exception) {
             Log.e(TAG, "All assistant methods failed", e)
             return false
         }
+
+        return false
     }
 
     private fun executeShortcut(shortcutUri: String): Boolean {

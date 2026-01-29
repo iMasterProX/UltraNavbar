@@ -30,6 +30,7 @@ class ButtonManager(
 ) {
     companion object {
         private const val TAG = "ButtonManager"
+        private const val BLINK_DEBOUNCE_MS = 500L
     }
 
     // 관리 중인 모든 버튼
@@ -51,6 +52,9 @@ class ButtonManager(
 
     // 알림 깜빡임 애니메이터
     private var notificationBlinkAnimator: ValueAnimator? = null
+
+    // 알림 깜빡임 디바운스 타임스탬프
+    private var lastBlinkStartTime: Long = 0
 
     /**
      * 버튼 액션 리스너
@@ -233,10 +237,26 @@ class ButtonManager(
 
     /**
      * 알림 깜빡임 시작
+     * 디바운스 보호로 500ms 이내 중복 호출 방지
      */
     fun startNotificationBlink() {
+        val now = System.currentTimeMillis()
+
+        // 이미 깜빡이는 중이면 무시
+        if (notificationBlinkAnimator?.isRunning == true) {
+            return
+        }
+
+        // 디바운스 체크 (최근 500ms 이내에 시작했으면 무시)
+        if (now - lastBlinkStartTime < BLINK_DEBOUNCE_MS) {
+            Log.d(TAG, "Notification blink debounced")
+            return
+        }
+
         stopNotificationBlink()
         val button = _panelButton ?: return
+
+        lastBlinkStartTime = now
 
         notificationBlinkAnimator = ValueAnimator.ofFloat(1.0f, 0.4f).apply {
             duration = 800L

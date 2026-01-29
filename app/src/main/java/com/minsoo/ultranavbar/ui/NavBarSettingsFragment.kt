@@ -33,6 +33,9 @@ class NavBarSettingsFragment : Fragment() {
 
     private lateinit var settings: SettingsManager
 
+    // 네비게이션 바 활성화
+    private lateinit var switchNavbarEnabled: SwitchMaterial
+
     // 롱프레스 설정
     private lateinit var txtLongPressAction: TextView
     private lateinit var btnChangeLongPressAction: MaterialButton
@@ -108,15 +111,12 @@ class NavBarSettingsFragment : Fragment() {
         }
     }
 
-    // 배경화면 미리보기 및 생성 런처
-    private val wallpaperPreviewLauncher = registerForActivityResult(
+    // 가이드 프리뷰 런처 (결과 처리 없음 - 가이드 모드)
+    private val guidePreviewLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            Toast.makeText(requireContext(), R.string.wallpaper_generated, Toast.LENGTH_SHORT).show()
-            updateBgImageStatus()
-            requireContext().sendBroadcast(Intent(Constants.Action.RELOAD_BACKGROUND))
-        }
+    ) { _ ->
+        // Guide 모드: 사용자가 직접 스크린샷을 찍고 이미지 선택으로 적용해야 함
+        // 결과 처리 없음
     }
 
     override fun onCreateView(
@@ -144,6 +144,9 @@ class NavBarSettingsFragment : Fragment() {
     }
 
     private fun initViews(view: View) {
+        // 네비게이션 바 활성화 스위치
+        switchNavbarEnabled = view.findViewById(R.id.switchNavbarEnabled)
+
         // 롱프레스 설정
         txtLongPressAction = view.findViewById(R.id.txtLongPressAction)
         btnChangeLongPressAction = view.findViewById<MaterialButton>(R.id.btnChangeLongPressAction).apply {
@@ -232,6 +235,9 @@ class NavBarSettingsFragment : Fragment() {
     }
 
     private fun loadSettings() {
+        // 네비게이션 바 활성화 상태 로드
+        switchNavbarEnabled.isChecked = settings.navbarEnabled
+
         // 재호출 설정 로드
         switchHotspot.isChecked = settings.hotspotEnabled
         switchIgnoreStylus.isChecked = settings.ignoreStylus
@@ -274,6 +280,12 @@ class NavBarSettingsFragment : Fragment() {
     }
 
     private fun setupListeners() {
+        // 네비게이션 바 활성화/비활성화
+        switchNavbarEnabled.setOnCheckedChangeListener { _, isChecked ->
+            settings.navbarEnabled = isChecked
+            notifySettingsChanged()
+        }
+
         // 재호출 핫스팟
         switchHotspot.setOnCheckedChangeListener { _, isChecked ->
             settings.hotspotEnabled = isChecked
@@ -308,8 +320,8 @@ class NavBarSettingsFragment : Fragment() {
             }
         }
 
-        btnGenerateLandscape.setOnClickListener { generateBackground(isLandscape = true, isDarkMode = false) }
-        btnGeneratePortrait.setOnClickListener { generateBackground(isLandscape = false, isDarkMode = false) }
+        btnGenerateLandscape.setOnClickListener { openGuidePreview(isLandscape = true, isDarkMode = false) }
+        btnGeneratePortrait.setOnClickListener { openGuidePreview(isLandscape = false, isDarkMode = false) }
 
         // 다크 모드 배경 리스너
         switchHomeBgDark.setOnCheckedChangeListener { _, isChecked ->
@@ -318,8 +330,8 @@ class NavBarSettingsFragment : Fragment() {
             notifySettingsChanged()
         }
 
-        btnGenerateDarkLandscape.setOnClickListener { generateBackground(isLandscape = true, isDarkMode = true) }
-        btnGenerateDarkPortrait.setOnClickListener { generateBackground(isLandscape = false, isDarkMode = true) }
+        btnGenerateDarkLandscape.setOnClickListener { openGuidePreview(isLandscape = true, isDarkMode = true) }
+        btnGenerateDarkPortrait.setOnClickListener { openGuidePreview(isLandscape = false, isDarkMode = true) }
     }
 
     private fun updateLongPressActionUI() {
@@ -355,13 +367,13 @@ class NavBarSettingsFragment : Fragment() {
         }
     }
 
-    private fun generateBackground(isLandscape: Boolean, isDarkMode: Boolean = false) {
+    private fun openGuidePreview(isLandscape: Boolean, isDarkMode: Boolean = false) {
         selectingDarkMode = isDarkMode
         val intent = Intent(requireContext(), WallpaperPreviewActivity::class.java).apply {
             putExtra("is_landscape", isLandscape)
             putExtra("is_dark_mode", isDarkMode)
         }
-        wallpaperPreviewLauncher.launch(intent)
+        guidePreviewLauncher.launch(intent)
     }
 
     private fun handleImageSelected(uri: Uri) {

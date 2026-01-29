@@ -40,7 +40,8 @@
       "Bash(.gradlew.bat assembleDebug)",
       "Bash(./gradlew.bat:*)",
       "Bash(where:*)",
-      "Bash(adb:*)"
+      "Bash(adb:*)",
+      "Bash(dir:*)"
     ]
   }
 }

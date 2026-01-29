@@ -16,6 +16,7 @@ class SettingsManager private constructor(context: Context) {
         const val CROP_HEIGHT_PX = 72 // 배경 크롭 높이 (px)
 
         // Keys
+        private const val KEY_NAVBAR_ENABLED = "navbar_enabled"
         private const val KEY_HOTSPOT_ENABLED = "hotspot_enabled"
         private const val KEY_HOTSPOT_HEIGHT = "hotspot_height"
         private const val KEY_HOME_BG_ENABLED = "home_bg_enabled"
@@ -43,6 +44,7 @@ class SettingsManager private constructor(context: Context) {
         // Battery notification
         private const val KEY_BATTERY_NOTIFICATION_ENABLED = "battery_notification_enabled"
         private const val KEY_BATTERY_LOW_THRESHOLD = "battery_low_threshold"
+        private const val KEY_BATTERY_PERSISTENT_NOTIFICATION = "battery_persistent_notification"
 
         @Volatile
         private var instance: SettingsManager? = null
@@ -55,6 +57,10 @@ class SettingsManager private constructor(context: Context) {
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+
+    var navbarEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NAVBAR_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_NAVBAR_ENABLED, value).apply()
 
     var hotspotEnabled: Boolean
         get() = prefs.getBoolean(KEY_HOTSPOT_ENABLED, true)
@@ -146,6 +152,10 @@ class SettingsManager private constructor(context: Context) {
     var batteryLowThreshold: Int
         get() = prefs.getInt(KEY_BATTERY_LOW_THRESHOLD, 20)
         set(value) = prefs.edit().putInt(KEY_BATTERY_LOW_THRESHOLD, value.coerceIn(5, 50)).apply()
+
+    var batteryPersistentNotificationEnabled: Boolean
+        get() = prefs.getBoolean(KEY_BATTERY_PERSISTENT_NOTIFICATION, false)
+        set(value) = prefs.edit().putBoolean(KEY_BATTERY_PERSISTENT_NOTIFICATION, value).apply()
 
     /**
      * 해당 패키지에서 커스텀 네비바를 비활성화해야 하는지 확인

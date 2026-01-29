@@ -17,6 +17,9 @@
     <string name="bar_opacity">Bar opacity</string>
     <string name="bar_color">Bar background color</string>
 
+    <string name="navbar_enable_title">Custom Navigation Bar</string>
+    <string name="navbar_enable_summary">Show custom navigation bar overlay</string>
+
     <string name="disabled_apps_settings">Disabled apps</string>
     <string name="disabled_apps_summary">Select apps where the custom navigation bar will be completely disabled. In these apps, only the default navigation bar will be used.</string>
     <string name="manage_disabled_apps">Manage disabled apps</string>
@@ -52,7 +55,7 @@
     <string name="home_bg_not_set">Not set</string>
     <string name="home_bg_set">Set</string>
     <string name="select_image">Select image</string>
-    <string name="home_bg_note">Tap Auto to preview your current wallpaper and capture the bottom 72px as the navigation bar background.</string>
+    <string name="home_bg_note">1. Tap Guide and adjust opacity to match your wallpaper\n2. Tap Close to hide controls, then take a screenshot\n3. Tap screen to exit, then apply via Select Image</string>
 
     <!-- Dark mode background settings -->
     <string name="home_bg_dark_section">Dark mode background</string>
@@ -76,7 +79,7 @@
     <string name="shortcut_not_available">Shortcut not available.</string>
     <string name="ignore_stylus_title">Ignore stylus input</string>
     <string name="ignore_stylus_summary">Prevents pen input from triggering navigation bar actions.</string>
-    <string name="auto_button_label">Auto</string>
+    <string name="auto_button_label">Guide</string>
 
     <string name="app_not_found">App not found</string>
     <string name="default_action_set">Default action set.</string>
@@ -89,7 +92,7 @@
     <string name="wallpaper_generated">Wallpaper background created.</string>
     <string name="battery_opt_already_ignored">Already excluded from battery optimization.</string>
     <string name="battery_opt_open_failed">Unable to open battery optimization settings.</string>
-    <string name="wallpaper_preview_hint">This is a preview of your current wallpaper. Tap Apply to capture and use it as a custom background.</string>
+    <string name="wallpaper_preview_hint">Adjust the filter opacity to match your wallpaper. Tap Close to hide controls, then take a screenshot. Tap anywhere to exit.</string>
     <string name="wallpaper_preview_failed">Failed to load the wallpaper preview.</string>
 
     <string name="preview_title">Wallpaper preview</string>
@@ -97,7 +100,8 @@
     <string name="preview_opacity_label">Opacity</string>
     <string name="preview_opacity_default">100%</string>
     <string name="preview_filter_opacity_desc">Preview filter opacity</string>
-    <string name="apply_wallpaper">Apply</string>
+    <string name="apply_wallpaper">Close</string>
+    <string name="preview_guide_description">Tap Close to hide this panel and take a screenshot. Tap anywhere to exit.</string>
     <string name="generating_wallpaper">Generating…</string>
 
     <string name="notification_panel_open">Open notification shade</string>
@@ -225,4 +229,12 @@
     <string name="battery_notification_channel_description">Notifications for low keyboard battery</string>
     <string name="battery_low_title">Keyboard Battery Low</string>
     <string name="battery_low_message">%s battery is at %d%%. Please charge soon.</string>
+
+    <!-- Battery Persistent Notification -->
+    <string name="battery_persistent_notification_title">Battery Status Notification</string>
+    <string name="battery_persistent_notification_summary">Always show keyboard battery level in notifications</string>
+    <string name="battery_status_channel_name">Keyboard Battery Status</string>
+    <string name="battery_status_channel_description">Ongoing notification showing keyboard battery level</string>
+    <string name="battery_status_title">%s Battery</string>
+    <string name="battery_status_message">Battery: %d%%</string>
 </resources>

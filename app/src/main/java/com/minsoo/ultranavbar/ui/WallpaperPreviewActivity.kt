@@ -80,11 +80,18 @@ class WallpaperPreviewActivity : AppCompatActivity() {
         }
 
         imagePreview.setOnClickListener {
-            togglePreviewControls()
+            // 컨트롤이 숨겨진 상태(스크린샷 모드)에서 터치하면 앱 종료
+            if (previewControlsCard.visibility == View.GONE) {
+                finish()
+            } else {
+                togglePreviewControls()
+            }
         }
 
         btnApplyWallpaper.setOnClickListener {
-            applyWallpaperBackground()
+            // Guide 모드: 컨트롤 카드만 숨기고 배경화면만 보이도록 함
+            // 이 상태에서 사용자가 스크린샷을 찍을 수 있음
+            previewControlsCard.visibility = View.GONE
         }
 
         Toast.makeText(
