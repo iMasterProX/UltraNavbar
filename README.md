@@ -21,7 +21,7 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 기능 앱�
 - **앱별 비활성화**: 특정 앱에서 네비게이션 바 완전히 숨기기
 
 #### 🎨 홈 화면 배경 커스터마이징
-- **배경화면 자동 크롭**: 현재 배경화면의 하단 72px를 자동으로 잘라 네비게이션 바 배경으로 사용
+- **배경화면 자동 크롭**: 현재 배경화면을 수동으로 캡처해 적용해주면 하단 72px를 자동으로 잘라 네비게이션 바 배경으로 사용
 - **화면 방향별 배경**: 가로/세로 모드에 각각 다른 배경 이미지 설정
 - **다크 모드 지원**: 다크 모드 활성화 시 별도의 배경 이미지 사용 가능
 - **버튼 색상 선택**: 홈 배경에서 버튼 색상 자동/흰색/검정 선택
@@ -30,7 +30,7 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 기능 앱�
 #### ⌨️ 블루투스 키보드 지원
 - **키보드 연결 감지**: 연결된 블루투스 키보드 자동 인식
 - **배터리 잔량 표시**: BLE GATT를 통한 정확한 배터리 레벨 읽기 (LG KBA10 지원)
-- **배터리 알림**: 키보드 배터리가 설정값 이하로 떨어지면 알림
+- **배터리 알림**: 키보드 배터리가 설정값 이하로 떨어지면 알림, 상시 배터리 잔량 알림 기능도 제공
 - **홈 화면 위젯**: 키보드 배터리 잔량을 홈 화면에 표시
 - **커스텀 단축키**: 키 조합으로 앱 실행, 설정 열기, 바로가기 실행
   - 예: Ctrl + 1 → Chrome 실행
@@ -51,7 +51,7 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 기능 앱�
 
 #### 요구사항
 - Android 12 이상
-- LG UltraTab 기기 (다른 태블릿에서도 작동 가능)
+- LG UltraTab 기기 (다른 태블릿에서도 작동 가능하지만 보장은 안합니다)
 
 #### 초기 설정
 1. 앱 설치 후 실행
@@ -203,18 +203,6 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 
 **Contributing**
 Bug reports, feature suggestions, and code contributions are welcome! Please participate through GitHub Issues.
-
----
-
-## Changelog
-
-### Version 0.2.0
-- Initial release
-- Custom navigation bar with home screen backgrounds
-- Bluetooth keyboard support with battery monitoring
-- Keyboard shortcuts management
-- Wacom pen settings integration
-- Per-app disable features
 
 ---
 
