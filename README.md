@@ -139,7 +139,7 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 
 #### 🖊️ Wacom Pen Settings
 - **System Pen Settings Shortcut**: Direct access to Extensions Settings menu
-- Configure pen sensitivity, button actions, and other Wacom pen features
+- button actions, and other Wacom pen features
 
 #### ⚙️ System Integration
 - **Accessibility Service**: Display navigation bar and detect window states
@@ -151,7 +151,7 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 
 #### Requirements
 - Android 12 or higher
-- LG UltraTab device (works on other tablets too)
+- LG UltraTab device (maybe works on other tablets too)
 
 #### Initial Setup
 1. Install and launch the app
