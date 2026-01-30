@@ -36,6 +36,9 @@ class NavBarSettingsFragment : Fragment() {
     // 네비게이션 바 활성화
     private lateinit var switchNavbarEnabled: SwitchMaterial
 
+    // 버튼 배치 반전 (Android 12L 스타일)
+    private lateinit var switchNavButtonsSwap: SwitchMaterial
+
     // 롱프레스 설정
     private lateinit var txtLongPressAction: TextView
     private lateinit var btnChangeLongPressAction: MaterialButton
@@ -147,6 +150,9 @@ class NavBarSettingsFragment : Fragment() {
         // 네비게이션 바 활성화 스위치
         switchNavbarEnabled = view.findViewById(R.id.switchNavbarEnabled)
 
+        // 버튼 배치 반전 스위치
+        switchNavButtonsSwap = view.findViewById(R.id.switchNavButtonsSwap)
+
         // 롱프레스 설정
         txtLongPressAction = view.findViewById(R.id.txtLongPressAction)
         btnChangeLongPressAction = view.findViewById<MaterialButton>(R.id.btnChangeLongPressAction).apply {
@@ -238,6 +244,9 @@ class NavBarSettingsFragment : Fragment() {
         // 네비게이션 바 활성화 상태 로드
         switchNavbarEnabled.isChecked = settings.navbarEnabled
 
+        // 버튼 배치 반전 상태 로드
+        switchNavButtonsSwap.isChecked = settings.navButtonsSwapped
+
         // 재호출 설정 로드
         switchHotspot.isChecked = settings.hotspotEnabled
         switchIgnoreStylus.isChecked = settings.ignoreStylus
@@ -283,6 +292,12 @@ class NavBarSettingsFragment : Fragment() {
         // 네비게이션 바 활성화/비활성화
         switchNavbarEnabled.setOnCheckedChangeListener { _, isChecked ->
             settings.navbarEnabled = isChecked
+            notifySettingsChanged()
+        }
+
+        // 버튼 배치 반전 (Android 12L 스타일)
+        switchNavButtonsSwap.setOnCheckedChangeListener { _, isChecked ->
+            settings.navButtonsSwapped = isChecked
             notifySettingsChanged()
         }
 

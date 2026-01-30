@@ -41,7 +41,12 @@
       "Bash(./gradlew.bat:*)",
       "Bash(where:*)",
       "Bash(adb:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(cmd /c \"cd C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar && gradlew.bat assembleDebug\")",
+      "Bash(cmd /c \"C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar\\\\gradlew.bat assembleDebug\")",
+      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\Users\\\\minsi\\\\AndroidStudioProjects\\\\UltraNavbar''; .\\\\gradlew.bat assembleDebug\")",
+      "Bash(bash -c \"cd /c/Users/minsi/AndroidStudioProjects/UltraNavbar && ./gradlew assembleDebug\")",
+      "Bash(more:*)"
     ]
   }
 }

@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.KeyEvent
 import com.minsoo.ultranavbar.model.KeyShortcut
 import com.minsoo.ultranavbar.settings.KeyShortcutManager
+import com.minsoo.ultranavbar.settings.SettingsManager
 
 /**
  * 키보드 이벤트 처리 헬퍼
@@ -19,6 +20,7 @@ class KeyEventHandler(private val context: Context) {
     }
 
     private val shortcutManager = KeyShortcutManager.getInstance(context)
+    private val settingsManager = SettingsManager.getInstance(context)
 
     // 현재 눌려있는 수정자 키 추적
     private val pressedModifiers = mutableSetOf<Int>()
@@ -28,6 +30,11 @@ class KeyEventHandler(private val context: Context) {
      * @return true: 이벤트 소비, false: 이벤트 전파
      */
     fun handleKeyEvent(event: KeyEvent): Boolean {
+        // 키보드 단축키 기능이 비활성화되어 있으면 이벤트 전파
+        if (!settingsManager.keyboardShortcutsEnabled) {
+            return false
+        }
+
         val keyCode = event.keyCode
         val action = if (event.action == KeyEvent.ACTION_DOWN) "DOWN" else "UP"
 

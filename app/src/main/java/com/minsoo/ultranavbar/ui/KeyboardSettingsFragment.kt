@@ -17,12 +17,15 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
+import com.google.android.material.switchmaterial.SwitchMaterial
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.util.BleGattBatteryReader
 import com.minsoo.ultranavbar.util.BluetoothUtils
@@ -35,17 +38,21 @@ class KeyboardSettingsFragment : Fragment() {
 
     private lateinit var deviceListContainer: LinearLayout
     private lateinit var txtNoDevices: TextView
+    private lateinit var layoutKba10NotFound: LinearLayout
     private lateinit var btnRefresh: MaterialButton
     private lateinit var btnBluetoothSettings: MaterialButton
     private lateinit var btnManageShortcuts: MaterialButton
     private lateinit var btnShortcutDisabledApps: MaterialButton
-    private lateinit var switchBatteryNotification: com.google.android.material.switchmaterial.SwitchMaterial
-    private lateinit var switchPersistentNotification: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var switchKeyboardShortcuts: SwitchMaterial
+    private lateinit var switchBatteryNotification: SwitchMaterial
+    private lateinit var switchPersistentNotification: SwitchMaterial
     private lateinit var sliderBatteryThreshold: Slider
     private lateinit var txtThresholdValue: TextView
     private lateinit var layoutBatteryThreshold: View
+    private lateinit var layoutShortcutButtons: LinearLayout
 
     private var bluetoothAdapter: BluetoothAdapter? = null
+    private lateinit var settings: com.minsoo.ultranavbar.settings.SettingsManager
 
     // 블루투스 권한 요청 런처
     private val requestBluetoothPermissionLauncher = registerForActivityResult(
@@ -80,16 +87,22 @@ class KeyboardSettingsFragment : Fragment() {
     }
 
     private fun initViews(view: View) {
+        settings = com.minsoo.ultranavbar.settings.SettingsManager.getInstance(requireContext())
+
         deviceListContainer = view.findViewById(R.id.deviceListContainer)
         txtNoDevices = view.findViewById(R.id.txtNoDevices)
+        layoutKba10NotFound = view.findViewById(R.id.layoutKba10NotFound)
         btnRefresh = view.findViewById(R.id.btnRefresh)
         btnBluetoothSettings = view.findViewById(R.id.btnBluetoothSettings)
         btnManageShortcuts = view.findViewById(R.id.btnManageShortcuts)
+        btnShortcutDisabledApps = view.findViewById(R.id.btnShortcutDisabledApps)
+        switchKeyboardShortcuts = view.findViewById(R.id.switchKeyboardShortcuts)
         switchBatteryNotification = view.findViewById(R.id.switchBatteryNotification)
         switchPersistentNotification = view.findViewById(R.id.switchPersistentNotification)
         sliderBatteryThreshold = view.findViewById(R.id.sliderBatteryThreshold)
         txtThresholdValue = view.findViewById(R.id.txtThresholdValue)
         layoutBatteryThreshold = view.findViewById(R.id.layoutBatteryThreshold)
+        layoutShortcutButtons = view.findViewById(R.id.layoutShortcutButtons)
 
         btnRefresh.setOnClickListener {
             // 캐시 클리어 후 새로 로드 (BLE GATT 배터리 새로 읽기)
@@ -105,13 +118,17 @@ class KeyboardSettingsFragment : Fragment() {
             openShortcutManagement()
         }
 
-        btnShortcutDisabledApps = view.findViewById(R.id.btnShortcutDisabledApps)
         btnShortcutDisabledApps.setOnClickListener {
             openShortcutDisabledApps()
         }
 
-        // 배터리 알림 설정
-        val settings = com.minsoo.ultranavbar.settings.SettingsManager.getInstance(requireContext())
+        // 키보드 단축키 토글
+        switchKeyboardShortcuts.isChecked = settings.keyboardShortcutsEnabled
+        updateShortcutButtonsVisibility(settings.keyboardShortcutsEnabled)
+        switchKeyboardShortcuts.setOnCheckedChangeListener { _, isChecked ->
+            settings.keyboardShortcutsEnabled = isChecked
+            updateShortcutButtonsVisibility(isChecked)
+        }
 
         // 배터리 알림 스위치
         switchBatteryNotification.isChecked = settings.batteryNotificationEnabled
@@ -146,6 +163,10 @@ class KeyboardSettingsFragment : Fragment() {
         layoutBatteryThreshold.visibility = if (settings.batteryNotificationEnabled) View.VISIBLE else View.GONE
     }
 
+    private fun updateShortcutButtonsVisibility(enabled: Boolean) {
+        layoutShortcutButtons.visibility = if (enabled) View.VISIBLE else View.GONE
+    }
+
     private fun updateThresholdText(threshold: Int) {
         txtThresholdValue.text = getString(R.string.battery_low_threshold_summary, threshold)
     }
@@ -169,9 +190,11 @@ class KeyboardSettingsFragment : Fragment() {
 
     private fun loadDevices() {
         deviceListContainer.removeAllViews()
+        layoutKba10NotFound.visibility = View.GONE
 
         if (bluetoothAdapter == null || !bluetoothAdapter!!.isEnabled) {
             showNoDevices()
+            showKba10NotFoundWarning()
             return
         }
 
@@ -192,10 +215,26 @@ class KeyboardSettingsFragment : Fragment() {
                 BluetoothUtils.isKeyboardDevice(device, requireContext())
             } ?: emptyList()
 
+            // LG KBA10 존재 여부 확인
+            val hasLgKba10 = keyboardDevices.any { device ->
+                try {
+                    device.name?.startsWith("LG KBA10", ignoreCase = true) == true
+                } catch (e: Exception) {
+                    false
+                }
+            }
+
             if (keyboardDevices.isEmpty()) {
                 showNoDevices()
+                showKba10NotFoundWarning()
             } else {
                 txtNoDevices.visibility = View.GONE
+
+                // LG KBA10이 없으면 안내 표시
+                if (!hasLgKba10) {
+                    showKba10NotFoundWarning()
+                }
+
                 // LG KBA10을 최우선으로 정렬
                 val sortedDevices = keyboardDevices.sortedByDescending { device ->
                     try {
@@ -213,8 +252,21 @@ class KeyboardSettingsFragment : Fragment() {
                         false
                     }
                 }
+
                 sortedDevices.forEach { device ->
-                    addDeviceCard(device)
+                    val isLgKeyboard = try {
+                        device.name?.startsWith("LG KBA10", ignoreCase = true) == true
+                    } catch (e: Exception) {
+                        false
+                    }
+
+                    // 서드파티 키보드인 경우 확인 다이얼로그 표시
+                    if (!isLgKeyboard && !settings.thirdPartyKeyboardAccepted) {
+                        showThirdPartyKeyboardDialog(device)
+                    }
+
+                    addDeviceCard(device, isLgKeyboard)
+
                     // BLE 기기일 경우 캐시가 없을 때만 GATT 배터리 읽기 트리거
                     if (BleGattBatteryReader.isBleOnlyDevice(device) &&
                         BleGattBatteryReader.getCachedBatteryLevel(device.address) == null) {
@@ -231,10 +283,37 @@ class KeyboardSettingsFragment : Fragment() {
             }
         } catch (e: SecurityException) {
             showNoDevices()
+            showKba10NotFoundWarning()
         }
     }
 
-    private fun addDeviceCard(device: BluetoothDevice) {
+    private fun showKba10NotFoundWarning() {
+        layoutKba10NotFound.visibility = View.VISIBLE
+    }
+
+    private fun showThirdPartyKeyboardDialog(device: BluetoothDevice) {
+        if (!isAdded) return
+
+        val deviceName = try {
+            device.name ?: "Unknown Device"
+        } catch (e: Exception) {
+            "Unknown Device"
+        }
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.third_party_keyboard_title)
+            .setMessage(getString(R.string.third_party_keyboard_message))
+            .setPositiveButton(R.string.third_party_keyboard_use) { _, _ ->
+                settings.thirdPartyKeyboardAccepted = true
+            }
+            .setNegativeButton(R.string.third_party_keyboard_cancel) { dialog, _ ->
+                dialog.dismiss()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun addDeviceCard(device: BluetoothDevice, isLgKeyboard: Boolean = false) {
         val cardView = MaterialCardView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -268,10 +347,10 @@ class KeyboardSettingsFragment : Fragment() {
             }
 
             val deviceName = device.name ?: "Unknown Device"
-            val displayName = if (deviceName.startsWith("LG KBA10", ignoreCase = true)) {
+            val displayName = if (isLgKeyboard) {
                 "LG UltraTab Keyboard ($deviceName)"
             } else {
-                deviceName
+                "$deviceName (Third-Party)"
             }
             val nameTextView = TextView(requireContext()).apply {
                 text = displayName

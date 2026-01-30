@@ -11,6 +11,7 @@ import com.minsoo.ultranavbar.ui.KeyboardSettingsFragment
 import com.minsoo.ultranavbar.ui.NavBarSettingsFragment
 import com.minsoo.ultranavbar.ui.SetupActivity
 import com.minsoo.ultranavbar.ui.WacomPenSettingsFragment
+import com.minsoo.ultranavbar.ui.HardwareInfoFragment
 import com.minsoo.ultranavbar.util.DeviceProfile
 
 class MainActivity : AppCompatActivity() {
@@ -43,6 +44,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_navbar -> NavBarSettingsFragment()
                 R.id.nav_keyboard -> KeyboardSettingsFragment()
                 R.id.nav_wacom_pen -> WacomPenSettingsFragment()
+                R.id.nav_hardware -> HardwareInfoFragment()
                 R.id.nav_app_settings -> AppSettingsFragment()
                 else -> return@setNavigationItemSelectedListener false
             }

@@ -46,6 +46,13 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_BATTERY_LOW_THRESHOLD = "battery_low_threshold"
         private const val KEY_BATTERY_PERSISTENT_NOTIFICATION = "battery_persistent_notification"
 
+        // Keyboard shortcuts
+        private const val KEY_KEYBOARD_SHORTCUTS_ENABLED = "keyboard_shortcuts_enabled"
+        private const val KEY_THIRD_PARTY_KEYBOARD_ACCEPTED = "third_party_keyboard_accepted"
+
+        // Navigation button layout
+        private const val KEY_NAV_BUTTONS_SWAPPED = "nav_buttons_swapped"
+
         @Volatile
         private var instance: SettingsManager? = null
 
@@ -156,6 +163,21 @@ class SettingsManager private constructor(context: Context) {
     var batteryPersistentNotificationEnabled: Boolean
         get() = prefs.getBoolean(KEY_BATTERY_PERSISTENT_NOTIFICATION, false)
         set(value) = prefs.edit().putBoolean(KEY_BATTERY_PERSISTENT_NOTIFICATION, value).apply()
+
+    // 키보드 단축키 기능 활성화 여부
+    var keyboardShortcutsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_KEYBOARD_SHORTCUTS_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_KEYBOARD_SHORTCUTS_ENABLED, value).apply()
+
+    // 서드파티 키보드 사용 동의 여부
+    var thirdPartyKeyboardAccepted: Boolean
+        get() = prefs.getBoolean(KEY_THIRD_PARTY_KEYBOARD_ACCEPTED, false)
+        set(value) = prefs.edit().putBoolean(KEY_THIRD_PARTY_KEYBOARD_ACCEPTED, value).apply()
+
+    // 네비게이션 버튼 좌우 반전 (Android 12L 스타일)
+    var navButtonsSwapped: Boolean
+        get() = prefs.getBoolean(KEY_NAV_BUTTONS_SWAPPED, false)
+        set(value) = prefs.edit().putBoolean(KEY_NAV_BUTTONS_SWAPPED, value).apply()
 
     /**
      * 해당 패키지에서 커스텀 네비바를 비활성화해야 하는지 확인

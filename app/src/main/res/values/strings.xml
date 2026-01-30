@@ -20,6 +20,9 @@
     <string name="navbar_enable_title">Custom Navigation Bar</string>
     <string name="navbar_enable_summary">Show custom navigation bar overlay</string>
 
+    <string name="nav_buttons_swap_title">Swap Button Layout</string>
+    <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (Screenshot/Notifications) to left side (Android 12L style)</string>
+
     <string name="disabled_apps_settings">Disabled apps</string>
     <string name="disabled_apps_summary">Select apps where the custom navigation bar will be completely disabled. In these apps, only the default navigation bar will be used.</string>
     <string name="manage_disabled_apps">Manage disabled apps</string>
@@ -111,7 +114,9 @@
     <string name="nav_menu_navbar">Navigation Bar</string>
     <string name="nav_menu_keyboard">Keyboard</string>
     <string name="nav_menu_wacom_pen">Wacom Pen</string>
+    <string name="nav_menu_hardware">Hardware</string>
     <string name="nav_menu_app_settings">App Settings</string>
+    <string name="hardware_info_desc">View device CPU, display, sensors, and input device information.</string>
 
     <!-- App settings screen -->
     <string name="app_settings_permissions">Permission status</string>
@@ -237,4 +242,18 @@
     <string name="battery_status_channel_description">Ongoing notification showing keyboard battery level</string>
     <string name="battery_status_title">%s Battery</string>
     <string name="battery_status_message">Battery: %d%%</string>
+
+    <!-- Keyboard Shortcuts Toggle -->
+    <string name="keyboard_shortcuts_enable_title">Keyboard Shortcuts</string>
+    <string name="keyboard_shortcuts_enable_summary">Enable custom keyboard shortcuts</string>
+
+    <!-- LG KBA10 Not Found -->
+    <string name="kba10_not_found_title">LG UltraTab Keyboard Not Found</string>
+    <string name="kba10_not_found_message">The LG KBA10 keyboard accessory for LG UltraTab 10A30Q is not registered on this device. Please pair the keyboard, or purchase one from lge.co.kr if you don\'t have one. You can also use other Bluetooth keyboard accessories.</string>
+
+    <!-- Third Party Keyboard -->
+    <string name="third_party_keyboard_title">Third-Party Keyboard Detected</string>
+    <string name="third_party_keyboard_message">This is a third-party Bluetooth keyboard. Would you like to use it? (Some features may not work properly)</string>
+    <string name="third_party_keyboard_use">Use This Keyboard</string>
+    <string name="third_party_keyboard_cancel">Cancel</string>
 </resources>

@@ -20,6 +20,9 @@
     <string name="navbar_enable_title">커스텀 네비게이션 바</string>
     <string name="navbar_enable_summary">커스텀 네비게이션 바 오버레이 표시</string>
 
+    <string name="nav_buttons_swap_title">버튼 배치 반전</string>
+    <string name="nav_buttons_swap_summary">네비게이션 버튼(뒤로/홈/최근앱)을 오른쪽으로, 추가 버튼(캡처/알림)을 왼쪽으로 이동 (Android 12L 스타일)</string>
+
     <string name="disabled_apps_settings">비활성화 앱</string>
     <string name="disabled_apps_summary">커스텀 네비게이션 바를 비활성화할 앱을 선택합니다. 해당 앱에서는 기본 네비게이션 바만 사용됩니다.</string>
     <string name="manage_disabled_apps">비활성화 앱 관리</string>
@@ -111,7 +114,9 @@
     <string name="nav_menu_navbar">네비게이션 바</string>
     <string name="nav_menu_keyboard">키보드</string>
     <string name="nav_menu_wacom_pen">와콤 펜</string>
+    <string name="nav_menu_hardware">하드웨어</string>
     <string name="nav_menu_app_settings">앱 설정</string>
+    <string name="hardware_info_desc">기기 CPU, 디스플레이, 센서 및 입력 장치 정보를 확인합니다.</string>
 
     <!-- 앱 설정 화면 -->
     <string name="app_settings_permissions">권한 상태</string>
@@ -237,4 +242,18 @@
     <string name="battery_status_channel_description">키보드 배터리 잔량을 표시하는 지속 알림</string>
     <string name="battery_status_title">%s 배터리</string>
     <string name="battery_status_message">배터리: %d%%</string>
+
+    <!-- 키보드 단축키 토글 -->
+    <string name="keyboard_shortcuts_enable_title">키보드 단축키</string>
+    <string name="keyboard_shortcuts_enable_summary">커스텀 키보드 단축키 기능 활성화</string>
+
+    <!-- LG KBA10 미등록 안내 -->
+    <string name="kba10_not_found_title">LG UltraTab 키보드 미등록</string>
+    <string name="kba10_not_found_message">LG UltraTab 10A30Q용 블루투스 키보드 악세사리 LG KBA10이 기기에 등록되지 않았습니다. 키보드를 등록하거나, 없으면 lge.co.kr에서 구매 후 진행해보세요. 또는 다른 블루투스 키보드 악세사리를 사용해보세요.</string>
+
+    <!-- 서드파티 키보드 -->
+    <string name="third_party_keyboard_title">서드파티 키보드 감지됨</string>
+    <string name="third_party_keyboard_message">이 기기는 서드파티 블루투스 키보드입니다. 사용하시겠습니까? (일부 기능이 정상적으로 작동하지 않을 수도 있습니다)</string>
+    <string name="third_party_keyboard_use">이 키보드 사용</string>
+    <string name="third_party_keyboard_cancel">취소</string>
 </resources>

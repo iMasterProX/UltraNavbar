@@ -18,6 +18,10 @@
 
     <group android:id="@+id/nav_group_system">
         <item
+            android:id="@+id/nav_hardware"
+            android:icon="@drawable/ic_hardware"
+            android:title="@string/nav_menu_hardware" />
+        <item
             android:id="@+id/nav_app_settings"
             android:icon="@drawable/ic_settings"
             android:title="@string/nav_menu_app_settings" />
