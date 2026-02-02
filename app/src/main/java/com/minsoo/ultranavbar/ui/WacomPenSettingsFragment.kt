@@ -66,6 +66,7 @@ class WacomPenSettingsFragment : Fragment() {
         val permissionBanner = view.findViewById<MaterialCardView>(R.id.cardPermissionBanner)
         val switchPenPointer = view.findViewById<SwitchMaterial>(R.id.switchPenPointer)
         val switchIgnoreGestures = view.findViewById<SwitchMaterial>(R.id.switchPenIgnoreGestures)
+        val switchIgnoreCustomNavbar = view.findViewById<SwitchMaterial>(R.id.switchPenIgnoreCustomNavbar)
         val cardButtonA = view.findViewById<MaterialCardView>(R.id.cardPenButtonA)
         val cardButtonB = view.findViewById<MaterialCardView>(R.id.cardPenButtonB)
         val cardReset = view.findViewById<MaterialCardView>(R.id.cardResetSettings)
@@ -80,6 +81,7 @@ class WacomPenSettingsFragment : Fragment() {
 
             switchPenPointer?.isEnabled = false
             switchIgnoreGestures?.isEnabled = false
+            switchIgnoreCustomNavbar?.isEnabled = false
             cardButtonA?.isEnabled = false
             cardButtonA?.alpha = 0.5f
             cardButtonB?.isEnabled = false
@@ -117,12 +119,25 @@ class WacomPenSettingsFragment : Fragment() {
                 }
             }
 
-            // 네비바 제스처 무시 토글
+            // 기본 네비바 제스처 무시 토글
             switchIgnoreGestures?.apply {
                 isChecked = settingsManager.penIgnoreNavGestures
                 setOnCheckedChangeListener { _, isChecked ->
                     settingsManager.penIgnoreNavGestures = isChecked
                     applyIgnoreGesturesSetting(isChecked)
+                }
+            }
+
+            // 커스텀 네비바 제스처 무시 토글
+            switchIgnoreCustomNavbar?.apply {
+                isChecked = settingsManager.ignoreStylus
+                setOnCheckedChangeListener { _, isChecked ->
+                    settingsManager.ignoreStylus = isChecked
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.pen_settings_updated,
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
 

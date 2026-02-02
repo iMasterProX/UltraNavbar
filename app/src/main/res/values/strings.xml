@@ -269,8 +269,10 @@
 
     <string name="pen_pointer_title">Show Pen Pointer</string>
     <string name="pen_pointer_summary">Display pen position on screen</string>
-    <string name="pen_ignore_gestures_title">Ignore NavBar Gestures While Writing</string>
-    <string name="pen_ignore_gestures_summary">Prevent accidental navigation bar touches while using the pen</string>
+    <string name="pen_ignore_gestures_system_title">Ignore System NavBar Gestures While Writing</string>
+    <string name="pen_ignore_gestures_system_summary">Prevent accidental touches on the system navigation bar while using the pen</string>
+    <string name="pen_ignore_gestures_custom_title">Ignore Custom NavBar Gestures While Writing</string>
+    <string name="pen_ignore_gestures_custom_summary">Prevent accidental touches on the custom navigation bar (UltraNavbar) while using the pen</string>
 
     <string name="pen_button_a_title">Pen Button A Settings</string>
     <string name="pen_button_b_title">Pen Button B Settings</string>

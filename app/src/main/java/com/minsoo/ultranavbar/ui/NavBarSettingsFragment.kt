@@ -47,7 +47,6 @@ class NavBarSettingsFragment : Fragment() {
 
     // 재호출 설정
     private lateinit var switchHotspot: SwitchMaterial
-    private lateinit var switchIgnoreStylus: SwitchMaterial
 
     // 홈 배경 관련
     private lateinit var switchHomeBg: SwitchMaterial
@@ -188,9 +187,6 @@ class NavBarSettingsFragment : Fragment() {
         // 재호출 설정
         switchHotspot = view.findViewById(R.id.switchHotspot)
 
-        // 스타일러스 설정
-        switchIgnoreStylus = view.findViewById(R.id.switchIgnoreStylus)
-
         // 홈 배경 설정
         switchHomeBg = view.findViewById(R.id.switchHomeBg)
         btnGenerateLandscape = view.findViewById(R.id.btnGenerateLandscape)
@@ -249,7 +245,6 @@ class NavBarSettingsFragment : Fragment() {
 
         // 재호출 설정 로드
         switchHotspot.isChecked = settings.hotspotEnabled
-        switchIgnoreStylus.isChecked = settings.ignoreStylus
 
         // 홈 배경 설정 로드
         switchHomeBg.isChecked = settings.homeBgEnabled
@@ -305,11 +300,6 @@ class NavBarSettingsFragment : Fragment() {
         switchHotspot.setOnCheckedChangeListener { _, isChecked ->
             settings.hotspotEnabled = isChecked
             notifySettingsChanged()
-        }
-
-        // 스타일러스 입력 무시
-        switchIgnoreStylus.setOnCheckedChangeListener { _, isChecked ->
-            settings.ignoreStylus = isChecked
         }
 
         // 홈 배경 활성화

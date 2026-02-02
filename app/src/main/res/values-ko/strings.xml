@@ -269,8 +269,10 @@
 
     <string name="pen_pointer_title">펜 포인터 표시</string>
     <string name="pen_pointer_summary">화면에 펜 위치를 표시합니다</string>
-    <string name="pen_ignore_gestures_title">필기 시 네비바 제스처 무시</string>
-    <string name="pen_ignore_gestures_summary">펜 사용 중 실수로 네비바를 터치하는 것을 방지합니다</string>
+    <string name="pen_ignore_gestures_system_title">필기 시 기본 네비바 제스처 무시</string>
+    <string name="pen_ignore_gestures_system_summary">펜 사용 중 실수로 시스템 네비바를 터치하는 것을 방지합니다</string>
+    <string name="pen_ignore_gestures_custom_title">필기 시 커스텀 네비바 제스처 무시</string>
+    <string name="pen_ignore_gestures_custom_summary">펜 사용 중 실수로 커스텀 네비바(UltraNavbar)를 터치하는 것을 방지합니다</string>
 
     <string name="pen_button_a_title">펜 버튼 A 설정</string>
     <string name="pen_button_b_title">펜 버튼 B 설정</string>
