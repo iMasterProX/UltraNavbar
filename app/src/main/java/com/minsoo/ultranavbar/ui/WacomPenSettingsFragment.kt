@@ -70,6 +70,9 @@ class WacomPenSettingsFragment : Fragment() {
         val cardButtonB = view.findViewById<MaterialCardView>(R.id.cardPenButtonB)
         val cardReset = view.findViewById<MaterialCardView>(R.id.cardResetSettings)
         val btnShowGuide = view.findViewById<MaterialButton>(R.id.btnShowPermissionGuide)
+        val btnSyncFromSystem = view.findViewById<MaterialButton>(R.id.btnSyncFromSystem)
+        val btnOpenSystemSettings = view.findViewById<MaterialButton>(R.id.btnOpenSystemSettings)
+        val cardTestCanvas = view.findViewById<MaterialCardView>(R.id.cardTestCanvas)
 
         if (!hasPermission) {
             // 권한 없을 때: 배너 표시 및 UI 비활성화
@@ -90,6 +93,20 @@ class WacomPenSettingsFragment : Fragment() {
         } else {
             // 권한 있을 때: 배너 숨기고 정상 동작
             permissionBanner?.visibility = View.GONE
+
+            // 시스템 설정 동기화 및 열기 버튼
+            btnSyncFromSystem?.setOnClickListener {
+                syncFromSystemSettings()
+            }
+
+            btnOpenSystemSettings?.setOnClickListener {
+                openSystemPenSettings()
+            }
+
+            // 테스트 캔버스 열기
+            cardTestCanvas?.setOnClickListener {
+                openTestCanvas()
+            }
 
             // 펜 포인터 토글
             switchPenPointer?.apply {
@@ -355,5 +372,70 @@ class WacomPenSettingsFragment : Fragment() {
         if (hasPermission) {
             view?.let { updateButtonStatus(it) }
         }
+    }
+
+    /**
+     * 시스템 펜 설정에서 동기화
+     */
+    private fun syncFromSystemSettings() {
+        try {
+            // 시스템 설정 읽기
+            val penPointer = Settings.Global.getInt(
+                requireContext().contentResolver,
+                "pen_pointer",
+                0
+            )
+            val ignoreGestures = Settings.Global.getInt(
+                requireContext().contentResolver,
+                "ignore_navigation_bar_gestures",
+                0
+            )
+
+            // SettingsManager에 반영
+            settingsManager.penPointerEnabled = (penPointer == 1)
+            settingsManager.penIgnoreNavGestures = (ignoreGestures == 1)
+
+            // UI 업데이트
+            view?.let {
+                it.findViewById<SwitchMaterial>(R.id.switchPenPointer)?.isChecked = (penPointer == 1)
+                it.findViewById<SwitchMaterial>(R.id.switchPenIgnoreGestures)?.isChecked = (ignoreGestures == 1)
+            }
+
+            Toast.makeText(
+                requireContext(),
+                R.string.pen_settings_synced,
+                Toast.LENGTH_SHORT
+            ).show()
+        } catch (e: Exception) {
+            Toast.makeText(
+                requireContext(),
+                "Failed to sync settings: ${e.message}",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    /**
+     * 시스템 펜 설정 열기
+     */
+    private fun openSystemPenSettings() {
+        try {
+            val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(
+                requireContext(),
+                "Failed to open system settings",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    /**
+     * 테스트 캔버스 열기
+     */
+    private fun openTestCanvas() {
+        val intent = Intent(requireContext(), PenTestCanvasActivity::class.java)
+        startActivity(intent)
     }
 }
