@@ -45,7 +45,7 @@ object ShortcutHelper {
             }
         }
 
-        return shortcuts.sortedBy { it.longLabel ?: it.shortLabel }
+        return shortcuts.sortedBy { (it.longLabel ?: it.shortLabel)?.toString() }
     }
 
     /**
