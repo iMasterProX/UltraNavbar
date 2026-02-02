@@ -301,25 +301,23 @@
 
     <string name="pen_permission_failed">Permission check failed. Please run the ADB command and try again.</string>
     <string name="pen_settings_updated">Pen settings updated</string>
+    <string name="pen_settings_synced">Settings synced from system</string>
 
-    <!-- System Settings Conflict -->
-    <string name="pen_settings_system_conflict_title">⚠️ Important Notice</string>
-    <string name="pen_settings_system_conflict_message">This feature works independently from the system pen settings. To avoid conflicts, either sync settings from the system or reset system settings before use.</string>
+    <!-- System Conflict Warning -->
+    <string name="pen_settings_system_conflict_title">System Settings Conflict Warning</string>
+    <string name="pen_settings_system_conflict_message">This feature operates independently of the system\'s pen settings. To avoid conflicts, it is recommended to reset the system\'s pen button settings or sync with the current system settings.</string>
     <string name="pen_settings_sync_from_system">Sync from System</string>
     <string name="pen_settings_open_system_settings">Open System Settings</string>
-    <string name="pen_settings_synced">Settings synced from system</string>
 
     <!-- Test Canvas -->
     <string name="pen_test_canvas_title">Test Pen Buttons</string>
-    <string name="pen_test_canvas_description">Test your pen button settings on a drawing canvas</string>
+    <string name="pen_test_canvas_summary">Verify that pen button functions work correctly with a drawing test</string>
     <string name="pen_test_instructions_title">How to Test</string>
-    <string name="pen_test_instructions_message">1. Draw on the canvas with your pen\n2. Press pen button A or B while drawing\n3. Check if the assigned function works correctly\n4. Use the toolbar below to test Undo/Redo/Eraser functions manually</string>
-    <string name="pen_test_got_it">Got it</string>
+    <string name="pen_test_instructions_message">1. Draw on the canvas using the pen\n2. Press the configured pen buttons (A/B)\n3. Verify that the functions work correctly (Undo, Redo, Eraser, etc.)</string>
     <string name="pen_test_undo">Undo</string>
     <string name="pen_test_redo">Redo</string>
-    <string name="pen_test_eraser_mode">Eraser</string>
-    <string name="pen_test_brush_mode">Brush</string>
+    <string name="pen_test_eraser">Eraser</string>
     <string name="pen_test_clear">Clear</string>
-    <string name="pen_test_brush_size_label">Brush Size:</string>
-    <string name="pen_test_brush_size">Brush size: %d</string>
+    <string name="pen_test_brush_size">Brush Size</string>
+    <string name="pen_test_dismiss_instructions">Got it</string>
 </resources>

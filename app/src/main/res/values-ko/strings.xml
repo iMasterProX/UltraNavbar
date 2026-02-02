@@ -301,25 +301,23 @@
 
     <string name="pen_permission_failed">권한 확인 실패. ADB 명령어를 실행한 후 다시 시도해주세요.</string>
     <string name="pen_settings_updated">펜 설정이 업데이트되었습니다</string>
+    <string name="pen_settings_synced">시스템 설정과 동기화되었습니다</string>
 
-    <!-- 시스템 설정 충돌 -->
-    <string name="pen_settings_system_conflict_title">⚠️ 중요 안내</string>
-    <string name="pen_settings_system_conflict_message">이 기능은 시스템 펜 설정과 별도로 작동합니다. 충돌을 방지하려면 시스템 설정을 동기화하거나 시스템 설정을 초기화하고 사용하세요.</string>
+    <!-- 시스템 설정 충돌 경고 -->
+    <string name="pen_settings_system_conflict_title">시스템 설정 충돌 경고</string>
+    <string name="pen_settings_system_conflict_message">이 기능은 시스템의 펜 설정과 독립적으로 작동합니다. 충돌을 방지하려면 시스템의 펜 버튼 설정을 초기화하거나, 현재 시스템 설정과 동기화하는 것을 권장합니다.</string>
     <string name="pen_settings_sync_from_system">시스템 설정 가져오기</string>
     <string name="pen_settings_open_system_settings">시스템 설정 열기</string>
-    <string name="pen_settings_synced">시스템 설정을 가져왔습니다</string>
 
     <!-- 테스트 캔버스 -->
     <string name="pen_test_canvas_title">펜 버튼 테스트</string>
-    <string name="pen_test_canvas_description">그리기 캔버스에서 펜 버튼 설정을 테스트하세요</string>
+    <string name="pen_test_canvas_summary">그림 그리기 테스트를 통해 펜 버튼 기능이 올바르게 작동하는지 확인합니다</string>
     <string name="pen_test_instructions_title">테스트 방법</string>
-    <string name="pen_test_instructions_message">1. 펜으로 캔버스에 그림을 그리세요\n2. 그리는 중에 펜 버튼 A 또는 B를 눌러보세요\n3. 설정한 기능이 제대로 작동하는지 확인하세요\n4. 아래 툴바로 Undo/Redo/지우개 기능을 직접 테스트할 수 있습니다</string>
-    <string name="pen_test_got_it">확인</string>
+    <string name="pen_test_instructions_message">1. 펜으로 캔버스에 그림을 그립니다\n2. 설정한 펜 버튼(A/B)을 눌러봅니다\n3. 기능이 올바르게 작동하는지 확인합니다 (실행 취소, 다시 실행, 지우개 등)</string>
     <string name="pen_test_undo">실행 취소</string>
     <string name="pen_test_redo">다시 실행</string>
-    <string name="pen_test_eraser_mode">지우개</string>
-    <string name="pen_test_brush_mode">브러시</string>
-    <string name="pen_test_clear">전체 지우기</string>
-    <string name="pen_test_brush_size_label">브러시 크기:</string>
-    <string name="pen_test_brush_size">브러시 크기: %d</string>
+    <string name="pen_test_eraser">지우개</string>
+    <string name="pen_test_clear">모두 지우기</string>
+    <string name="pen_test_brush_size">브러시 크기</string>
+    <string name="pen_test_dismiss_instructions">확인</string>
 </resources>
