@@ -908,6 +908,15 @@ class NavBarAccessibilityService : AccessibilityService() {
             return false
         }
 
+        // 펜 버튼 이벤트 처리 (최우선)
+        if (com.minsoo.ultranavbar.util.PenButtonHandler.isPenButtonEvent(event)) {
+            val handled = com.minsoo.ultranavbar.util.PenButtonHandler.handlePenButtonEvent(this, event)
+            if (handled) {
+                Log.d(TAG, "onKeyEvent: pen button event consumed")
+                return true
+            }
+        }
+
         // 현재 앱에서 키보드 단축키가 비활성화되어 있으면 이벤트 전파
         if (currentPackage.isNotEmpty() && settings.isShortcutDisabledForApp(currentPackage)) {
             Log.d(TAG, "onKeyEvent: shortcuts disabled for $currentPackage, passing through")

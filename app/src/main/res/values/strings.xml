@@ -256,4 +256,49 @@
     <string name="third_party_keyboard_message">This is a third-party Bluetooth keyboard. Would you like to use it? (Some features may not work properly)</string>
     <string name="third_party_keyboard_use">Use This Keyboard</string>
     <string name="third_party_keyboard_cancel">Cancel</string>
+
+    <!-- Pen Settings -->
+    <string name="pen_settings_title">Wacom Pen Settings</string>
+    <string name="pen_settings_permission_required_title">Permission Required</string>
+    <string name="pen_settings_permission_banner_message">ADB permission is required to use this feature. Click below to view the setup guide.</string>
+    <string name="pen_settings_view_guide">View Permission Guide</string>
+    <string name="pen_settings_permission_guide">This feature requires ADB permission to be granted once.\n\n1. Install ADB on your PC\n2. Enable USB debugging\n3. Run the following command:</string>
+    <string name="pen_settings_adb_command">adb shell pm grant com.minsoo.ultranavbar android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="pen_settings_check_permission">Check Permission and Continue</string>
+    <string name="pen_settings_permission_note">Note: This permission is required only once and will persist across app reinstalls.</string>
+
+    <string name="pen_pointer_title">Show Pen Pointer</string>
+    <string name="pen_pointer_summary">Display pen position on screen</string>
+    <string name="pen_ignore_gestures_title">Ignore NavBar Gestures While Writing</string>
+    <string name="pen_ignore_gestures_summary">Prevent accidental navigation bar touches while using the pen</string>
+
+    <string name="pen_button_a_title">Pen Button A Settings</string>
+    <string name="pen_button_b_title">Pen Button B Settings</string>
+    <string name="pen_button_action_none">Disabled</string>
+    <string name="pen_button_action_app">Launch App</string>
+    <string name="pen_button_action_shortcut">App Shortcut</string>
+    <string name="pen_button_action_paint">Painting Function</string>
+
+    <string name="pen_paint_function_undo">Undo (Ctrl+Z)</string>
+    <string name="pen_paint_function_redo">Redo (Ctrl+Y)</string>
+    <string name="pen_paint_function_eraser">Toggle Eraser (E)</string>
+    <string name="pen_paint_function_brush_up">Brush Size + (])</string>
+    <string name="pen_paint_function_brush_down">Brush Size - ([)</string>
+    <string name="pen_paint_function_color_picker">Color Picker (I)</string>
+
+    <string name="pen_paint_compatible_apps">Compatible apps: ibis Paint X, MediBang Paint, Clip Studio Paint, Krita, Infinite Painter, and more</string>
+
+    <string name="pen_reset_settings">Reset Pen Settings</string>
+    <string name="pen_reset_settings_summary">Remove all pen settings and revert to default system settings</string>
+    <string name="pen_reset_confirm">Are you sure you want to reset all pen settings?</string>
+    <string name="pen_reset_done">Pen settings have been reset</string>
+
+    <string name="pen_button_config_title">Configure Pen Button</string>
+    <string name="pen_button_select_action">Select Action Type</string>
+    <string name="pen_button_select_app">Select App</string>
+    <string name="pen_button_select_shortcut">Select Shortcut</string>
+    <string name="pen_button_select_paint_function">Select Painting Function</string>
+
+    <string name="pen_permission_failed">Permission check failed. Please run the ADB command and try again.</string>
+    <string name="pen_settings_updated">Pen settings updated</string>
 </resources>

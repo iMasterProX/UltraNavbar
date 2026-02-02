@@ -53,6 +53,22 @@ class SettingsManager private constructor(context: Context) {
         // Navigation button layout
         private const val KEY_NAV_BUTTONS_SWAPPED = "nav_buttons_swapped"
 
+        // Wacom Pen Settings
+        private const val KEY_PEN_POINTER_ENABLED = "pen_pointer_enabled"
+        private const val KEY_PEN_IGNORE_NAV_GESTURES = "pen_ignore_nav_gestures"
+        private const val KEY_PEN_A_ACTION_TYPE = "pen_a_action_type"
+        private const val KEY_PEN_B_ACTION_TYPE = "pen_b_action_type"
+        private const val KEY_PEN_A_APP_PACKAGE = "pen_a_app_package"
+        private const val KEY_PEN_A_APP_ACTIVITY = "pen_a_app_activity"
+        private const val KEY_PEN_B_APP_PACKAGE = "pen_b_app_package"
+        private const val KEY_PEN_B_APP_ACTIVITY = "pen_b_app_activity"
+        private const val KEY_PEN_A_SHORTCUT_PACKAGE = "pen_a_shortcut_package"
+        private const val KEY_PEN_A_SHORTCUT_ID = "pen_a_shortcut_id"
+        private const val KEY_PEN_B_SHORTCUT_PACKAGE = "pen_b_shortcut_package"
+        private const val KEY_PEN_B_SHORTCUT_ID = "pen_b_shortcut_id"
+        private const val KEY_PEN_A_PAINT_FUNCTION = "pen_a_paint_function"
+        private const val KEY_PEN_B_PAINT_FUNCTION = "pen_b_paint_function"
+
         @Volatile
         private var instance: SettingsManager? = null
 
@@ -178,6 +194,76 @@ class SettingsManager private constructor(context: Context) {
     var navButtonsSwapped: Boolean
         get() = prefs.getBoolean(KEY_NAV_BUTTONS_SWAPPED, false)
         set(value) = prefs.edit().putBoolean(KEY_NAV_BUTTONS_SWAPPED, value).apply()
+
+    // Wacom 펜 포인터 표시
+    var penPointerEnabled: Boolean
+        get() = prefs.getBoolean(KEY_PEN_POINTER_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_PEN_POINTER_ENABLED, value).apply()
+
+    // 펜 사용 시 네비바 제스처 무시
+    var penIgnoreNavGestures: Boolean
+        get() = prefs.getBoolean(KEY_PEN_IGNORE_NAV_GESTURES, false)
+        set(value) = prefs.edit().putBoolean(KEY_PEN_IGNORE_NAV_GESTURES, value).apply()
+
+    // 펜 버튼 A 액션 타입
+    var penAActionType: String
+        get() = prefs.getString(KEY_PEN_A_ACTION_TYPE, "NONE") ?: "NONE"
+        set(value) = prefs.edit().putString(KEY_PEN_A_ACTION_TYPE, value).apply()
+
+    // 펜 버튼 B 액션 타입
+    var penBActionType: String
+        get() = prefs.getString(KEY_PEN_B_ACTION_TYPE, "NONE") ?: "NONE"
+        set(value) = prefs.edit().putString(KEY_PEN_B_ACTION_TYPE, value).apply()
+
+    // 펜 버튼 A - 앱 패키지
+    var penAAppPackage: String?
+        get() = prefs.getString(KEY_PEN_A_APP_PACKAGE, null)
+        set(value) = prefs.edit().putString(KEY_PEN_A_APP_PACKAGE, value).apply()
+
+    // 펜 버튼 A - 앱 액티비티
+    var penAAppActivity: String?
+        get() = prefs.getString(KEY_PEN_A_APP_ACTIVITY, null)
+        set(value) = prefs.edit().putString(KEY_PEN_A_APP_ACTIVITY, value).apply()
+
+    // 펜 버튼 B - 앱 패키지
+    var penBAppPackage: String?
+        get() = prefs.getString(KEY_PEN_B_APP_PACKAGE, null)
+        set(value) = prefs.edit().putString(KEY_PEN_B_APP_PACKAGE, value).apply()
+
+    // 펜 버튼 B - 앱 액티비티
+    var penBAppActivity: String?
+        get() = prefs.getString(KEY_PEN_B_APP_ACTIVITY, null)
+        set(value) = prefs.edit().putString(KEY_PEN_B_APP_ACTIVITY, value).apply()
+
+    // 펜 버튼 A - 바로가기 패키지
+    var penAShortcutPackage: String?
+        get() = prefs.getString(KEY_PEN_A_SHORTCUT_PACKAGE, null)
+        set(value) = prefs.edit().putString(KEY_PEN_A_SHORTCUT_PACKAGE, value).apply()
+
+    // 펜 버튼 A - 바로가기 ID
+    var penAShortcutId: String?
+        get() = prefs.getString(KEY_PEN_A_SHORTCUT_ID, null)
+        set(value) = prefs.edit().putString(KEY_PEN_A_SHORTCUT_ID, value).apply()
+
+    // 펜 버튼 B - 바로가기 패키지
+    var penBShortcutPackage: String?
+        get() = prefs.getString(KEY_PEN_B_SHORTCUT_PACKAGE, null)
+        set(value) = prefs.edit().putString(KEY_PEN_B_SHORTCUT_PACKAGE, value).apply()
+
+    // 펜 버튼 B - 바로가기 ID
+    var penBShortcutId: String?
+        get() = prefs.getString(KEY_PEN_B_SHORTCUT_ID, null)
+        set(value) = prefs.edit().putString(KEY_PEN_B_SHORTCUT_ID, value).apply()
+
+    // 펜 버튼 A - 페인팅 기능
+    var penAPaintFunction: String?
+        get() = prefs.getString(KEY_PEN_A_PAINT_FUNCTION, null)
+        set(value) = prefs.edit().putString(KEY_PEN_A_PAINT_FUNCTION, value).apply()
+
+    // 펜 버튼 B - 페인팅 기능
+    var penBPaintFunction: String?
+        get() = prefs.getString(KEY_PEN_B_PAINT_FUNCTION, null)
+        set(value) = prefs.edit().putString(KEY_PEN_B_PAINT_FUNCTION, value).apply()
 
     /**
      * 해당 패키지에서 커스텀 네비바를 비활성화해야 하는지 확인

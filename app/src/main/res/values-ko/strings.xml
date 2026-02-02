@@ -256,4 +256,49 @@
     <string name="third_party_keyboard_message">이 기기는 서드파티 블루투스 키보드입니다. 사용하시겠습니까? (일부 기능이 정상적으로 작동하지 않을 수도 있습니다)</string>
     <string name="third_party_keyboard_use">이 키보드 사용</string>
     <string name="third_party_keyboard_cancel">취소</string>
+
+    <!-- 펜 설정 -->
+    <string name="pen_settings_title">와콤 펜 설정</string>
+    <string name="pen_settings_permission_required_title">권한 부여가 필요합니다</string>
+    <string name="pen_settings_permission_banner_message">이 기능을 사용하려면 ADB 권한이 필요합니다. 아래 버튼을 눌러 설정 방법을 확인하세요.</string>
+    <string name="pen_settings_view_guide">권한 설정 방법 보기</string>
+    <string name="pen_settings_permission_guide">이 메뉴를 사용하려면 ADB로 \'한 번만\' 권한을 부여해야 합니다.\n\n1. PC에 ADB를 설치합니다\n2. USB 디버깅을 활성화합니다\n3. 다음 명령어를 실행합니다:</string>
+    <string name="pen_settings_adb_command">adb shell pm grant com.minsoo.ultranavbar android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="pen_settings_check_permission">권한 확인 후 진행</string>
+    <string name="pen_settings_permission_note">참고: 이 권한은 한 번만 필요하며 앱 재설치 후에도 유지됩니다.</string>
+
+    <string name="pen_pointer_title">펜 포인터 표시</string>
+    <string name="pen_pointer_summary">화면에 펜 위치를 표시합니다</string>
+    <string name="pen_ignore_gestures_title">필기 시 네비바 제스처 무시</string>
+    <string name="pen_ignore_gestures_summary">펜 사용 중 실수로 네비바를 터치하는 것을 방지합니다</string>
+
+    <string name="pen_button_a_title">펜 버튼 A 설정</string>
+    <string name="pen_button_b_title">펜 버튼 B 설정</string>
+    <string name="pen_button_action_none">비활성화</string>
+    <string name="pen_button_action_app">앱 실행</string>
+    <string name="pen_button_action_shortcut">앱 바로가기</string>
+    <string name="pen_button_action_paint">페인팅 기능</string>
+
+    <string name="pen_paint_function_undo">실행 취소 (Ctrl+Z)</string>
+    <string name="pen_paint_function_redo">다시 실행 (Ctrl+Y)</string>
+    <string name="pen_paint_function_eraser">지우개 전환 (E)</string>
+    <string name="pen_paint_function_brush_up">브러시 크기 + (])</string>
+    <string name="pen_paint_function_brush_down">브러시 크기 - ([)</string>
+    <string name="pen_paint_function_color_picker">색상 피커 (I)</string>
+
+    <string name="pen_paint_compatible_apps">호환 앱: ibis Paint X, MediBang Paint, Clip Studio Paint, Krita, Infinite Painter 등</string>
+
+    <string name="pen_reset_settings">펜 설정 초기화</string>
+    <string name="pen_reset_settings_summary">이 앱의 펜 설정을 제거하고 기본 설정 앱 사용으로 돌아갑니다</string>
+    <string name="pen_reset_confirm">정말 초기화하시겠습니까?</string>
+    <string name="pen_reset_done">펜 설정이 초기화되었습니다</string>
+
+    <string name="pen_button_config_title">펜 버튼 설정</string>
+    <string name="pen_button_select_action">동작 유형 선택</string>
+    <string name="pen_button_select_app">앱 선택</string>
+    <string name="pen_button_select_shortcut">바로가기 선택</string>
+    <string name="pen_button_select_paint_function">페인팅 기능 선택</string>
+
+    <string name="pen_permission_failed">권한 확인 실패. ADB 명령어를 실행한 후 다시 시도해주세요.</string>
+    <string name="pen_settings_updated">펜 설정이 업데이트되었습니다</string>
 </resources>
