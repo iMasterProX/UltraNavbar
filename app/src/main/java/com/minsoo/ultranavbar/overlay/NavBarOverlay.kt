@@ -303,19 +303,31 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             buttonManager.createNavButton(NavAction.RECENTS, R.drawable.ic_sysbar_recent, buttonSizePx, initialButtonColor)
         )
 
-        // Extra buttons group: Screenshot / Notifications
+        // Extra buttons group: Screenshot / Notifications (order reversed when swapped)
         val extraGroup = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        extraGroup.addView(
-            buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
-        )
-        buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
-        extraGroup.addView(
-            buttonManager.createNavButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel, buttonSizePx, initialButtonColor)
-        )
+        if (isSwapped) {
+            // When swapped to left: Notifications first, then Screenshot
+            extraGroup.addView(
+                buttonManager.createNavButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel, buttonSizePx, initialButtonColor)
+            )
+            buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
+            extraGroup.addView(
+                buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
+            )
+        } else {
+            // Default order: Screenshot first, then Notifications
+            extraGroup.addView(
+                buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
+            )
+            buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
+            extraGroup.addView(
+                buttonManager.createNavButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel, buttonSizePx, initialButtonColor)
+            )
+        }
 
         // 반전 설정에 따라 배치 결정
         val leftGroup = if (isSwapped) extraGroup else navGroup

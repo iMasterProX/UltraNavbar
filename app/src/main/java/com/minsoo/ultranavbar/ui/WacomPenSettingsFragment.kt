@@ -70,7 +70,6 @@ class WacomPenSettingsFragment : Fragment() {
         val switchIgnoreCustomNavbar = view.findViewById<SwitchMaterial>(R.id.switchPenIgnoreCustomNavbar)
         val cardButtonA = view.findViewById<MaterialCardView>(R.id.cardPenButtonA)
         val cardButtonB = view.findViewById<MaterialCardView>(R.id.cardPenButtonB)
-        val cardReset = view.findViewById<MaterialCardView>(R.id.cardResetSettings)
         val btnShowGuide = view.findViewById<MaterialButton>(R.id.btnShowPermissionGuide)
 
         if (!hasPermission) {
@@ -85,8 +84,6 @@ class WacomPenSettingsFragment : Fragment() {
             cardButtonA?.alpha = 0.5f
             cardButtonB?.isEnabled = false
             cardButtonB?.alpha = 0.5f
-            cardReset?.isEnabled = false
-            cardReset?.alpha = 0.5f
 
             btnShowGuide?.setOnClickListener {
                 showPermissionGuideDialog()
@@ -143,11 +140,6 @@ class WacomPenSettingsFragment : Fragment() {
                 isChecked = settingsManager.ignoreStylus
                 setOnCheckedChangeListener { _, isChecked ->
                     settingsManager.ignoreStylus = isChecked
-                    Toast.makeText(
-                        requireContext(),
-                        R.string.pen_settings_updated,
-                        Toast.LENGTH_SHORT
-                    ).show()
                 }
             }
 
@@ -159,11 +151,6 @@ class WacomPenSettingsFragment : Fragment() {
             // 펜 버튼 B 설정
             cardButtonB?.setOnClickListener {
                 openButtonConfig("B")
-            }
-
-            // 설정 초기화
-            cardReset?.setOnClickListener {
-                showResetConfirmDialog()
             }
 
             // 버튼 상태 업데이트
@@ -215,11 +202,6 @@ class WacomPenSettingsFragment : Fragment() {
                 "pen_pointer",
                 if (enabled) 1 else 0
             )
-            Toast.makeText(
-                requireContext(),
-                R.string.pen_settings_updated,
-                Toast.LENGTH_SHORT
-            ).show()
         } catch (e: Exception) {
             Toast.makeText(
                 requireContext(),
@@ -239,11 +221,6 @@ class WacomPenSettingsFragment : Fragment() {
                 "ignore_navigation_bar_gestures",
                 if (enabled) 1 else 0
             )
-            Toast.makeText(
-                requireContext(),
-                R.string.pen_settings_updated,
-                Toast.LENGTH_SHORT
-            ).show()
         } catch (e: Exception) {
             Toast.makeText(
                 requireContext(),
@@ -314,6 +291,13 @@ class WacomPenSettingsFragment : Fragment() {
                 val x = if (button == "A") settingsManager.penATouchX else settingsManager.penBTouchX
                 val y = if (button == "A") settingsManager.penATouchY else settingsManager.penBTouchY
                 getString(R.string.pen_button_action_touch_point) + ": (${x.toInt()}, ${y.toInt()})"
+            }
+            "NODE_CLICK" -> {
+                val nodeId = if (button == "A") settingsManager.penANodeId else settingsManager.penBNodeId
+                val nodeText = if (button == "A") settingsManager.penANodeText else settingsManager.penBNodeText
+                val nodeDesc = if (button == "A") settingsManager.penANodeDesc else settingsManager.penBNodeDesc
+                val displayName = nodeText ?: nodeDesc ?: nodeId ?: "Unknown"
+                getString(R.string.pen_button_action_node_click) + ": $displayName"
             }
             else -> getString(R.string.pen_button_action_none)
         }
@@ -387,6 +371,15 @@ class WacomPenSettingsFragment : Fragment() {
             settingsManager.penATouchY = -1f
             settingsManager.penBTouchX = -1f
             settingsManager.penBTouchY = -1f
+            // NODE_CLICK 설정 초기화
+            settingsManager.penANodeId = null
+            settingsManager.penANodeText = null
+            settingsManager.penANodeDesc = null
+            settingsManager.penANodePackage = null
+            settingsManager.penBNodeId = null
+            settingsManager.penBNodeText = null
+            settingsManager.penBNodeDesc = null
+            settingsManager.penBNodePackage = null
 
             Toast.makeText(
                 requireContext(),
@@ -432,9 +425,9 @@ class WacomPenSettingsFragment : Fragment() {
      */
     private fun syncPenSettingsToSystem() {
         try {
-            // Button A 동기화 (PAINT_FUNCTION, TOUCH_POINT, SHORTCUT)
+            // Button A 동기화 (PAINT_FUNCTION, TOUCH_POINT, SHORTCUT, NODE_CLICK)
             val actionA = settingsManager.penAActionType
-            if (actionA == "PAINT_FUNCTION" || actionA == "TOUCH_POINT" || actionA == "SHORTCUT") {
+            if (actionA == "PAINT_FUNCTION" || actionA == "TOUCH_POINT" || actionA == "SHORTCUT" || actionA == "NODE_CLICK") {
                 val componentName = "com.minsoo.ultranavbar/com.minsoo.ultranavbar.ui.PenButtonABridgeActivity"
                 val currentA = Settings.Global.getString(requireContext().contentResolver, "a_button_component_name")
                 if (currentA != componentName) {
@@ -444,9 +437,9 @@ class WacomPenSettingsFragment : Fragment() {
                 }
             }
 
-            // Button B 동기화 (PAINT_FUNCTION, TOUCH_POINT, SHORTCUT)
+            // Button B 동기화 (PAINT_FUNCTION, TOUCH_POINT, SHORTCUT, NODE_CLICK)
             val actionB = settingsManager.penBActionType
-            if (actionB == "PAINT_FUNCTION" || actionB == "TOUCH_POINT" || actionB == "SHORTCUT") {
+            if (actionB == "PAINT_FUNCTION" || actionB == "TOUCH_POINT" || actionB == "SHORTCUT" || actionB == "NODE_CLICK") {
                 val componentName = "com.minsoo.ultranavbar/com.minsoo.ultranavbar.ui.PenButtonBBridgeActivity"
                 val currentB = Settings.Global.getString(requireContext().contentResolver, "b_button_component_name")
                 if (currentB != componentName) {
@@ -467,7 +460,6 @@ class WacomPenSettingsFragment : Fragment() {
         // 카드 뷰들
         val cardButtonA = view.findViewById<MaterialCardView>(R.id.cardPenButtonA)
         val cardButtonB = view.findViewById<MaterialCardView>(R.id.cardPenButtonB)
-        val cardReset = view.findViewById<MaterialCardView>(R.id.cardResetSettings)
 
         // 스위치들
         val switchPenPointer = view.findViewById<SwitchMaterial>(R.id.switchPenPointer)
@@ -479,8 +471,6 @@ class WacomPenSettingsFragment : Fragment() {
         cardButtonA?.alpha = if (enabled) 1f else 0.5f
         cardButtonB?.isEnabled = enabled
         cardButtonB?.alpha = if (enabled) 1f else 0.5f
-        cardReset?.isEnabled = enabled
-        cardReset?.alpha = if (enabled) 1f else 0.5f
 
         // 스위치 활성화/비활성화
         switchPenPointer?.isEnabled = enabled

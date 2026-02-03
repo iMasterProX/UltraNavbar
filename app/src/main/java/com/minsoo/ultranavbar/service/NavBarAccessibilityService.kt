@@ -16,6 +16,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import com.minsoo.ultranavbar.core.Constants
 import com.minsoo.ultranavbar.core.WindowAnalyzer
 import com.minsoo.ultranavbar.model.NavAction
@@ -1287,5 +1288,162 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.e(TAG, "performTap: Failed to dispatch gesture", e)
             false
         }
+    }
+
+    /**
+     * 저장된 노드 정보를 기반으로 UI 요소 클릭
+     * Shizuku 없이 작동하며 화면 방향에 상관없이 동작
+     *
+     * @param nodeId 리소스 ID (예: com.example:id/button)
+     * @param nodeText 텍스트 내용
+     * @param nodeDesc contentDescription
+     * @param nodePackage 패키지 이름 (특정 앱에서만 클릭)
+     * @return 클릭 성공 여부
+     */
+    fun performNodeClick(
+        nodeId: String?,
+        nodeText: String?,
+        nodeDesc: String?,
+        nodePackage: String?
+    ): Boolean {
+        // 매 시도마다 새로운 rootInActiveWindow 가져오기
+        val rootNode = rootInActiveWindow ?: run {
+            Log.w(TAG, "performNodeClick: No active window")
+            return false
+        }
+
+        try {
+            // 패키지 확인 (선택사항) - 패키지 불일치 시에도 노드 찾기 시도
+            val currentPackage = rootNode.packageName?.toString()
+            if (!nodePackage.isNullOrEmpty() && currentPackage != nodePackage) {
+                Log.d(TAG, "performNodeClick: Package hint mismatch ($currentPackage vs $nodePackage), trying anyway")
+            }
+
+            // 노드 찾기 (여러 방법 시도)
+            var targetNode: AccessibilityNodeInfo? = null
+
+            // 1. Resource ID로 찾기 (가장 신뢰할 수 있음)
+            if (!nodeId.isNullOrEmpty()) {
+                val nodes = rootNode.findAccessibilityNodeInfosByViewId(nodeId)
+                if (nodes.isNotEmpty()) {
+                    // 클릭 가능한 노드 우선 선택
+                    for (node in nodes) {
+                        if (node.isClickable || node.isCheckable) {
+                            targetNode = node
+                            break
+                        }
+                    }
+                    // 클릭 가능한 노드가 없으면 첫 번째 노드 사용
+                    if (targetNode == null) {
+                        targetNode = nodes[0]
+                    }
+                    // 나머지 노드 recycle
+                    for (node in nodes) {
+                        if (node != targetNode) {
+                            node.recycle()
+                        }
+                    }
+                    Log.d(TAG, "performNodeClick: Found node by ID: $nodeId")
+                }
+            }
+
+            // 2. contentDescription으로 찾기
+            if (!nodeDesc.isNullOrEmpty() && targetNode == null) {
+                targetNode = findNodeByContentDescription(rootNode, nodeDesc)
+                if (targetNode != null) {
+                    Log.d(TAG, "performNodeClick: Found node by description: $nodeDesc")
+                }
+            }
+
+            // 3. 텍스트로 찾기 (부분 일치 포함)
+            if (!nodeText.isNullOrEmpty() && targetNode == null) {
+                val nodes = rootNode.findAccessibilityNodeInfosByText(nodeText)
+                // 정확한 일치 우선
+                for (node in nodes) {
+                    val text = node.text?.toString()
+                    if (text == nodeText) {
+                        targetNode = node
+                        Log.d(TAG, "performNodeClick: Found node by exact text: $nodeText")
+                        break
+                    }
+                }
+                // 정확한 일치가 없으면 부분 일치 중 클릭 가능한 것
+                if (targetNode == null) {
+                    for (node in nodes) {
+                        if (node.isClickable || node.isCheckable) {
+                            targetNode = node
+                            Log.d(TAG, "performNodeClick: Found clickable node containing text: $nodeText")
+                            break
+                        }
+                    }
+                }
+                // 나머지 노드 recycle
+                for (node in nodes) {
+                    if (node != targetNode) {
+                        node.recycle()
+                    }
+                }
+            }
+
+            if (targetNode == null) {
+                Log.w(TAG, "performNodeClick: Node not found (id=$nodeId, text=$nodeText, desc=$nodeDesc)")
+                rootNode.recycle()
+                return false
+            }
+
+            // 클릭 수행 - 노드가 클릭 불가능하면 클릭 가능한 부모 찾기
+            var result = false
+            if (targetNode.isClickable || targetNode.isCheckable) {
+                result = targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                Log.d(TAG, "performNodeClick: Direct click result=$result")
+            } else {
+                // 클릭 가능한 부모 노드 찾기
+                var parent = targetNode.parent
+                var depth = 0
+                while (parent != null && depth < 10) {
+                    if (parent.isClickable) {
+                        result = parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        Log.d(TAG, "performNodeClick: Parent click result=$result (depth=$depth)")
+                        parent.recycle()
+                        break
+                    }
+                    val grandParent = parent.parent
+                    parent.recycle()
+                    parent = grandParent
+                    depth++
+                }
+                parent?.recycle()
+            }
+
+            targetNode.recycle()
+            rootNode.recycle()
+            return result
+        } catch (e: Exception) {
+            Log.e(TAG, "performNodeClick: Failed", e)
+            try { rootNode.recycle() } catch (_: Exception) {}
+            return false
+        }
+    }
+
+    /**
+     * contentDescription으로 노드 찾기 (재귀)
+     * 클릭 가능 여부와 관계없이 찾음 (나중에 부모에서 클릭 시도)
+     */
+    private fun findNodeByContentDescription(node: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
+        val nodeDesc = node.contentDescription?.toString()
+        if (nodeDesc == desc) {
+            return AccessibilityNodeInfo.obtain(node)
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findNodeByContentDescription(child, desc)
+            child.recycle()
+            if (result != null) {
+                return result
+            }
+        }
+
+        return null
     }
 }

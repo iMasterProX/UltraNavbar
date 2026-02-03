@@ -317,8 +317,12 @@ class AppSettingsFragment : Fragment() {
             .setNeutralButton(R.string.shizuku_grant_permission) { _, _ ->
                 // Shizuku 권한 요청
                 if (ShizukuHelper.isShizukuAvailable()) {
-                    ShizukuHelper.requestShizukuPermission()
-                    Toast.makeText(requireContext(), "권한 요청을 보냈습니다", Toast.LENGTH_SHORT).show()
+                    if (ShizukuHelper.hasShizukuPermission()) {
+                        Toast.makeText(requireContext(), R.string.shizuku_permission_already_granted, Toast.LENGTH_SHORT).show()
+                    } else {
+                        ShizukuHelper.requestShizukuPermission()
+                        Toast.makeText(requireContext(), "권한 요청을 보냈습니다", Toast.LENGTH_SHORT).show()
+                    }
                 } else {
                     Toast.makeText(requireContext(), R.string.shizuku_not_running, Toast.LENGTH_SHORT).show()
                 }

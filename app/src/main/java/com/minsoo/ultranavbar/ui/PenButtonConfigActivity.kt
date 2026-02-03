@@ -21,6 +21,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
+import com.minsoo.ultranavbar.util.ShizukuHelper
 
 /**
  * 펜 버튼 설정 Activity
@@ -34,6 +35,7 @@ class PenButtonConfigActivity : AppCompatActivity() {
     companion object {
         const val REQUEST_SELECT_APP = 100
         const val REQUEST_TOUCH_POINT = 102
+        const val REQUEST_NODE_SELECTION = 103
     }
 
     private val appPickerLauncher = registerForActivityResult(
@@ -75,6 +77,13 @@ class PenButtonConfigActivity : AppCompatActivity() {
         finish()
     }
 
+    private val nodeSelectionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        // NodeSelectionActivity에서 이미 저장함
+        finish()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -93,7 +102,8 @@ class PenButtonConfigActivity : AppCompatActivity() {
             getString(R.string.pen_button_action_none),
             getString(R.string.pen_button_action_app),
             getString(R.string.pen_button_action_shortcut),
-            getString(R.string.pen_button_action_touch_point)
+            getString(R.string.pen_button_action_touch_point),
+            getString(R.string.pen_button_action_node_click)
         )
 
         AlertDialog.Builder(this)
@@ -104,6 +114,7 @@ class PenButtonConfigActivity : AppCompatActivity() {
                     1 -> selectApp()
                     2 -> selectShortcut()
                     3 -> selectTouchPoint()
+                    4 -> selectNodeClick()
                 }
             }
             .setOnCancelListener {
@@ -300,15 +311,53 @@ class PenButtonConfigActivity : AppCompatActivity() {
             return
         }
 
+        // Shizuku 권한 상태에 따라 다른 안내 메시지 표시
+        val guideMessage = if (ShizukuHelper.hasShizukuPermission()) {
+            R.string.touch_point_guide_message_shizuku_ready
+        } else {
+            R.string.touch_point_guide_message
+        }
+
         // 안내 다이얼로그 표시
         AlertDialog.Builder(this)
             .setTitle(R.string.touch_point_guide_title)
-            .setMessage(R.string.touch_point_guide_message)
+            .setMessage(guideMessage)
             .setPositiveButton(R.string.touch_point_guide_start) { _, _ ->
                 val intent = Intent(this, TouchPointSetupActivity::class.java).apply {
                     putExtra(TouchPointSetupActivity.EXTRA_BUTTON, buttonName)
                 }
                 touchPointLauncher.launch(intent)
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                finish()
+            }
+            .setOnCancelListener {
+                finish()
+            }
+            .show()
+    }
+
+    /**
+     * 노드 클릭 설정 - 안내 다이얼로그 표시 후 설정 시작
+     * Shizuku 없이 작동하는 UI 요소 클릭 기능
+     */
+    private fun selectNodeClick() {
+        // 접근성 서비스가 실행 중인지 확인
+        if (!NavBarAccessibilityService.isRunning()) {
+            Toast.makeText(this, R.string.node_selection_accessibility_required, Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
+        // 안내 다이얼로그 표시
+        AlertDialog.Builder(this)
+            .setTitle(R.string.node_selection_guide_title)
+            .setMessage(R.string.node_selection_guide_message)
+            .setPositiveButton(R.string.node_selection_guide_start) { _, _ ->
+                val intent = Intent(this, NodeSelectionActivity::class.java).apply {
+                    putExtra(NodeSelectionActivity.EXTRA_BUTTON, buttonName)
+                }
+                nodeSelectionLauncher.launch(intent)
             }
             .setNegativeButton(android.R.string.cancel) { _, _ ->
                 finish()

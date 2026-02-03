@@ -98,6 +98,12 @@
             android:parentActivityName=".ui.PenButtonConfigActivity"
             android:theme="@style/Theme.UltraNavbar.Transparent" />
 
+        <activity
+            android:name=".ui.NodeSelectionActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.PenButtonConfigActivity"
+            android:theme="@style/Theme.UltraNavbar.Transparent" />
+
         <!-- 펜 버튼 브릿지 Activities (페인팅 기능용) -->
         <!-- taskAffinity=""로 별도 태스크에서 실행, finishOnTaskLaunch로 태스크 전환 시 종료 -->
         <activity

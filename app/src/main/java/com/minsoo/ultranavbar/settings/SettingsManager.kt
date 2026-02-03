@@ -72,11 +72,23 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_PEN_A_PAINT_FUNCTION = "pen_a_paint_function"
         private const val KEY_PEN_B_PAINT_FUNCTION = "pen_b_paint_function"
 
-        // 터치 포인트 설정
+        // 터치 포인트 설정 (좌표 기반 - Shizuku 필요)
         private const val KEY_PEN_A_TOUCH_X = "pen_a_touch_x"
         private const val KEY_PEN_A_TOUCH_Y = "pen_a_touch_y"
         private const val KEY_PEN_B_TOUCH_X = "pen_b_touch_x"
         private const val KEY_PEN_B_TOUCH_Y = "pen_b_touch_y"
+
+        // 노드 선택 설정 (접근성 노드 기반 - Shizuku 불필요)
+        private const val KEY_PEN_A_NODE_ID = "pen_a_node_id"
+        private const val KEY_PEN_A_NODE_TEXT = "pen_a_node_text"
+        private const val KEY_PEN_A_NODE_CLASS = "pen_a_node_class"
+        private const val KEY_PEN_A_NODE_DESC = "pen_a_node_desc"
+        private const val KEY_PEN_A_NODE_PACKAGE = "pen_a_node_package"
+        private const val KEY_PEN_B_NODE_ID = "pen_b_node_id"
+        private const val KEY_PEN_B_NODE_TEXT = "pen_b_node_text"
+        private const val KEY_PEN_B_NODE_CLASS = "pen_b_node_class"
+        private const val KEY_PEN_B_NODE_DESC = "pen_b_node_desc"
+        private const val KEY_PEN_B_NODE_PACKAGE = "pen_b_node_package"
 
         @Volatile
         private var instance: SettingsManager? = null
@@ -296,6 +308,59 @@ class SettingsManager private constructor(context: Context) {
     var penBTouchY: Float
         get() = prefs.getFloat(KEY_PEN_B_TOUCH_Y, -1f)
         set(value) = prefs.edit().putFloat(KEY_PEN_B_TOUCH_Y, value).apply()
+
+    // 펜 버튼 A - 노드 선택 정보
+    var penANodeId: String?
+        get() = prefs.getString(KEY_PEN_A_NODE_ID, null)
+        set(value) = prefs.edit().putString(KEY_PEN_A_NODE_ID, value).apply()
+
+    var penANodeText: String?
+        get() = prefs.getString(KEY_PEN_A_NODE_TEXT, null)
+        set(value) = prefs.edit().putString(KEY_PEN_A_NODE_TEXT, value).apply()
+
+    var penANodeClass: String?
+        get() = prefs.getString(KEY_PEN_A_NODE_CLASS, null)
+        set(value) = prefs.edit().putString(KEY_PEN_A_NODE_CLASS, value).apply()
+
+    var penANodeDesc: String?
+        get() = prefs.getString(KEY_PEN_A_NODE_DESC, null)
+        set(value) = prefs.edit().putString(KEY_PEN_A_NODE_DESC, value).apply()
+
+    var penANodePackage: String?
+        get() = prefs.getString(KEY_PEN_A_NODE_PACKAGE, null)
+        set(value) = prefs.edit().putString(KEY_PEN_A_NODE_PACKAGE, value).apply()
+
+    // 펜 버튼 B - 노드 선택 정보
+    var penBNodeId: String?
+        get() = prefs.getString(KEY_PEN_B_NODE_ID, null)
+        set(value) = prefs.edit().putString(KEY_PEN_B_NODE_ID, value).apply()
+
+    var penBNodeText: String?
+        get() = prefs.getString(KEY_PEN_B_NODE_TEXT, null)
+        set(value) = prefs.edit().putString(KEY_PEN_B_NODE_TEXT, value).apply()
+
+    var penBNodeClass: String?
+        get() = prefs.getString(KEY_PEN_B_NODE_CLASS, null)
+        set(value) = prefs.edit().putString(KEY_PEN_B_NODE_CLASS, value).apply()
+
+    var penBNodeDesc: String?
+        get() = prefs.getString(KEY_PEN_B_NODE_DESC, null)
+        set(value) = prefs.edit().putString(KEY_PEN_B_NODE_DESC, value).apply()
+
+    var penBNodePackage: String?
+        get() = prefs.getString(KEY_PEN_B_NODE_PACKAGE, null)
+        set(value) = prefs.edit().putString(KEY_PEN_B_NODE_PACKAGE, value).apply()
+
+    /**
+     * 노드 정보가 설정되어 있는지 확인
+     */
+    fun hasNodeInfo(button: String): Boolean {
+        return if (button == "A") {
+            !penANodeId.isNullOrEmpty() || !penANodeText.isNullOrEmpty() || !penANodeDesc.isNullOrEmpty()
+        } else {
+            !penBNodeId.isNullOrEmpty() || !penBNodeText.isNullOrEmpty() || !penBNodeDesc.isNullOrEmpty()
+        }
+    }
 
     /**
      * 터치 포인트가 설정되어 있는지 확인

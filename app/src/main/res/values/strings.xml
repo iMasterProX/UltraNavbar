@@ -21,7 +21,7 @@
     <string name="navbar_enable_summary">Show custom navigation bar overlay</string>
 
     <string name="nav_buttons_swap_title">Swap Button Layout</string>
-    <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (Screenshot/Notifications) to left side (Android 12L style)</string>
+    <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (Notifications/Screenshot) to left side (Android 12L style)</string>
 
     <string name="disabled_apps_settings">Disabled apps</string>
     <string name="disabled_apps_summary">Select apps where the custom navigation bar will be completely disabled. In these apps, only the default navigation bar will be used.</string>
@@ -290,8 +290,8 @@
     <string name="pen_pointer_summary">Display pen position on screen</string>
     <string name="pen_ignore_gestures_system_title">Ignore System NavBar Gestures While Writing</string>
     <string name="pen_ignore_gestures_system_summary">Prevent accidental touches on the system navigation bar while using the pen</string>
-    <string name="pen_ignore_gestures_custom_title">Ignore Custom NavBar Gestures While Writing</string>
-    <string name="pen_ignore_gestures_custom_summary">Prevent accidental touches on the custom navigation bar (UltraNavbar) while using the pen</string>
+    <string name="pen_ignore_gestures_custom_title">Ignore LG UltraTab Extension NavBar Gestures While Writing</string>
+    <string name="pen_ignore_gestures_custom_summary">Prevent accidental touches on the navigation bar provided by LG UltraTab Extension while using the pen</string>
 
     <string name="pen_button_a_title">Pen Button A Settings</string>
     <string name="pen_button_b_title">Pen Button B Settings</string>
@@ -348,7 +348,7 @@
     <string name="pen_test_got_it">Got it</string>
 
     <!-- Auto Touch -->
-    <string name="pen_button_action_touch_point">Auto Touch</string>
+    <string name="pen_button_action_touch_point">Auto Touch (Coordinate)</string>
     <string name="touch_point_instruction">Tap anywhere to set the auto touch location for button %s.\n\nWhen you press pen button %s, a tap will be performed at the saved location.</string>
     <string name="touch_point_cancel">Cancel</string>
     <string name="touch_point_saved">Button %s auto touch saved at (%d, %d)</string>
@@ -359,7 +359,8 @@
 
     <!-- Auto Touch Guide -->
     <string name="touch_point_guide_title">Auto Touch Setup Guide</string>
-    <string name="touch_point_guide_message">How to set up auto touch:\n\n1. A floating button will appear\n2. Navigate to the app where you want to use auto touch\n3. Tap the floating button\n4. Tap the location you want to assign\n5. Tap \"Activate Auto Touch\" to confirm\n\nFor best results:\n• Install Shizuku app for fast and reliable operation\n• Without Shizuku, auto touch may be slow or inconsistent\n\nUsage tips:\n• Set Button A to Undo and Button B to Redo in drawing apps\n\nNote:\n• Auto touch only works when the pen is close to the screen</string>
+    <string name="touch_point_guide_message">How to set up auto touch:\n\n1. A floating button will appear\n2. Navigate to the app where you want to use auto touch\n3. Tap the floating button\n4. Tap the location you want to assign\n5. Tap \"Activate Auto Touch\" to confirm\n\nFor best results:\n• Install Shizuku app for fast and reliable operation\n• Without Shizuku, auto touch may be slow or inconsistent\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nNote:\n• Auto touch only works when the pen is close to the screen</string>
+    <string name="touch_point_guide_message_shizuku_ready">How to set up auto touch:\n\n1. A floating button will appear\n2. Navigate to the app where you want to use auto touch\n3. Tap the floating button\n4. Tap the location you want to assign\n5. Tap \"Activate Auto Touch\" to confirm\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nNote:\n• Auto touch only works when the pen is close to the screen</string>
     <string name="touch_point_guide_start">Start Setup</string>
     <string name="touch_point_confirm">Activate Auto Touch at This Location</string>
 
@@ -387,9 +388,37 @@
 
     <!-- Shizuku Setup Guide -->
     <string name="shizuku_setup_guide_title">Shizuku Setup Guide</string>
-    <string name="shizuku_setup_guide_message">To enable Shizuku for reliable auto touch:\n\n1. Install Shizuku app from Play Store or GitHub\n\n2. Connect device to PC via USB\n\n3. Enable USB debugging in Developer Options\n\n4. Run the following ADB command on PC:\n\n<b>adb shell chmod +x /data/local/tmp/shizuku_starter &amp;&amp; /data/local/tmp/shizuku_starter</b>\n\n5. Grant permission when prompted in app\n\nNote: This only needs to be done once. Shizuku will automatically start on device reboot.</string>
+    <string name="shizuku_setup_guide_message">To enable Shizuku for reliable auto touch:\n\n1. Install Shizuku app from Play Store or GitHub\n\n2. Connect device to PC via USB\n\n3. Enable USB debugging in Developer Options\n\n4. Run the following ADB command on PC:\n<b>adb shell chmod +x /data/local/tmp/shizuku_starter &amp;&amp; /data/local/tmp/shizuku_starter</b>\n\n5. Grant permission when prompted in app\n\n\nNote: This only needs to be done once. Shizuku will automatically start on device reboot.</string>
+    <string name="shizuku_permission_already_granted">Shizuku permission is already granted</string>
     <string name="shizuku_copy_command">Copy ADB Command</string>
     <string name="shizuku_grant_permission">Grant Permission</string>
     <string name="shizuku_command_copied">ADB command copied to clipboard</string>
     <string name="shizuku_not_running">Shizuku is not running. Please execute the ADB command first.</string>
+
+    <!-- Node Selection (No Shizuku required) -->
+    <string name="pen_button_action_node_click">Auto Touch (UI Element)</string>
+    <string name="node_selection_title">UI Element Selection</string>
+    <string name="node_selection_guide_title">UI Element Selection Guide</string>
+    <string name="node_selection_guide_message">This feature clicks a specific UI element when the pen button is pressed.\n\n• Works without Shizuku\n• Works regardless of screen orientation\n• Target app must be open for it to work\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nTap \'Start Setup\' to select a UI element.</string>
+    <string name="node_selection_guide_start">Start Setup</string>
+    <string name="node_selection_instruction">Open the target app and tap on the UI element you want to click.\n\nTap the floating button when ready.</string>
+    <string name="node_selection_overlay_hint">Tap the element you want to select</string>
+    <string name="node_selection_saved">UI element saved: %s</string>
+    <string name="node_selection_not_found">No clickable element found at this position</string>
+    <string name="node_selection_confirm">Select This Element</string>
+    <string name="node_selection_cancel">Cancel</string>
+    <string name="node_selection_info">Selected: %s</string>
+    <string name="node_selection_accessibility_required">Accessibility service must be enabled to use this feature.</string>
+    <string name="node_click_failed">Could not find the UI element. Make sure the target app is open.</string>
+    <string name="node_click_success">UI element clicked</string>
+
+    <!-- Pen Button Usage Tip -->
+    <string name="pen_button_usage_tip">💡 Tip: Press the pen button slowly and hold briefly rather than quick short presses for better recognition</string>
+
+    <!-- Auto Touch Method Selection -->
+    <string name="auto_touch_method_title">Select Auto Touch Method</string>
+    <string name="auto_touch_method_coordinate">Coordinate Touch (Shizuku Required)</string>
+    <string name="auto_touch_method_coordinate_desc">Fast and precise. Requires Shizuku permission.</string>
+    <string name="auto_touch_method_node">UI Element Click (No Shizuku)</string>
+    <string name="auto_touch_method_node_desc">Works without Shizuku. Clicks a specific UI element regardless of screen orientation.</string>
 </resources>
