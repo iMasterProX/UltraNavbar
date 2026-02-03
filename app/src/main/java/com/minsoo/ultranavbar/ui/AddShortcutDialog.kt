@@ -20,6 +20,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.model.KeyShortcut
+import com.minsoo.ultranavbar.model.ReservedShortcuts
 
 class AddShortcutDialog : DialogFragment() {
 
@@ -35,6 +36,7 @@ class AddShortcutDialog : DialogFragment() {
     private val pressedModifiers = mutableSetOf<Int>()  // 실시간 추적 (KEY_UP에서 제거)
     private val capturedModifiers = mutableSetOf<Int>()  // 메인키 입력 시점에 확정된 modifier
     private var mainKeyCode: Int? = null
+    private var isLongPress: Boolean = false  // 길게 누름 모드 여부
     private var selectedActionType: KeyShortcut.ActionType? = null
     private var selectedActionData: String? = null
 
@@ -48,6 +50,7 @@ class AddShortcutDialog : DialogFragment() {
     // Step 1
     private lateinit var step1View: View
     private lateinit var txtKeyCombination: TextView
+    private lateinit var radioPressMode: RadioGroup
 
     // Step 2
     private lateinit var step2View: View
@@ -104,6 +107,11 @@ class AddShortcutDialog : DialogFragment() {
     private fun setupStep1() {
         step1View = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_step1_key_combination, contentContainer, false)
         txtKeyCombination = step1View.findViewById(R.id.txtKeyCombination)
+        radioPressMode = step1View.findViewById(R.id.radioPressMode)
+
+        radioPressMode.setOnCheckedChangeListener { _, checkedId ->
+            isLongPress = (checkedId == R.id.radioLongPress)
+        }
     }
 
     private fun setupStep2() {
@@ -127,11 +135,17 @@ class AddShortcutDialog : DialogFragment() {
         layoutSettings = step3View.findViewById(R.id.layoutSettings)
 
         // Set suggested name
-        val suggestedName = buildString {
-            if (capturedModifiers.contains(KeyEvent.KEYCODE_CTRL_LEFT)) append("Ctrl + ")
-            if (capturedModifiers.contains(KeyEvent.KEYCODE_SHIFT_LEFT)) append("Shift + ")
-            if (capturedModifiers.contains(KeyEvent.KEYCODE_ALT_LEFT)) append("Alt + ")
-            mainKeyCode?.let { append(getKeyName(it)) }
+        val suggestedName = if (isLongPress) {
+            // 길게 누름: 단일 키만
+            mainKeyCode?.let { "${getKeyName(it)} (Long)" } ?: ""
+        } else {
+            // 일반 누름: modifier + 키 조합
+            buildString {
+                if (capturedModifiers.contains(KeyEvent.KEYCODE_CTRL_LEFT)) append("Ctrl + ")
+                if (capturedModifiers.contains(KeyEvent.KEYCODE_SHIFT_LEFT)) append("Shift + ")
+                if (capturedModifiers.contains(KeyEvent.KEYCODE_ALT_LEFT)) append("Alt + ")
+                mainKeyCode?.let { append(getKeyName(it)) }
+            }
         }
         editName.setText(suggestedName)
 
@@ -266,22 +280,52 @@ class AddShortcutDialog : DialogFragment() {
             return
         }
 
-        if (mainKeyCode == null || capturedModifiers.isEmpty() || selectedActionType == null || selectedActionData == null) {
+        if (mainKeyCode == null || selectedActionType == null || selectedActionData == null) {
             Toast.makeText(requireContext(), requireContext().getString(R.string.shortcut_invalid), Toast.LENGTH_SHORT).show()
             return
+        }
+
+        // 검증: 일반 누름은 modifier 필수, 길게 누름은 modifier 없어야 함
+        if (isLongPress) {
+            // 길게 누름: modifier가 있으면 안됨
+            if (capturedModifiers.isNotEmpty()) {
+                Toast.makeText(requireContext(), "길게 누름 단축키는 단일 키만 사용할 수 있습니다", Toast.LENGTH_SHORT).show()
+                return
+            }
+        } else {
+            // 일반 누름: modifier가 반드시 있어야 함
+            if (capturedModifiers.isEmpty()) {
+                Toast.makeText(requireContext(), requireContext().getString(R.string.shortcut_invalid), Toast.LENGTH_SHORT).show()
+                return
+            }
         }
 
         val shortcut = KeyShortcut(
             id = java.util.UUID.randomUUID().toString(),
             name = name,
-            modifiers = capturedModifiers.toSet(),
+            modifiers = if (isLongPress) emptySet() else capturedModifiers.toSet(),
             keyCode = mainKeyCode!!,
             actionType = selectedActionType!!,
-            actionData = selectedActionData!!
+            actionData = selectedActionData!!,
+            isLongPress = isLongPress,
+            longPressThreshold = 500L
         )
 
         listener?.onShortcutAdded(shortcut)
         dismiss()
+    }
+
+    private fun showReservedWarning(modifiers: Set<Int>, keyCode: Int) {
+        val description = ReservedShortcuts.getDescription(modifiers, keyCode) ?: "Unknown"
+        val message = "이 단축키는 시스템에서 예약된 단축키입니다.\n\n" +
+                "기능: $description\n\n" +
+                "다른 키 조합을 사용해주세요."
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("예약된 단축키")
+            .setMessage(message)
+            .setPositiveButton("확인", null)
+            .show()
     }
 
     private fun handleKeyEvent(keyCode: Int, event: KeyEvent): Boolean {
@@ -305,12 +349,29 @@ class AddShortcutDialog : DialogFragment() {
                         pressedModifiers.add(KeyEvent.KEYCODE_META_LEFT)
                     }
                     else -> {
-                        if (pressedModifiers.isNotEmpty()) {
-                            // 메인키 입력 시 현재 눌린 modifier를 확정 캡처
-                            capturedModifiers.clear()
-                            capturedModifiers.addAll(pressedModifiers)
+                        // 길게 누름 모드: 단일 키만 허용 (modifier 무시)
+                        if (isLongPress) {
                             mainKeyCode = keyCode
                             btnNext.isEnabled = true
+                        } else {
+                            // 일반 누름 모드: modifier + 키 조합 필요
+                            if (pressedModifiers.isNotEmpty()) {
+                                // 메인키 입력 시 현재 눌린 modifier를 확정 캡처
+                                capturedModifiers.clear()
+                                capturedModifiers.addAll(pressedModifiers)
+                                mainKeyCode = keyCode
+
+                                // 시스템 예약 단축키 확인
+                                if (ReservedShortcuts.isReserved(capturedModifiers, keyCode)) {
+                                    showReservedWarning(capturedModifiers, keyCode)
+                                    // 예약된 단축키이므로 입력 무효화
+                                    capturedModifiers.clear()
+                                    mainKeyCode = null
+                                    btnNext.isEnabled = false
+                                } else {
+                                    btnNext.isEnabled = true
+                                }
+                            }
                         }
                     }
                 }
@@ -343,15 +404,20 @@ class AddShortcutDialog : DialogFragment() {
     private fun updateKeyCombinationDisplay() {
         val parts = mutableListOf<String>()
 
-        // 메인키가 캡처되었으면 확정된 modifier를 보여주고, 아니면 실시간 추적 값 표시
-        val displayModifiers = if (mainKeyCode != null) capturedModifiers else pressedModifiers
+        // 길게 누름 모드: 단일 키만 표시
+        if (isLongPress) {
+            mainKeyCode?.let { parts.add("${getKeyName(it)} (Long)") }
+        } else {
+            // 일반 누름 모드: modifier + 키 조합 표시
+            val displayModifiers = if (mainKeyCode != null) capturedModifiers else pressedModifiers
 
-        if (displayModifiers.contains(KeyEvent.KEYCODE_CTRL_LEFT)) parts.add("Ctrl")
-        if (displayModifiers.contains(KeyEvent.KEYCODE_SHIFT_LEFT)) parts.add("Shift")
-        if (displayModifiers.contains(KeyEvent.KEYCODE_ALT_LEFT)) parts.add("Alt")
-        if (displayModifiers.contains(KeyEvent.KEYCODE_META_LEFT)) parts.add("Meta")
+            if (displayModifiers.contains(KeyEvent.KEYCODE_CTRL_LEFT)) parts.add("Ctrl")
+            if (displayModifiers.contains(KeyEvent.KEYCODE_SHIFT_LEFT)) parts.add("Shift")
+            if (displayModifiers.contains(KeyEvent.KEYCODE_ALT_LEFT)) parts.add("Alt")
+            if (displayModifiers.contains(KeyEvent.KEYCODE_META_LEFT)) parts.add("Meta")
 
-        mainKeyCode?.let { parts.add(getKeyName(it)) }
+            mainKeyCode?.let { parts.add(getKeyName(it)) }
+        }
 
         txtKeyCombination.text = if (parts.isEmpty()) "---" else parts.joinToString(" + ")
     }

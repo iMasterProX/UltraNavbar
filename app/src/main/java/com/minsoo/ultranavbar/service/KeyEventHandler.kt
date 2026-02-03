@@ -25,6 +25,19 @@ class KeyEventHandler(private val context: Context) {
     // 현재 눌려있는 수정자 키 추적
     private val pressedModifiers = mutableSetOf<Int>()
 
+    // 길게 누름 감지용 타임스탬프 맵 (keyCode -> pressTime)
+    private val keyPressTimestamps = mutableMapOf<Int, Long>()
+
+    // IME (키보드) 표시 상태
+    private var isImeVisible: Boolean = false
+
+    /**
+     * IME 표시 상태 업데이트
+     */
+    fun setImeVisible(visible: Boolean) {
+        isImeVisible = visible
+    }
+
     /**
      * 키 이벤트 처리
      * @return true: 이벤트 소비, false: 이벤트 전파
@@ -32,6 +45,12 @@ class KeyEventHandler(private val context: Context) {
     fun handleKeyEvent(event: KeyEvent): Boolean {
         // 키보드 단축키 기능이 비활성화되어 있으면 이벤트 전파
         if (!settingsManager.keyboardShortcutsEnabled) {
+            return false
+        }
+
+        // 텍스트 입력 중 (IME 표시 중)에는 단축키 비활성화
+        if (isImeVisible) {
+            Log.d(TAG, "IME is visible, shortcuts disabled")
             return false
         }
 
@@ -57,21 +76,41 @@ class KeyEventHandler(private val context: Context) {
             return false
         }
 
-        // 일반 키 눌림 시 단축키 확인
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            Log.d(TAG, "Searching for shortcut with modifiers=$pressedModifiers, keyCode=$keyCode")
-            val shortcut = shortcutManager.findShortcut(pressedModifiers.toSet(), keyCode)
-            if (shortcut != null) {
-                Log.d(TAG, "Shortcut matched: ${shortcut.name} (${shortcut.getDisplayString()})")
-                executeShortcut(shortcut)
-                return true  // 이벤트 소비
-            } else {
-                Log.d(TAG, "No shortcut found for modifiers=$pressedModifiers, keyCode=$keyCode")
-                // 등록된 모든 단축키 출력
-                val allShortcuts = shortcutManager.getAllShortcuts()
-                Log.d(TAG, "Registered shortcuts: ${allShortcuts.size}")
-                allShortcuts.forEach { s ->
-                    Log.d(TAG, "  - ${s.name}: modifiers=${s.modifiers}, keyCode=${s.keyCode}")
+        // 일반 키 처리
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                // 키 눌림 시간 기록
+                keyPressTimestamps[keyCode] = System.currentTimeMillis()
+
+                // 일반 누름 단축키 확인 (modifier + 키 조합)
+                if (pressedModifiers.isNotEmpty()) {
+                    Log.d(TAG, "Searching for normal press shortcut with modifiers=$pressedModifiers, keyCode=$keyCode")
+                    val normalShortcut = shortcutManager.findShortcut(pressedModifiers.toSet(), keyCode, isLongPress = false)
+                    if (normalShortcut != null) {
+                        Log.d(TAG, "Normal press shortcut matched: ${normalShortcut.name} (${normalShortcut.getDisplayString()})")
+                        executeShortcut(normalShortcut)
+                        return true  // 이벤트 소비
+                    }
+                }
+            }
+
+            KeyEvent.ACTION_UP -> {
+                // 키를 누르고 있었던 시간 계산
+                val pressTime = keyPressTimestamps.remove(keyCode)
+                if (pressTime != null) {
+                    val holdDuration = System.currentTimeMillis() - pressTime
+
+                    // 길게 누름 단축키 확인 (단일 키만, modifier 없이)
+                    if (pressedModifiers.isEmpty()) {
+                        Log.d(TAG, "Searching for long press shortcut with keyCode=$keyCode, holdDuration=$holdDuration")
+                        val longPressShortcut = shortcutManager.findShortcut(emptySet(), keyCode, isLongPress = true)
+
+                        if (longPressShortcut != null && holdDuration >= longPressShortcut.longPressThreshold) {
+                            Log.d(TAG, "Long press shortcut matched: ${longPressShortcut.name} (${longPressShortcut.getDisplayString()}), held for ${holdDuration}ms")
+                            executeShortcut(longPressShortcut)
+                            return true  // 이벤트 소비
+                        }
+                    }
                 }
             }
         }

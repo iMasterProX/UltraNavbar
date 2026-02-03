@@ -12,6 +12,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- 화면 방향 설정 권한 -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- Wacom 펜 설정 접근 권한 (ADB로 부여 필요) -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
@@ -41,6 +45,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:theme="@style/Theme.UltraNavbar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -87,6 +92,42 @@
             android:parentActivityName=".MainActivity"
             android:theme="@style/Theme.UltraNavbar" />
 
+        <activity
+            android:name=".ui.TouchPointSetupActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.PenButtonConfigActivity"
+            android:theme="@style/Theme.UltraNavbar.Transparent" />
+
+        <!-- 펜 버튼 브릿지 Activities (페인팅 기능용) -->
+        <!-- taskAffinity=""로 별도 태스크에서 실행, finishOnTaskLaunch로 태스크 전환 시 종료 -->
+        <activity
+            android:name=".ui.PenButtonABridgeActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:label="@string/pen_button_a_title">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ui.PenButtonBBridgeActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:label="@string/pen_button_b_title">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".service.NavBarAccessibilityService"
             android:label="@string/app_name"
@@ -117,5 +158,14 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Shizuku Provider -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 </manifest>

@@ -87,8 +87,11 @@
     <string name="app_not_found">App not found</string>
     <string name="default_action_set">Default action set.</string>
     <string name="tablet_only">Tablet-only app. This device is not supported.</string>
-    <string name="permission_granted">Permission granted. Auto background generation is available.</string>
+    <string name="permission_granted">Permission granted.</string>
+    <string name="permission_granted_storage">Storage permission granted. Auto background generation is available.</string>
+    <string name="permission_granted_bluetooth">Bluetooth permission granted.</string>
     <string name="permission_denied">Permission denied. Storage access is required.</string>
+    <string name="permission_denied_bluetooth">Bluetooth permission denied.</string>
     <string name="storage_permission_already_granted">Storage permission already granted. Auto background is available.</string>
     <string name="bluetooth_permission_already_granted">Bluetooth permission already granted.</string>
     <string name="accessibility_already_enabled">Accessibility service is already enabled.</string>
@@ -216,9 +219,18 @@
     <string name="settings_apps">Apps</string>
     <string name="settings_accessibility_menu">Accessibility</string>
 
+    <!-- Long Press Mode -->
+    <string name="press_mode_title">Press Mode</string>
+    <string name="normal_press">Normal Press (Modifier + Key)</string>
+    <string name="long_press">Long Press (Single key only)</string>
+    <string name="long_press_hint">Long press shortcuts use a single key without any modifiers. Normal press shortcuts require Ctrl/Shift/Alt + Key combinations.</string>
+
     <!-- Shortcut disabled apps -->
     <string name="shortcut_disabled_apps">Disabled Apps for Shortcuts</string>
     <string name="shortcut_disabled_apps_summary">Select apps where keyboard shortcuts will not work.</string>
+    <string name="view_system_shortcuts">View System Shortcuts</string>
+    <string name="system_shortcuts_title">System Reserved Shortcuts</string>
+    <string name="system_shortcuts_message">The following shortcuts are reserved by the system and cannot be used for custom shortcuts:</string>
 
     <!-- Widget -->
     <string name="widget_description">Show keyboard battery level on home screen</string>
@@ -246,6 +258,13 @@
     <!-- Keyboard Shortcuts Toggle -->
     <string name="keyboard_shortcuts_enable_title">Keyboard Shortcuts</string>
     <string name="keyboard_shortcuts_enable_summary">Enable custom keyboard shortcuts</string>
+
+    <!-- Orientation Lock -->
+    <string name="orientation_lock_title">Screen Orientation Lock</string>
+    <string name="orientation_lock_summary">Lock screen orientation when Bluetooth keyboard is connected</string>
+    <string name="orientation_lock_off">Off</string>
+    <string name="orientation_lock_landscape">Lock to Landscape</string>
+    <string name="orientation_lock_portrait">Lock to Portrait</string>
 
     <!-- LG KBA10 Not Found -->
     <string name="kba10_not_found_title">LG UltraTab Keyboard Not Found</string>
@@ -288,7 +307,7 @@
     <string name="pen_paint_function_brush_down">Brush Size - ([)</string>
     <string name="pen_paint_function_color_picker">Color Picker (I)</string>
 
-    <string name="pen_paint_compatible_apps">Compatible apps: ibis Paint X, MediBang Paint, Clip Studio Paint, Krita, Infinite Painter, and more</string>
+    <string name="pen_paint_compatible_apps">Shortcuts configured here may work in third-party painting apps, but compatibility is not guaranteed.</string>
 
     <string name="pen_reset_settings">Reset Pen Settings</string>
     <string name="pen_reset_settings_summary">Remove all pen settings and revert to default system settings</string>
@@ -305,21 +324,72 @@
     <string name="pen_settings_updated">Pen settings updated</string>
     <string name="pen_settings_synced">Settings synced from system</string>
 
-    <!-- System Conflict Warning -->
-    <string name="pen_settings_system_conflict_title">System Settings Conflict Warning</string>
-    <string name="pen_settings_system_conflict_message">This feature operates independently of the system\'s pen settings. To avoid conflicts, it is recommended to reset the system\'s pen button settings or sync with the current system settings.</string>
-    <string name="pen_settings_sync_from_system">Sync from System</string>
-    <string name="pen_settings_open_system_settings">Open System Settings</string>
+    <!-- Pen Custom Function Enable -->
+    <string name="pen_custom_function_enable_title">Enable Pen Button Customization</string>
+    <string name="pen_custom_function_enable_summary">Override system pen button settings with custom functions</string>
+    <string name="pen_custom_disable_confirm_title">Disable Pen Customization?</string>
+    <string name="pen_custom_disable_confirm_message">Disabling this feature will reset all pen button settings and restore the default system behavior.</string>
 
     <!-- Test Canvas -->
     <string name="pen_test_canvas_title">Test Pen Buttons</string>
     <string name="pen_test_canvas_summary">Verify that pen button functions work correctly with a drawing test</string>
+    <string name="pen_test_canvas_description">Verify that pen button functions work correctly with a drawing test</string>
     <string name="pen_test_instructions_title">How to Test</string>
     <string name="pen_test_instructions_message">1. Draw on the canvas using the pen\n2. Press the configured pen buttons (A/B)\n3. Verify that the functions work correctly (Undo, Redo, Eraser, etc.)</string>
     <string name="pen_test_undo">Undo</string>
     <string name="pen_test_redo">Redo</string>
     <string name="pen_test_eraser">Eraser</string>
+    <string name="pen_test_eraser_mode">Eraser Mode</string>
+    <string name="pen_test_brush_mode">Brush Mode</string>
     <string name="pen_test_clear">Clear</string>
-    <string name="pen_test_brush_size">Brush Size</string>
+    <string name="pen_test_brush_size">Brush Size: %d</string>
+    <string name="pen_test_brush_size_label">Brush:</string>
     <string name="pen_test_dismiss_instructions">Got it</string>
+    <string name="pen_test_got_it">Got it</string>
+
+    <!-- Auto Touch -->
+    <string name="pen_button_action_touch_point">Auto Touch</string>
+    <string name="touch_point_instruction">Tap anywhere to set the auto touch location for button %s.\n\nWhen you press pen button %s, a tap will be performed at the saved location.</string>
+    <string name="touch_point_cancel">Cancel</string>
+    <string name="touch_point_saved">Button %s auto touch saved at (%d, %d)</string>
+    <string name="touch_point_not_set">Auto touch not set</string>
+    <string name="touch_point_current">Current: (%d, %d)</string>
+    <string name="touch_point_setup">Set Auto Touch</string>
+    <string name="touch_point_accessibility_required">Accessibility service must be enabled to use auto touch feature.</string>
+
+    <!-- Auto Touch Guide -->
+    <string name="touch_point_guide_title">Auto Touch Setup Guide</string>
+    <string name="touch_point_guide_message">How to set up auto touch:\n\n1. A floating button will appear\n2. Navigate to the app where you want to use auto touch\n3. Tap the floating button\n4. Tap the location you want to assign\n5. Tap \"Activate Auto Touch\" to confirm\n\nFor best results:\n• Install Shizuku app for fast and reliable operation\n• Without Shizuku, auto touch may be slow or inconsistent\n\nUsage tips:\n• Set Button A to Undo and Button B to Redo in drawing apps\n\nNote:\n• Auto touch only works when the pen is close to the screen</string>
+    <string name="touch_point_guide_start">Start Setup</string>
+    <string name="touch_point_confirm">Activate Auto Touch at This Location</string>
+
+    <!-- System Pen Settings Warning -->
+    <string name="pen_settings_system_warning">LG UltraTab Extension pen settings are currently active. To avoid conflicts, please disable pen settings in the app first before using system settings.</string>
+
+    <!-- Auto Touch API Warning -->
+    <string name="auto_touch_api_warning">Note: This feature may respond slowly or inconsistently due to Android dispatchGesture API limitations. For reliable operation, Shizuku is required.</string>
+
+    <!-- Shizuku Auto Touch -->
+    <string name="shizuku_status_title">Shizuku Status</string>
+    <string name="shizuku_status_ready">Ready (Fast mode enabled)</string>
+    <string name="shizuku_status_no_permission">Permission required</string>
+    <string name="shizuku_status_not_installed">Not installed</string>
+    <string name="shizuku_request_permission">Request Shizuku Permission</string>
+    <string name="shizuku_install_guide">Install Shizuku for reliable auto touch</string>
+    <string name="shizuku_install_link">https://shizuku.rikka.app/</string>
+
+    <!-- Setup - Shizuku -->
+    <string name="setup_shizuku_title">Shizuku Permission (Optional)</string>
+    <string name="setup_shizuku_desc">Shizuku is required for reliable auto touch feature. Due to Android dispatchGesture API limitations, auto touch may be slow or inconsistent without Shizuku.\n\nThis is optional and can be skipped.</string>
+    <string name="setup_shizuku_setup_guide">Setup Guide</string>
+    <string name="permission_shizuku">Shizuku permission</string>
+    <string name="permission_shizuku_summary">Required for fast and reliable auto touch feature.</string>
+
+    <!-- Shizuku Setup Guide -->
+    <string name="shizuku_setup_guide_title">Shizuku Setup Guide</string>
+    <string name="shizuku_setup_guide_message">To enable Shizuku for reliable auto touch:\n\n1. Install Shizuku app from Play Store or GitHub\n\n2. Connect device to PC via USB\n\n3. Enable USB debugging in Developer Options\n\n4. Run the following ADB command on PC:\n\n<b>adb shell chmod +x /data/local/tmp/shizuku_starter &amp;&amp; /data/local/tmp/shizuku_starter</b>\n\n5. Grant permission when prompted in app\n\nNote: This only needs to be done once. Shizuku will automatically start on device reboot.</string>
+    <string name="shizuku_copy_command">Copy ADB Command</string>
+    <string name="shizuku_grant_permission">Grant Permission</string>
+    <string name="shizuku_command_copied">ADB command copied to clipboard</string>
+    <string name="shizuku_not_running">Shizuku is not running. Please execute the ADB command first.</string>
 </resources>

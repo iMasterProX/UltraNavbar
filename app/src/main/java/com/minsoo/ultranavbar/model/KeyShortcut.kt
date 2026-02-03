@@ -13,7 +13,9 @@ data class KeyShortcut(
     val modifiers: Set<Int>,  // Ctrl, Shift, Alt, Meta 등
     val keyCode: Int,  // 주요 키 코드
     val actionType: ActionType,  // 액션 타입
-    val actionData: String  // 액션 데이터 (패키지명, URI, 설정 액션 등)
+    val actionData: String,  // 액션 데이터 (패키지명, URI, 설정 액션 등)
+    val isLongPress: Boolean = false,  // 길게 누름 단축키 여부
+    val longPressThreshold: Long = 500L  // 길게 누름 인식 시간 (ms)
 ) {
     enum class ActionType {
         APP,  // 앱 실행
@@ -45,7 +47,9 @@ data class KeyShortcut(
                 modifiers = modifiers,
                 keyCode = json.getInt("keyCode"),
                 actionType = ActionType.valueOf(json.getString("actionType")),
-                actionData = json.getString("actionData")
+                actionData = json.getString("actionData"),
+                isLongPress = json.optBoolean("isLongPress", false),
+                longPressThreshold = json.optLong("longPressThreshold", 500L)
             )
         }
     }
@@ -61,6 +65,8 @@ data class KeyShortcut(
             put("keyCode", keyCode)
             put("actionType", actionType.name)
             put("actionData", actionData)
+            put("isLongPress", isLongPress)
+            put("longPressThreshold", longPressThreshold)
         }
     }
 
@@ -79,7 +85,8 @@ data class KeyShortcut(
         val keyName = getKeyName(keyCode)
         parts.add(keyName)
 
-        return parts.joinToString(" + ")
+        val shortcutStr = parts.joinToString(" + ")
+        return if (isLongPress) "$shortcutStr (Long)" else shortcutStr
     }
 
     /**
@@ -118,7 +125,7 @@ data class KeyShortcut(
     /**
      * 현재 눌린 키들이 이 단축키와 일치하는지 확인
      */
-    fun matches(pressedModifiers: Set<Int>, pressedKeyCode: Int): Boolean {
-        return modifiers == pressedModifiers && keyCode == pressedKeyCode
+    fun matches(pressedModifiers: Set<Int>, pressedKeyCode: Int, pressedIsLongPress: Boolean = false): Boolean {
+        return modifiers == pressedModifiers && keyCode == pressedKeyCode && isLongPress == pressedIsLongPress
     }
 }

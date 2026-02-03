@@ -64,6 +64,7 @@ class WacomPenSettingsFragment : Fragment() {
      */
     private fun setupUI(view: View) {
         val permissionBanner = view.findViewById<MaterialCardView>(R.id.cardPermissionBanner)
+        val switchPenCustomEnable = view.findViewById<SwitchMaterial>(R.id.switchPenCustomEnable)
         val switchPenPointer = view.findViewById<SwitchMaterial>(R.id.switchPenPointer)
         val switchIgnoreGestures = view.findViewById<SwitchMaterial>(R.id.switchPenIgnoreGestures)
         val switchIgnoreCustomNavbar = view.findViewById<SwitchMaterial>(R.id.switchPenIgnoreCustomNavbar)
@@ -71,14 +72,12 @@ class WacomPenSettingsFragment : Fragment() {
         val cardButtonB = view.findViewById<MaterialCardView>(R.id.cardPenButtonB)
         val cardReset = view.findViewById<MaterialCardView>(R.id.cardResetSettings)
         val btnShowGuide = view.findViewById<MaterialButton>(R.id.btnShowPermissionGuide)
-        val btnSyncFromSystem = view.findViewById<MaterialButton>(R.id.btnSyncFromSystem)
-        val btnOpenSystemSettings = view.findViewById<MaterialButton>(R.id.btnOpenSystemSettings)
-        val cardTestCanvas = view.findViewById<MaterialCardView>(R.id.cardTestCanvas)
 
         if (!hasPermission) {
             // 권한 없을 때: 배너 표시 및 UI 비활성화
             permissionBanner?.visibility = View.VISIBLE
 
+            switchPenCustomEnable?.isEnabled = false
             switchPenPointer?.isEnabled = false
             switchIgnoreGestures?.isEnabled = false
             switchIgnoreCustomNavbar?.isEnabled = false
@@ -96,18 +95,29 @@ class WacomPenSettingsFragment : Fragment() {
             // 권한 있을 때: 배너 숨기고 정상 동작
             permissionBanner?.visibility = View.GONE
 
-            // 시스템 설정 동기화 및 열기 버튼
-            btnSyncFromSystem?.setOnClickListener {
-                syncFromSystemSettings()
-            }
+            // 펜 커스텀 기능 활성화 토글
+            val isPenCustomEnabled = settingsManager.isPenCustomFunctionEnabled()
+            switchPenCustomEnable?.isChecked = isPenCustomEnabled
+            updatePenCustomUI(view, isPenCustomEnabled)
 
-            btnOpenSystemSettings?.setOnClickListener {
-                openSystemPenSettings()
-            }
-
-            // 테스트 캔버스 열기
-            cardTestCanvas?.setOnClickListener {
-                openTestCanvas()
+            switchPenCustomEnable?.setOnCheckedChangeListener { _, isChecked ->
+                if (!isChecked) {
+                    if (settingsManager.isPenCustomFunctionEnabled()) {
+                        // 기능이 설정되어 있으면 확인 다이얼로그
+                        showDisableConfirmDialog(switchPenCustomEnable, view)
+                    } else {
+                        // 기능이 설정되어 있지 않으면 바로 UI 비활성화
+                        updatePenCustomUI(view, false)
+                    }
+                } else {
+                    updatePenCustomUI(view, true)
+                    // 시스템 펜 설정과의 충돌 경고 표시
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.pen_settings_system_warning,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
 
             // 펜 포인터 토글
@@ -284,7 +294,14 @@ class WacomPenSettingsFragment : Fragment() {
                 }
                 getString(R.string.pen_button_action_app) + ": ${pkg ?: "None"}"
             }
-            "SHORTCUT" -> getString(R.string.pen_button_action_shortcut)
+            "SHORTCUT" -> {
+                val shortcutName = if (button == "A") {
+                    settingsManager.penAShortcutId  // 이름이 저장되어 있음
+                } else {
+                    settingsManager.penBShortcutId
+                }
+                getString(R.string.pen_button_action_shortcut) + ": ${shortcutName ?: "None"}"
+            }
             "PAINT_FUNCTION" -> {
                 val function = if (button == "A") {
                     settingsManager.penAPaintFunction
@@ -292,6 +309,11 @@ class WacomPenSettingsFragment : Fragment() {
                     settingsManager.penBPaintFunction
                 }
                 getString(R.string.pen_button_action_paint) + ": ${function ?: "None"}"
+            }
+            "TOUCH_POINT" -> {
+                val x = if (button == "A") settingsManager.penATouchX else settingsManager.penBTouchX
+                val y = if (button == "A") settingsManager.penATouchY else settingsManager.penBTouchY
+                getString(R.string.pen_button_action_touch_point) + ": (${x.toInt()}, ${y.toInt()})"
             }
             else -> getString(R.string.pen_button_action_none)
         }
@@ -361,6 +383,10 @@ class WacomPenSettingsFragment : Fragment() {
             settingsManager.penBShortcutId = null
             settingsManager.penAPaintFunction = null
             settingsManager.penBPaintFunction = null
+            settingsManager.penATouchX = -1f
+            settingsManager.penATouchY = -1f
+            settingsManager.penBTouchX = -1f
+            settingsManager.penBTouchY = -1f
 
             Toast.makeText(
                 requireContext(),
@@ -385,72 +411,104 @@ class WacomPenSettingsFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         if (hasPermission) {
-            view?.let { updateButtonStatus(it) }
+            view?.let {
+                updateButtonStatus(it)
+                // 토글 상태 업데이트
+                val isPenCustomEnabled = settingsManager.isPenCustomFunctionEnabled()
+                it.findViewById<SwitchMaterial>(R.id.switchPenCustomEnable)?.isChecked = isPenCustomEnabled
+                updatePenCustomUI(it, isPenCustomEnabled)
+
+                // 시스템 설정과 동기화 (기존 설정이 시스템에 적용되지 않은 경우 대비)
+                if (isPenCustomEnabled) {
+                    syncPenSettingsToSystem()
+                }
+            }
         }
     }
 
     /**
-     * 시스템 펜 설정에서 동기화
+     * 앱 설정을 시스템 Settings.Global에 동기화
+     * 기존 설정이 있지만 시스템에 적용되지 않은 경우를 위한 처리
      */
-    private fun syncFromSystemSettings() {
+    private fun syncPenSettingsToSystem() {
         try {
-            // 시스템 설정 읽기
-            val penPointer = Settings.Global.getInt(
-                requireContext().contentResolver,
-                "pen_pointer",
-                0
-            )
-            val ignoreGestures = Settings.Global.getInt(
-                requireContext().contentResolver,
-                "ignore_navigation_bar_gestures",
-                0
-            )
-
-            // SettingsManager에 반영
-            settingsManager.penPointerEnabled = (penPointer == 1)
-            settingsManager.penIgnoreNavGestures = (ignoreGestures == 1)
-
-            // UI 업데이트
-            view?.let {
-                it.findViewById<SwitchMaterial>(R.id.switchPenPointer)?.isChecked = (penPointer == 1)
-                it.findViewById<SwitchMaterial>(R.id.switchPenIgnoreGestures)?.isChecked = (ignoreGestures == 1)
+            // Button A 동기화 (PAINT_FUNCTION, TOUCH_POINT, SHORTCUT)
+            val actionA = settingsManager.penAActionType
+            if (actionA == "PAINT_FUNCTION" || actionA == "TOUCH_POINT" || actionA == "SHORTCUT") {
+                val componentName = "com.minsoo.ultranavbar/com.minsoo.ultranavbar.ui.PenButtonABridgeActivity"
+                val currentA = Settings.Global.getString(requireContext().contentResolver, "a_button_component_name")
+                if (currentA != componentName) {
+                    Settings.Global.putString(requireContext().contentResolver, "a_button_component_name", componentName)
+                    Settings.Global.putInt(requireContext().contentResolver, "a_button_setting", 1)
+                    android.util.Log.d("WacomPenSettings", "Synced button A to system: $componentName")
+                }
             }
 
-            Toast.makeText(
-                requireContext(),
-                R.string.pen_settings_synced,
-                Toast.LENGTH_SHORT
-            ).show()
+            // Button B 동기화 (PAINT_FUNCTION, TOUCH_POINT, SHORTCUT)
+            val actionB = settingsManager.penBActionType
+            if (actionB == "PAINT_FUNCTION" || actionB == "TOUCH_POINT" || actionB == "SHORTCUT") {
+                val componentName = "com.minsoo.ultranavbar/com.minsoo.ultranavbar.ui.PenButtonBBridgeActivity"
+                val currentB = Settings.Global.getString(requireContext().contentResolver, "b_button_component_name")
+                if (currentB != componentName) {
+                    Settings.Global.putString(requireContext().contentResolver, "b_button_component_name", componentName)
+                    Settings.Global.putInt(requireContext().contentResolver, "b_button_setting", 1)
+                    android.util.Log.d("WacomPenSettings", "Synced button B to system: $componentName")
+                }
+            }
         } catch (e: Exception) {
-            Toast.makeText(
-                requireContext(),
-                "Failed to sync settings: ${e.message}",
-                Toast.LENGTH_SHORT
-            ).show()
+            android.util.Log.e("WacomPenSettings", "Failed to sync settings to system", e)
         }
     }
 
     /**
-     * 시스템 펜 설정 열기
+     * 펜 커스텀 기능 UI 활성화/비활성화
      */
-    private fun openSystemPenSettings() {
-        try {
-            val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
-            startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(
-                requireContext(),
-                "Failed to open system settings",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
+    private fun updatePenCustomUI(view: View, enabled: Boolean) {
+        // 카드 뷰들
+        val cardButtonA = view.findViewById<MaterialCardView>(R.id.cardPenButtonA)
+        val cardButtonB = view.findViewById<MaterialCardView>(R.id.cardPenButtonB)
+        val cardReset = view.findViewById<MaterialCardView>(R.id.cardResetSettings)
+
+        // 스위치들
+        val switchPenPointer = view.findViewById<SwitchMaterial>(R.id.switchPenPointer)
+        val switchIgnoreGestures = view.findViewById<SwitchMaterial>(R.id.switchPenIgnoreGestures)
+        val switchIgnoreCustomNavbar = view.findViewById<SwitchMaterial>(R.id.switchPenIgnoreCustomNavbar)
+
+        // 카드 활성화/비활성화
+        cardButtonA?.isEnabled = enabled
+        cardButtonA?.alpha = if (enabled) 1f else 0.5f
+        cardButtonB?.isEnabled = enabled
+        cardButtonB?.alpha = if (enabled) 1f else 0.5f
+        cardReset?.isEnabled = enabled
+        cardReset?.alpha = if (enabled) 1f else 0.5f
+
+        // 스위치 활성화/비활성화
+        switchPenPointer?.isEnabled = enabled
+        switchIgnoreGestures?.isEnabled = enabled
+        switchIgnoreCustomNavbar?.isEnabled = enabled
     }
 
     /**
-     * 테스트 캔버스 열기
+     * 펜 커스텀 기능 비활성화 확인 다이얼로그
      */
-    private fun openTestCanvas() {
-        val intent = Intent(requireContext(), PenTestCanvasActivity::class.java)
-        startActivity(intent)
+    private fun showDisableConfirmDialog(switchView: SwitchMaterial, rootView: View) {
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.pen_custom_disable_confirm_title)
+            .setMessage(R.string.pen_custom_disable_confirm_message)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                // 설정 초기화 및 UI 업데이트
+                resetPenSettings()
+                updatePenCustomUI(rootView, false)
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                // 취소 시 토글 복원
+                switchView.isChecked = true
+            }
+            .setOnCancelListener {
+                // 다이얼로그 닫기 시 토글 복원
+                switchView.isChecked = true
+            }
+            .show()
     }
+
 }

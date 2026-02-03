@@ -2,6 +2,8 @@ package com.minsoo.ultranavbar.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -34,6 +36,11 @@ class NavBarAccessibilityService : AccessibilityService() {
         private const val TAG = "NavBarAccessibility"
         private const val HOME_ENTRY_STABILIZE_MS = 400L  // 홈 진입 후 안정화 시간
         private const val HOME_EXIT_STABILIZE_MS = 500L   // 홈 이탈 후 안정화 시간 (windows 소스의 잘못된 재진입 방지)
+        private const val ORIENTATION_CHANGE_STABILIZE_MS = 500L  // 화면 회전 후 안정화 시간
+
+        // 방향 고정 브로드캐스트 액션
+        const val ACTION_APPLY_ORIENTATION_LOCK = "com.minsoo.ultranavbar.ACTION_APPLY_ORIENTATION_LOCK"
+        const val ACTION_REMOVE_ORIENTATION_LOCK = "com.minsoo.ultranavbar.ACTION_REMOVE_ORIENTATION_LOCK"
 
         @Volatile
         var instance: NavBarAccessibilityService? = null
@@ -44,6 +51,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     // === 컴포넌트 ===
     private var overlay: NavBarOverlay? = null
+    private var orientationLockView: android.view.View? = null  // 화면 방향 강제용 오버레이
     private lateinit var settings: SettingsManager
     private lateinit var windowAnalyzer: WindowAnalyzer
     private lateinit var keyEventHandler: KeyEventHandler
@@ -66,6 +74,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var lastNonLauncherEventAt: Long = 0
     private var lastHomeEntryAt: Long = 0  // 홈 진입 안정화용
     private var lastHomeExitAt: Long = 0   // 홈 이탈 안정화용
+    private var lastOrientationChangeAt: Long = 0  // 화면 회전 안정화용
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
@@ -89,6 +98,14 @@ class NavBarAccessibilityService : AccessibilityService() {
                 Constants.Action.UPDATE_BUTTON_COLORS -> {
                     Log.d(TAG, "Updating background/button colors")
                     overlay?.refreshBackgroundStyle()
+                }
+                ACTION_APPLY_ORIENTATION_LOCK -> {
+                    Log.d(TAG, "Applying orientation lock from broadcast")
+                    applyOrientationLock()
+                }
+                ACTION_REMOVE_ORIENTATION_LOCK -> {
+                    Log.d(TAG, "Removing orientation lock from broadcast")
+                    removeOrientationLock()
                 }
             }
         }
@@ -115,16 +132,49 @@ class NavBarAccessibilityService : AccessibilityService() {
                     Log.d(TAG, "User present, showing with fade")
                     // 안전을 위해 여기서도 플래그 설정
                     overlay?.prepareForUnlockFade()
-                    
+
                     // 기존 예약 취소
                     unlockFadeRunnable?.let { handler.removeCallbacks(it) }
-                    
+
                     // 새 작업 예약
                     unlockFadeRunnable = Runnable {
                         unlockFadeRunnable = null
                         overlay?.startUnlockFade()
                     }
                     handler.postDelayed(unlockFadeRunnable!!, Constants.Timing.UNLOCK_FADE_DELAY_MS)
+                }
+            }
+        }
+    }
+
+    private val bluetoothReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                    val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE, android.bluetooth.BluetoothDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE)
+                    }
+                    Log.d(TAG, "Bluetooth device connected: ${device?.name}")
+                    if (device != null && isBluetoothKeyboard(device)) {
+                        Log.d(TAG, "Keyboard connected, applying orientation lock")
+                        applyOrientationLock()
+                    }
+                }
+                android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                    val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE, android.bluetooth.BluetoothDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE)
+                    }
+                    Log.d(TAG, "Bluetooth device disconnected: ${device?.name}")
+                    if (device != null && isBluetoothKeyboard(device)) {
+                        Log.d(TAG, "Keyboard disconnected, removing orientation lock")
+                        removeOrientationLock()
+                    }
                 }
             }
         }
@@ -157,6 +207,9 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         // 배터리 모니터링 시작
         startBatteryMonitoring()
+
+        // 현재 연결된 키보드 확인 및 방향 고정 적용
+        checkAndApplyOrientationLock()
 
         Log.i(TAG, "Service fully initialized")
     }
@@ -205,9 +258,11 @@ class NavBarAccessibilityService : AccessibilityService() {
             addAction(Constants.Action.SETTINGS_CHANGED)
             addAction(Constants.Action.RELOAD_BACKGROUND)
             addAction(Constants.Action.UPDATE_BUTTON_COLORS)
+            addAction(ACTION_APPLY_ORIENTATION_LOCK)
+            addAction(ACTION_REMOVE_ORIENTATION_LOCK)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(settingsReceiver, settingsFilter, Context.RECEIVER_NOT_EXPORTED)
+            registerReceiver(settingsReceiver, settingsFilter, Context.RECEIVER_EXPORTED)
         } else {
             @Suppress("DEPRECATION")
             registerReceiver(settingsReceiver, settingsFilter)
@@ -219,6 +274,12 @@ class NavBarAccessibilityService : AccessibilityService() {
             addAction(Intent.ACTION_USER_PRESENT)
         }
         registerReceiver(screenStateReceiver, screenStateFilter)
+
+        val bluetoothFilter = IntentFilter().apply {
+            addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED)
+        }
+        registerReceiver(bluetoothReceiver, bluetoothFilter)
     }
 
     override fun onDestroy() {
@@ -228,6 +289,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         cancelPendingTasks()
         unregisterReceivers()
         destroyOverlay()
+        removeOrientationLockOverlay()
         stopBatteryMonitoring()
 
         super.onDestroy()
@@ -247,6 +309,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         try {
             unregisterReceiver(settingsReceiver)
             unregisterReceiver(screenStateReceiver)
+            unregisterReceiver(bluetoothReceiver)
         } catch (e: Exception) {
             Log.w(TAG, "Receiver not registered", e)
         }
@@ -265,7 +328,20 @@ class NavBarAccessibilityService : AccessibilityService() {
         overlay?.updateDarkMode()
 
         if (orientationChanged) {
+            // 화면 회전 시간 기록 (안정화 기간 동안 auto-hide 차단)
+            lastOrientationChangeAt = SystemClock.elapsedRealtime()
+
             windowAnalyzer.calculateNavBarHeight()
+
+            // 화면 회전 후 오버레이를 강제로 표시 (숨김 방지)
+            overlay?.show(fade = false)
+
+            // 화면 회전 후 일정 시간 후에 상태 재확인
+            handler.postDelayed({
+                Log.d(TAG, "Re-checking overlay visibility after orientation change")
+                updateOverlayVisibility(forceFade = false)
+            }, 200)
+
             scheduleStateCheck()
         }
     }
@@ -366,6 +442,15 @@ class NavBarAccessibilityService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
         val className = event.className?.toString() ?: ""
         val isRecents = windowAnalyzer.isRecentsClassName(className)
+
+        // 디버깅: 모든 윈도우 상태 변경 로그
+        Log.d(TAG, "WindowStateChanged: pkg=$packageName, class=$className")
+
+        // 시스템 펜 설정 화면 차단 및 리다이렉트
+        if (shouldBlockSystemPenSettings(packageName, className)) {
+            redirectToAppPenSettings()
+            return
+        }
 
         updateRecentsState(isRecents, "event")
 
@@ -580,6 +665,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         Log.d(TAG, "IME visibility: $isImeVisible")
         handler.post {
             overlay?.setImeVisible(isImeVisible)
+            keyEventHandler.setImeVisible(isImeVisible)
         }
     }
 
@@ -718,6 +804,14 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (currentPackage.isNotEmpty() && settings.isAppDisabled(currentPackage)) {
             Log.d(TAG, "App disabled: $currentPackage - hiding overlay completely")
             overlay?.hide(animate = false, showHotspot = false)
+            return
+        }
+
+        // 1.5. 화면 회전 안정화 기간 동안 숨김 방지
+        val orientationChangeElapsed = SystemClock.elapsedRealtime() - lastOrientationChangeAt
+        if (orientationChangeElapsed < ORIENTATION_CHANGE_STABILIZE_MS) {
+            Log.d(TAG, "Orientation change stabilizing (${orientationChangeElapsed}ms) - keeping overlay visible")
+            overlay?.show(fade = false)
             return
         }
 
@@ -902,19 +996,83 @@ class NavBarAccessibilityService : AccessibilityService() {
         Log.w(TAG, "Service interrupted")
     }
 
+    /**
+     * 시스템 펜 설정 화면을 차단해야 하는지 확인
+     */
+    private fun shouldBlockSystemPenSettings(packageName: String, className: String): Boolean {
+        // 펜 커스텀 기능이 활성화되어 있지 않으면 차단하지 않음
+        if (!settings.isPenCustomFunctionEnabled()) {
+            return false
+        }
+
+        // 설정 앱인지 먼저 확인 (다른 앱은 절대 차단하지 않음)
+        val isSettingsApp = packageName == "com.android.settings" ||
+                packageName == "com.lge.settings" ||
+                packageName.contains("settings", ignoreCase = true)
+
+        if (!isSettingsApp) {
+            return false
+        }
+
+        // 펜 관련 Activity 감지 (LG, Samsung, 일반 Android)
+        val classNameLower = className.lowercase()
+        val isPenSettingsActivity = classNameLower.contains("extension") ||
+                classNameLower.contains("pen") ||
+                classNameLower.contains("stylus") ||
+                classNameLower.contains("wacom") ||
+                classNameLower.contains("spen") ||
+                classNameLower.contains("buttonconfig")
+
+        if (isPenSettingsActivity) {
+            Log.d(TAG, "Blocking system pen settings: pkg=$packageName, class=$className")
+            return true
+        }
+
+        return false
+    }
+
+    /**
+     * 이 앱의 펜 설정 화면으로 리다이렉트
+     */
+    private fun redirectToAppPenSettings() {
+        try {
+            // 먼저 시스템 설정 화면을 닫음
+            performGlobalAction(GLOBAL_ACTION_BACK)
+
+            // 이 앱의 메인 화면 열기 (펜 설정 탭)
+            handler.postDelayed({
+                val intent = Intent(this, com.minsoo.ultranavbar.MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    putExtra("navigate_to", "pen_settings")
+                }
+                startActivity(intent)
+                Log.d(TAG, "Redirected to app pen settings")
+            }, 100)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to redirect to app pen settings", e)
+        }
+    }
+
     override fun onKeyEvent(event: KeyEvent?): Boolean {
         if (event == null) {
             Log.d(TAG, "onKeyEvent: event is null")
             return false
         }
 
+        // 모든 키 이벤트 로그 (펜 버튼 디버깅용)
+        val action = if (event.action == KeyEvent.ACTION_DOWN) "DOWN" else "UP"
+        val deviceName = event.device?.name ?: "unknown"
+        Log.d(TAG, "onKeyEvent: keyCode=${event.keyCode}, action=$action, device=$deviceName, source=${event.source}")
+
         // 펜 버튼 이벤트 처리 (최우선)
         if (com.minsoo.ultranavbar.util.PenButtonHandler.isPenButtonEvent(event)) {
+            Log.d(TAG, "onKeyEvent: Detected pen button event, handling...")
             val handled = com.minsoo.ultranavbar.util.PenButtonHandler.handlePenButtonEvent(this, event)
             if (handled) {
                 Log.d(TAG, "onKeyEvent: pen button event consumed")
                 return true
             }
+            Log.d(TAG, "onKeyEvent: pen button event not consumed, passing through")
         }
 
         // 현재 앱에서 키보드 단축키가 비활성화되어 있으면 이벤트 전파
@@ -923,11 +1081,211 @@ class NavBarAccessibilityService : AccessibilityService() {
             return false
         }
 
-        val action = if (event.action == KeyEvent.ACTION_DOWN) "DOWN" else "UP"
-        Log.d(TAG, "onKeyEvent: keyCode=${event.keyCode}, action=$action")
-
         val result = keyEventHandler.handleKeyEvent(event)
         Log.d(TAG, "onKeyEvent: result=$result (consumed=$result)")
         return result
+    }
+
+    // ===== 화면 방향 고정 기능 =====
+
+    /**
+     * 블루투스 장치가 키보드인지 확인
+     */
+    private fun isBluetoothKeyboard(device: android.bluetooth.BluetoothDevice): Boolean {
+        return try {
+            val deviceClass = device.bluetoothClass ?: return false
+            val majorClass = deviceClass.majorDeviceClass
+            majorClass == android.bluetooth.BluetoothClass.Device.Major.PERIPHERAL ||
+            majorClass == android.bluetooth.BluetoothClass.Device.Major.COMPUTER
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check if device is keyboard", e)
+            false
+        }
+    }
+
+    /**
+     * 화면 방향 고정 적용 (오버레이 윈도우의 screenOrientation 사용)
+     * 이 방식은 앱 자체의 orientation 설정도 무시하고 강제로 방향 고정
+     */
+    private fun applyOrientationLock() {
+        val lockMode = settings.keyboardOrientationLock
+        if (lockMode == 0) {
+            Log.d(TAG, "Orientation lock is disabled in settings")
+            return
+        }
+
+        // 기존 오버레이 제거
+        removeOrientationLockOverlay()
+
+        try {
+            val wm = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+
+            // 투명 오버레이 생성
+            val view = android.view.View(this).apply {
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            }
+
+            // 화면 방향 설정
+            val screenOrientation = when (lockMode) {
+                1 -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                2 -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                else -> return
+            }
+
+            val params = android.view.WindowManager.LayoutParams().apply {
+                type = android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+                format = android.graphics.PixelFormat.TRANSLUCENT
+                flags = android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                width = 1  // 최소 크기 (보이지 않음)
+                height = 1
+                gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                x = 0
+                y = 0
+                this.screenOrientation = screenOrientation
+            }
+
+            wm.addView(view, params)
+            orientationLockView = view
+
+            Log.d(TAG, "Applied orientation lock overlay: ${if (lockMode == 1) "landscape" else "portrait"}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to apply orientation lock overlay", e)
+        }
+    }
+
+    /**
+     * 화면 방향 고정 오버레이 제거
+     */
+    private fun removeOrientationLockOverlay() {
+        orientationLockView?.let { view ->
+            try {
+                val wm = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+                wm.removeView(view)
+                Log.d(TAG, "Removed orientation lock overlay")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to remove orientation lock overlay", e)
+            }
+            orientationLockView = null
+        }
+    }
+
+    /**
+     * 화면 방향 고정 해제
+     */
+    private fun removeOrientationLock() {
+        removeOrientationLockOverlay()
+        Log.d(TAG, "Orientation lock removed")
+    }
+
+    /**
+     * 현재 연결된 키보드 확인 및 방향 고정 적용
+     */
+    private fun checkAndApplyOrientationLock() {
+        val lockMode = settings.keyboardOrientationLock
+        if (lockMode == 0) {
+            Log.d(TAG, "Orientation lock is disabled")
+            return
+        }
+
+        try {
+            val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+            val bluetoothAdapter = bluetoothManager?.adapter
+
+            if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+                Log.d(TAG, "Bluetooth not available or disabled")
+                return
+            }
+
+            // 연결된 블루투스 기기 확인 (권한 체크 필요)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    Log.w(TAG, "BLUETOOTH_CONNECT permission not granted")
+                    return
+                }
+            }
+
+            val connectedDevices = bluetoothAdapter.bondedDevices
+            val hasKeyboard = connectedDevices?.any { device ->
+                isBluetoothKeyboard(device)
+            } ?: false
+
+            if (hasKeyboard) {
+                Log.d(TAG, "Keyboard already connected on service start, applying orientation lock")
+                applyOrientationLock()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check for connected keyboards", e)
+        }
+    }
+
+    // ===== 자동 터치 기능 =====
+
+    /**
+     * 지정된 좌표에 터치(탭) 제스처 수행
+     *
+     * 개선된 제스처 방식:
+     * 1. startTime에 딜레이를 주어 펜 버튼 이벤트 완료 후 실행
+     * 2. 약간의 움직임을 추가하여 정지 탭 무시 방지
+     * 3. 적절한 터치 지속 시간 사용
+     *
+     * @param x X 좌표
+     * @param y Y 좌표
+     * @param callback 결과 콜백 (선택)
+     * @param startDelay 제스처 시작 전 딜레이 (ms)
+     * @return 제스처 디스패치 성공 여부
+     */
+    fun performTap(
+        x: Float,
+        y: Float,
+        callback: GestureResultCallback? = null,
+        startDelay: Long = 0L
+    ): Boolean {
+        if (x < 0 || y < 0) {
+            Log.w(TAG, "performTap: Invalid coordinates ($x, $y)")
+            return false
+        }
+
+        return try {
+            // 약간의 움직임이 있는 탭 (일부 앱에서 정지 탭을 무시할 수 있음)
+            val path = Path().apply {
+                moveTo(x, y)
+                lineTo(x + 1f, y)
+                lineTo(x, y)
+            }
+
+            // 터치 지속 시간: 100ms
+            val strokeDescription = GestureDescription.StrokeDescription(
+                path,
+                startDelay,
+                100L
+            )
+
+            val gestureBuilder = GestureDescription.Builder()
+                .addStroke(strokeDescription)
+                .build()
+
+            val result = dispatchGesture(
+                gestureBuilder,
+                callback ?: object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        Log.d(TAG, "performTap: Gesture completed at ($x, $y)")
+                    }
+
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        Log.w(TAG, "performTap: Gesture cancelled at ($x, $y)")
+                    }
+                },
+                handler
+            )
+
+            Log.d(TAG, "performTap: dispatchGesture result=$result at ($x, $y)")
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "performTap: Failed to dispatch gesture", e)
+            false
+        }
     }
 }

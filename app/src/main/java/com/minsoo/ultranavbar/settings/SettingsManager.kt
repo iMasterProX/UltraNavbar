@@ -48,6 +48,9 @@ class SettingsManager private constructor(context: Context) {
 
         // Keyboard shortcuts
         private const val KEY_KEYBOARD_SHORTCUTS_ENABLED = "keyboard_shortcuts_enabled"
+
+        // Keyboard orientation lock
+        private const val KEY_KEYBOARD_ORIENTATION_LOCK = "keyboard_orientation_lock"
         private const val KEY_THIRD_PARTY_KEYBOARD_ACCEPTED = "third_party_keyboard_accepted"
 
         // Navigation button layout
@@ -68,6 +71,12 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_PEN_B_SHORTCUT_ID = "pen_b_shortcut_id"
         private const val KEY_PEN_A_PAINT_FUNCTION = "pen_a_paint_function"
         private const val KEY_PEN_B_PAINT_FUNCTION = "pen_b_paint_function"
+
+        // 터치 포인트 설정
+        private const val KEY_PEN_A_TOUCH_X = "pen_a_touch_x"
+        private const val KEY_PEN_A_TOUCH_Y = "pen_a_touch_y"
+        private const val KEY_PEN_B_TOUCH_X = "pen_b_touch_x"
+        private const val KEY_PEN_B_TOUCH_Y = "pen_b_touch_y"
 
         @Volatile
         private var instance: SettingsManager? = null
@@ -185,6 +194,11 @@ class SettingsManager private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_KEYBOARD_SHORTCUTS_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_KEYBOARD_SHORTCUTS_ENABLED, value).apply()
 
+    // 키보드 연결 시 화면 방향 고정 (0=끄기, 1=가로, 2=세로)
+    var keyboardOrientationLock: Int
+        get() = prefs.getInt(KEY_KEYBOARD_ORIENTATION_LOCK, 0)
+        set(value) = prefs.edit().putInt(KEY_KEYBOARD_ORIENTATION_LOCK, value).apply()
+
     // 서드파티 키보드 사용 동의 여부
     var thirdPartyKeyboardAccepted: Boolean
         get() = prefs.getBoolean(KEY_THIRD_PARTY_KEYBOARD_ACCEPTED, false)
@@ -265,6 +279,35 @@ class SettingsManager private constructor(context: Context) {
         get() = prefs.getString(KEY_PEN_B_PAINT_FUNCTION, null)
         set(value) = prefs.edit().putString(KEY_PEN_B_PAINT_FUNCTION, value).apply()
 
+    // 펜 버튼 A - 터치 포인트 좌표
+    var penATouchX: Float
+        get() = prefs.getFloat(KEY_PEN_A_TOUCH_X, -1f)
+        set(value) = prefs.edit().putFloat(KEY_PEN_A_TOUCH_X, value).apply()
+
+    var penATouchY: Float
+        get() = prefs.getFloat(KEY_PEN_A_TOUCH_Y, -1f)
+        set(value) = prefs.edit().putFloat(KEY_PEN_A_TOUCH_Y, value).apply()
+
+    // 펜 버튼 B - 터치 포인트 좌표
+    var penBTouchX: Float
+        get() = prefs.getFloat(KEY_PEN_B_TOUCH_X, -1f)
+        set(value) = prefs.edit().putFloat(KEY_PEN_B_TOUCH_X, value).apply()
+
+    var penBTouchY: Float
+        get() = prefs.getFloat(KEY_PEN_B_TOUCH_Y, -1f)
+        set(value) = prefs.edit().putFloat(KEY_PEN_B_TOUCH_Y, value).apply()
+
+    /**
+     * 터치 포인트가 설정되어 있는지 확인
+     */
+    fun hasTouchPoint(button: String): Boolean {
+        return if (button == "A") {
+            penATouchX >= 0 && penATouchY >= 0
+        } else {
+            penBTouchX >= 0 && penBTouchY >= 0
+        }
+    }
+
     /**
      * 해당 패키지에서 커스텀 네비바를 비활성화해야 하는지 확인
      */
@@ -277,5 +320,13 @@ class SettingsManager private constructor(context: Context) {
      */
     fun isShortcutDisabledForApp(packageName: String): Boolean {
         return shortcutDisabledApps.contains(packageName)
+    }
+
+    /**
+     * 펜 버튼 커스텀 기능이 활성화되어 있는지 확인
+     * 버튼 A 또는 B 중 하나라도 NONE이 아니면 활성화된 것으로 간주
+     */
+    fun isPenCustomFunctionEnabled(): Boolean {
+        return penAActionType != "NONE" || penBActionType != "NONE"
     }
 }

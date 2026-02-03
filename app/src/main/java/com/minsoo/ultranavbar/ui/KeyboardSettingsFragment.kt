@@ -15,6 +15,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.RadioGroup
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -27,6 +28,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.minsoo.ultranavbar.R
+import com.minsoo.ultranavbar.model.ReservedShortcuts
 import com.minsoo.ultranavbar.util.BleGattBatteryReader
 import com.minsoo.ultranavbar.util.BluetoothUtils
 
@@ -43,6 +45,7 @@ class KeyboardSettingsFragment : Fragment() {
     private lateinit var btnBluetoothSettings: MaterialButton
     private lateinit var btnManageShortcuts: MaterialButton
     private lateinit var btnShortcutDisabledApps: MaterialButton
+    private lateinit var btnViewSystemShortcuts: MaterialButton
     private lateinit var switchKeyboardShortcuts: SwitchMaterial
     private lateinit var switchBatteryNotification: SwitchMaterial
     private lateinit var switchPersistentNotification: SwitchMaterial
@@ -50,9 +53,11 @@ class KeyboardSettingsFragment : Fragment() {
     private lateinit var txtThresholdValue: TextView
     private lateinit var layoutBatteryThreshold: View
     private lateinit var layoutShortcutButtons: LinearLayout
+    private lateinit var radioGroupOrientationLock: RadioGroup
 
     private var bluetoothAdapter: BluetoothAdapter? = null
     private lateinit var settings: com.minsoo.ultranavbar.settings.SettingsManager
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
     // 블루투스 권한 요청 런처
     private val requestBluetoothPermissionLauncher = registerForActivityResult(
@@ -96,6 +101,7 @@ class KeyboardSettingsFragment : Fragment() {
         btnBluetoothSettings = view.findViewById(R.id.btnBluetoothSettings)
         btnManageShortcuts = view.findViewById(R.id.btnManageShortcuts)
         btnShortcutDisabledApps = view.findViewById(R.id.btnShortcutDisabledApps)
+        btnViewSystemShortcuts = view.findViewById(R.id.btnViewSystemShortcuts)
         switchKeyboardShortcuts = view.findViewById(R.id.switchKeyboardShortcuts)
         switchBatteryNotification = view.findViewById(R.id.switchBatteryNotification)
         switchPersistentNotification = view.findViewById(R.id.switchPersistentNotification)
@@ -103,6 +109,7 @@ class KeyboardSettingsFragment : Fragment() {
         txtThresholdValue = view.findViewById(R.id.txtThresholdValue)
         layoutBatteryThreshold = view.findViewById(R.id.layoutBatteryThreshold)
         layoutShortcutButtons = view.findViewById(R.id.layoutShortcutButtons)
+        radioGroupOrientationLock = view.findViewById(R.id.radioGroupOrientationLock)
 
         btnRefresh.setOnClickListener {
             // 캐시 클리어 후 새로 로드 (BLE GATT 배터리 새로 읽기)
@@ -120,6 +127,10 @@ class KeyboardSettingsFragment : Fragment() {
 
         btnShortcutDisabledApps.setOnClickListener {
             openShortcutDisabledApps()
+        }
+
+        btnViewSystemShortcuts.setOnClickListener {
+            showSystemShortcutsDialog()
         }
 
         // 키보드 단축키 토글
@@ -159,6 +170,31 @@ class KeyboardSettingsFragment : Fragment() {
             updateThresholdText(threshold)
         }
 
+        // 화면 방향 고정 설정
+        val orientationLock = settings.keyboardOrientationLock
+        when (orientationLock) {
+            0 -> radioGroupOrientationLock.check(R.id.radioOrientationOff)
+            1 -> radioGroupOrientationLock.check(R.id.radioOrientationLandscape)
+            2 -> radioGroupOrientationLock.check(R.id.radioOrientationPortrait)
+        }
+        radioGroupOrientationLock.setOnCheckedChangeListener { _, checkedId ->
+            val lockMode = when (checkedId) {
+                R.id.radioOrientationOff -> 0
+                R.id.radioOrientationLandscape -> 1
+                R.id.radioOrientationPortrait -> 2
+                else -> 0
+            }
+
+            settings.keyboardOrientationLock = lockMode
+
+            // 접근성 서비스가 실행 중이면 즉시 적용
+            if (lockMode != 0) {
+                applyOrientationLockNow()
+            } else {
+                removeOrientationLockNow()
+            }
+        }
+
         // 초기 가시성 설정
         layoutBatteryThreshold.visibility = if (settings.batteryNotificationEnabled) View.VISIBLE else View.GONE
     }
@@ -181,6 +217,24 @@ class KeyboardSettingsFragment : Fragment() {
             putExtra(AppListActivity.EXTRA_SELECTION_MODE, AppListActivity.MODE_SHORTCUT_DISABLED_APPS)
         }
         startActivity(intent)
+    }
+
+    private fun showSystemShortcutsDialog() {
+        val shortcuts = ReservedShortcuts.getAllReservedShortcuts(useEnglish = false)
+
+        val message = buildString {
+            append(getString(R.string.system_shortcuts_message))
+            append("\n\n")
+            shortcuts.forEach { (keyCombo, description) ->
+                append("• $keyCombo → $description\n")
+            }
+        }
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.system_shortcuts_title)
+            .setMessage(message.trim())
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun initBluetooth() {
@@ -437,5 +491,34 @@ class KeyboardSettingsFragment : Fragment() {
     private fun openBluetoothSettings() {
         val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
         startActivity(intent)
+    }
+
+    private fun applyOrientationLockNow() {
+        val lockMode = settings.keyboardOrientationLock
+        if (lockMode == 0) return
+
+        // 서비스에 브로드캐스트 전송하여 방향 고정 적용
+        val intent = Intent("com.minsoo.ultranavbar.ACTION_APPLY_ORIENTATION_LOCK")
+        intent.setPackage(requireContext().packageName)
+        requireContext().sendBroadcast(intent)
+
+        android.widget.Toast.makeText(
+            requireContext(),
+            if (lockMode == 1) "가로 모드로 고정되었습니다" else "세로 모드로 고정되었습니다",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun removeOrientationLockNow() {
+        // 서비스에 브로드캐스트 전송하여 방향 고정 해제
+        val intent = Intent("com.minsoo.ultranavbar.ACTION_REMOVE_ORIENTATION_LOCK")
+        intent.setPackage(requireContext().packageName)
+        requireContext().sendBroadcast(intent)
+
+        android.widget.Toast.makeText(
+            requireContext(),
+            "화면 방향 고정 해제",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
     }
 }

@@ -21,6 +21,12 @@ import com.google.android.material.card.MaterialCardView
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
+import com.minsoo.ultranavbar.util.ShizukuHelper
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.appcompat.app.AlertDialog
+import android.text.Html
 
 /**
  * AppSettingsFragment - 앱 전반적인 설정 및 권한 관리를 담당하는 Fragment
@@ -57,21 +63,33 @@ class AppSettingsFragment : Fragment() {
     private lateinit var txtPermStorage: TextView
     private lateinit var txtPermBattery: TextView
     private lateinit var txtPermBluetooth: TextView
+    private var txtPermShizuku: TextView? = null  // 레이아웃에 없을 수 있음
 
     // 버전 정보 UI
     private lateinit var txtVersion: TextView
 
     // 저장소 읽기 권한 요청 런처
-    private val requestPermissionLauncher = registerForActivityResult(
+    private val storagePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            Toast.makeText(requireContext(), R.string.permission_granted, Toast.LENGTH_SHORT).show()
-            updatePermissionStatus()
+            Toast.makeText(requireContext(), R.string.permission_granted_storage, Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(requireContext(), R.string.permission_denied, Toast.LENGTH_SHORT).show()
-            updatePermissionStatus()
         }
+        updatePermissionStatus()
+    }
+
+    // 블루투스 권한 요청 런처
+    private val bluetoothPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Toast.makeText(requireContext(), R.string.permission_granted_bluetooth, Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(requireContext(), R.string.permission_denied_bluetooth, Toast.LENGTH_SHORT).show()
+        }
+        updatePermissionStatus()
     }
 
     override fun onCreateView(
@@ -136,6 +154,12 @@ class AppSettingsFragment : Fragment() {
             requestBluetoothPermission()
         }
 
+        // Shizuku 권한 (레이아웃에 없으면 null)
+        txtPermShizuku = view.findViewById(R.id.txtPermShizuku)
+        view.findViewById<MaterialButton?>(R.id.btnPermShizuku)?.setOnClickListener {
+            showShizukuSetupGuide()
+        }
+
         // 버전 정보 UI
         txtVersion = view.findViewById(R.id.txtVersion)
     }
@@ -196,6 +220,18 @@ class AppSettingsFragment : Fragment() {
         } else {
             getString(R.string.permission_status_not_granted)
         }
+
+        // Shizuku 권한 상태 확인 (레이아웃에 있는 경우에만)
+        try {
+            val isShizukuAvailable = ShizukuHelper.isShizukuAvailable() && ShizukuHelper.hasShizukuPermission()
+            txtPermShizuku?.text = when {
+                !ShizukuHelper.isShizukuAvailable() -> getString(R.string.shizuku_status_not_installed)
+                !ShizukuHelper.hasShizukuPermission() -> getString(R.string.shizuku_status_no_permission)
+                else -> getString(R.string.shizuku_status_ready)
+            }
+        } catch (e: Exception) {
+            // 레이아웃에 없으면 무시
+        }
     }
 
     private fun loadVersionInfo() {
@@ -218,7 +254,7 @@ class AppSettingsFragment : Fragment() {
                 getStoragePermission()
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            requestPermissionLauncher.launch(getStoragePermission())
+            storagePermissionLauncher.launch(getStoragePermission())
         } else {
             Toast.makeText(requireContext(), R.string.storage_permission_already_granted, Toast.LENGTH_SHORT).show()
         }
@@ -258,9 +294,36 @@ class AppSettingsFragment : Fragment() {
                 Manifest.permission.BLUETOOTH_CONNECT
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            requestPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
         } else {
             Toast.makeText(requireContext(), R.string.bluetooth_permission_already_granted, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun showShizukuSetupGuide() {
+        val message = Html.fromHtml(getString(R.string.shizuku_setup_guide_message), Html.FROM_HTML_MODE_LEGACY)
+
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.shizuku_setup_guide_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.shizuku_copy_command) { _, _ ->
+                // ADB 명령어 클립보드 복사
+                val command = "adb shell chmod +x /data/local/tmp/shizuku_starter && /data/local/tmp/shizuku_starter"
+                val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("Shizuku ADB Command", command)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(requireContext(), R.string.shizuku_command_copied, Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton(R.string.shizuku_grant_permission) { _, _ ->
+                // Shizuku 권한 요청
+                if (ShizukuHelper.isShizukuAvailable()) {
+                    ShizukuHelper.requestShizukuPermission()
+                    Toast.makeText(requireContext(), "권한 요청을 보냈습니다", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(requireContext(), R.string.shizuku_not_running, Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 }

@@ -1189,8 +1189,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             currentWindowHeight = params.height
         }
 
-        // 비트맵이 없는 경우에만 로드 (이미 로드되어 있으면 스킵)
-        backgroundManager.loadBackgroundBitmaps(forceReload = false)
+        // 방향 변경 시 반드시 새 배경 로드 (가로/세로 이미지가 다름)
+        backgroundManager.loadBackgroundBitmaps(forceReload = true)
         updateNavBarBackground()
     }
 

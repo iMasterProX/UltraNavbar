@@ -138,14 +138,14 @@ class KeyShortcutManager private constructor(context: Context) {
     /**
      * 키 조합으로 단축키 찾기
      */
-    fun findShortcut(modifiers: Set<Int>, keyCode: Int): KeyShortcut? {
+    fun findShortcut(modifiers: Set<Int>, keyCode: Int, isLongPress: Boolean = false): KeyShortcut? {
         loadShortcuts()
-        Log.d(TAG, "findShortcut: looking for modifiers=$modifiers, keyCode=$keyCode in ${shortcuts.size} shortcuts")
+        Log.d(TAG, "findShortcut: looking for modifiers=$modifiers, keyCode=$keyCode, isLongPress=$isLongPress in ${shortcuts.size} shortcuts")
         shortcuts.forEach { shortcut ->
-            val matches = shortcut.matches(modifiers, keyCode)
-            Log.d(TAG, "  Checking ${shortcut.name}: modifiers=${shortcut.modifiers}, keyCode=${shortcut.keyCode}, matches=$matches")
+            val matches = shortcut.matches(modifiers, keyCode, isLongPress)
+            Log.d(TAG, "  Checking ${shortcut.name}: modifiers=${shortcut.modifiers}, keyCode=${shortcut.keyCode}, isLongPress=${shortcut.isLongPress}, matches=$matches")
         }
-        val result = shortcuts.firstOrNull { it.matches(modifiers, keyCode) }
+        val result = shortcuts.firstOrNull { it.matches(modifiers, keyCode, isLongPress) }
         Log.d(TAG, "findShortcut: result=${result?.name ?: "null"}")
         return result
     }
@@ -153,10 +153,10 @@ class KeyShortcutManager private constructor(context: Context) {
     /**
      * 단축키 중복 확인
      */
-    fun isDuplicate(modifiers: Set<Int>, keyCode: Int, excludeId: String? = null): Boolean {
+    fun isDuplicate(modifiers: Set<Int>, keyCode: Int, isLongPress: Boolean = false, excludeId: String? = null): Boolean {
         loadShortcuts()
         return shortcuts.any {
-            it.matches(modifiers, keyCode) && (excludeId == null || it.id != excludeId)
+            it.matches(modifiers, keyCode, isLongPress) && (excludeId == null || it.id != excludeId)
         }
     }
 

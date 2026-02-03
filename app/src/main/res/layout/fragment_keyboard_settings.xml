@@ -193,14 +193,74 @@
                         android:text="@string/shortcut_disabled_apps"
                         style="@style/Widget.Material3.Button.TonalButton" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnViewSystemShortcuts"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="@string/shortcut_disabled_apps_summary"
-                        android:textSize="12sp"
-                        android:textColor="?android:textColorSecondary" />
+                        android:text="@string/view_system_shortcuts"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
                 </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 화면 방향 고정 카드 -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardElevation="4dp"
+            app:cardCornerRadius="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/orientation_lock_title"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/orientation_lock_summary"
+                    android:textSize="12sp"
+                    android:textColor="?android:textColorSecondary" />
+
+                <RadioGroup
+                    android:id="@+id/radioGroupOrientationLock"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical">
+
+                    <RadioButton
+                        android:id="@+id/radioOrientationOff"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/orientation_lock_off" />
+
+                    <RadioButton
+                        android:id="@+id/radioOrientationLandscape"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/orientation_lock_landscape"
+                        android:layout_marginTop="4dp" />
+
+                    <RadioButton
+                        android:id="@+id/radioOrientationPortrait"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/orientation_lock_portrait"
+                        android:layout_marginTop="4dp" />
+                </RadioGroup>
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

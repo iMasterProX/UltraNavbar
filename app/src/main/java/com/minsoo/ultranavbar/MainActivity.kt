@@ -1,6 +1,7 @@
 package com.minsoo.ultranavbar
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -54,12 +55,39 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        // 기본: 네비바 설정 표시
+        // 기본: 네비바 설정 표시 (또는 intent로 지정된 화면)
         if (savedInstanceState == null) {
-            navigationView.setCheckedItem(R.id.nav_navbar)
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.contentFrame, NavBarSettingsFragment())
-                .commit()
+            handleNavigationIntent(intent)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        intent?.let { handleNavigationIntent(it) }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Activity가 재생성되지 않으므로 Fragment는 자동으로 회전 처리됨
+        // 필요시 추가 UI 업데이트 수행
+    }
+
+    private fun handleNavigationIntent(intent: Intent) {
+        val navigateTo = intent.getStringExtra("navigate_to")
+
+        when (navigateTo) {
+            "pen_settings" -> {
+                navigationView.setCheckedItem(R.id.nav_wacom_pen)
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.contentFrame, WacomPenSettingsFragment())
+                    .commit()
+            }
+            else -> {
+                navigationView.setCheckedItem(R.id.nav_navbar)
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.contentFrame, NavBarSettingsFragment())
+                    .commit()
+            }
         }
     }
 }

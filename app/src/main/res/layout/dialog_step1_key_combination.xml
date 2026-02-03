@@ -31,4 +31,35 @@
             android:textColor="?attr/colorPrimary" />
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- Press mode selection -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="@string/press_mode_title"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <RadioGroup
+        android:id="@+id/radioPressMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioNormalPress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/normal_press"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/radioLongPress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/long_press"
+            android:layout_marginTop="8dp" />
+    </RadioGroup>
+
 </LinearLayout>

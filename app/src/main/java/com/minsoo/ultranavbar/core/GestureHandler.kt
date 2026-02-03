@@ -134,7 +134,13 @@ class GestureHandler(
     // ===== 스타일러스 처리 =====
 
     private fun shouldIgnoreTouch(event: MotionEvent): Boolean {
-        return settings.ignoreStylus && event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS
+        val toolType = event.getToolType(0)
+        val isStylus = toolType == MotionEvent.TOOL_TYPE_STYLUS
+        val shouldIgnore = settings.ignoreStylus && isStylus
+        if (settings.ignoreStylus && event.action == MotionEvent.ACTION_DOWN) {
+            android.util.Log.d("GestureHandler", "Touch: toolType=$toolType, isStylus=$isStylus, shouldIgnore=$shouldIgnore")
+        }
+        return shouldIgnore
     }
 
     /**

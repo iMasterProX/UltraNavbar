@@ -4,9 +4,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.SystemClock
 import android.view.KeyEvent
 import com.minsoo.ultranavbar.model.PaintFunction
+import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
 
 /**
@@ -26,8 +26,18 @@ object PenButtonHandler {
     private const val TAG = "PenButtonHandler"
 
     // 펜 버튼 KeyCode (기기에 따라 다를 수 있음)
-    private const val BTN_STYLUS = 331    // 버튼 A
-    private const val BTN_STYLUS2 = 332   // 버튼 B
+    // Linux input 코드 (원래 BTN_STYLUS/BTN_STYLUS2)
+    private const val BTN_STYLUS = 331    // 표준 버튼 A
+    private const val BTN_STYLUS2 = 332   // 표준 버튼 B
+
+    // LG UltraTab의 실제 펜 버튼 키코드 (Generic.kl에서 매핑)
+    private const val KEYCODE_PENA = 236  // LG UltraTab 버튼 A
+    private const val KEYCODE_PENB = 237  // LG UltraTab 버튼 B
+
+    // Android 표준 스타일러스 버튼 키코드
+    private const val KEYCODE_STYLUS_BUTTON_PRIMARY = 288   // 버튼 A
+    private const val KEYCODE_STYLUS_BUTTON_SECONDARY = 289 // 버튼 B
+    private const val KEYCODE_STYLUS_BUTTON_TERTIARY = 290  // 버튼 B (일부 기기)
 
     /**
      * 펜 버튼 이벤트인지 확인
@@ -40,8 +50,11 @@ object PenButtonHandler {
             return true
         }
 
-        // KeyCode로 확인
-        return event.keyCode == BTN_STYLUS || event.keyCode == BTN_STYLUS2
+        // KeyCode로 확인 (표준, LG UltraTab, Android 표준 키코드)
+        return event.keyCode == BTN_STYLUS || event.keyCode == BTN_STYLUS2 ||
+               event.keyCode == KEYCODE_PENA || event.keyCode == KEYCODE_PENB ||
+               event.keyCode == KEYCODE_STYLUS_BUTTON_PRIMARY || event.keyCode == KEYCODE_STYLUS_BUTTON_SECONDARY ||
+               event.keyCode == KEYCODE_STYLUS_BUTTON_TERTIARY
     }
 
     /**
@@ -55,14 +68,22 @@ object PenButtonHandler {
 
         val settings = SettingsManager.getInstance(context)
 
-        // 버튼 구분
-        val isButtonA = event.keyCode == BTN_STYLUS
-        val buttonName = if (isButtonA) "A" else "B"
+        // 버튼 구분 (표준, LG UltraTab, Android 표준 키코드 모두 지원)
+        // 주의: 시스템 펜 버튼 설정에서 Bridge Activity를 실행하므로, 여기서는 감지만 하고 처리하지 않음
+        // LG UltraTab: keyCode 289 = Button A, keyCode 290 = Button B
+        val isButtonA = event.keyCode == BTN_STYLUS ||
+                        event.keyCode == KEYCODE_PENA ||
+                        event.keyCode == KEYCODE_STYLUS_BUTTON_PRIMARY ||
+                        event.keyCode == KEYCODE_STYLUS_BUTTON_SECONDARY  // LG UltraTab에서 289가 버튼 A
+        val isButtonB = event.keyCode == BTN_STYLUS2 ||
+                        event.keyCode == KEYCODE_PENB ||
+                        event.keyCode == KEYCODE_STYLUS_BUTTON_TERTIARY   // LG UltraTab에서 290이 버튼 B
+        val buttonName = if (isButtonB) "B" else "A"  // B가 아니면 A로 처리
 
-        val actionType = if (isButtonA) {
-            settings.penAActionType
-        } else {
+        val actionType = if (isButtonB) {
             settings.penBActionType
+        } else {
+            settings.penAActionType
         }
 
         android.util.Log.d(TAG, "Pen button $buttonName pressed, action type: $actionType")
@@ -71,6 +92,12 @@ object PenButtonHandler {
             "APP" -> handleAppLaunch(context, isButtonA, settings)
             "SHORTCUT" -> handleShortcutLaunch(context, isButtonA, settings)
             "PAINT_FUNCTION" -> handlePaintFunction(context, isButtonA, settings)
+            "TOUCH_POINT" -> {
+                // Bridge Activity가 처리하도록 이벤트를 consume하지 않음
+                // Bridge Activity에서 딜레이 후 터치를 수행해야 취소되지 않음
+                android.util.Log.d(TAG, "Touch point: delegating to Bridge Activity")
+                false
+            }
             else -> false
         }
     }
@@ -131,7 +158,11 @@ object PenButtonHandler {
     }
 
     /**
-     * 페인팅 기능 처리 (키 이벤트 주입)
+     * 페인팅 기능 처리
+     *
+     * 참고: 실제 키 이벤트 주입은 Bridge Activity에서 수행합니다.
+     * 시스템 펜 버튼 설정에서 Bridge Activity를 실행하도록 설정되어 있으므로,
+     * 여기서는 이벤트를 consume하지 않고 시스템이 처리하도록 합니다.
      */
     private fun handlePaintFunction(context: Context, isButtonA: Boolean, settings: SettingsManager): Boolean {
         val functionName = if (isButtonA) {
@@ -142,23 +173,33 @@ object PenButtonHandler {
 
         val function = PaintFunction.fromName(functionName) ?: return false
 
-        // 키 이벤트 주입
-        // 참고: AccessibilityService에서 직접 키 이벤트를 주입하는 것은 제한적입니다.
-        // performGlobalAction이나 다른 방법을 사용해야 할 수 있습니다.
-
-        // TODO: 실제 키 이벤트 주입 구현
-        // 현재로서는 Instrumentation이나 다른 방법이 필요할 수 있습니다.
-
         android.util.Log.d(TAG, "Paint function: ${function.name}, keyCode: ${function.keyCode}, metaState: ${function.metaState}")
 
-        // 임시: 토스트로 표시
-        android.widget.Toast.makeText(
-            context,
-            "Paint function: ${function.name} (키 이벤트 주입은 추후 구현 예정)",
-            android.widget.Toast.LENGTH_SHORT
-        ).show()
+        // Bridge Activity가 처리하도록 이벤트를 consume하지 않음
+        return false
+    }
 
-        return true
+    /**
+     * 터치 포인트 처리
+     * AccessibilityService의 dispatchGesture를 사용하여 지정된 좌표에 터치 수행
+     */
+    private fun handleTouchPoint(isButtonA: Boolean, settings: SettingsManager): Boolean {
+        val x = if (isButtonA) settings.penATouchX else settings.penBTouchX
+        val y = if (isButtonA) settings.penATouchY else settings.penBTouchY
+
+        if (x < 0 || y < 0) {
+            android.util.Log.w(TAG, "Touch point not set for button ${if (isButtonA) "A" else "B"}")
+            return false
+        }
+
+        val service = NavBarAccessibilityService.instance
+        if (service == null) {
+            android.util.Log.e(TAG, "AccessibilityService not running")
+            return false
+        }
+
+        android.util.Log.d(TAG, "Performing tap at ($x, $y) for button ${if (isButtonA) "A" else "B"}")
+        return service.performTap(x, y)
     }
 
     /**
