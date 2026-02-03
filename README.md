@@ -48,7 +48,6 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 기능 앱�
   - **자동 터치 (좌표 기반)**: 지정한 화면 좌표를 자동으로 터치 (Shizuku 권장)
   - **자동 터치 (UI 요소 기반)**: 접근성 서비스로 특정 UI 요소 클릭 (Shizuku 불필요)
 - **시스템 설정 동기화**: 앱 설정과 시스템 펜 설정 자동 동기화
-- **펜 제스처 무시**: OneNote 등 드로잉 앱에서 펜 제스처로 인한 오작동 방지
 
 #### ⚙️ 시스템 통합
 - **접근성 서비스**: 네비게이션 바 표시, 윈도우 상태 감지, 펜 버튼 동작 실행
@@ -109,10 +108,6 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 기능 앱�
 - 펜 버튼을 짧고 빠르게 누르기보다 조금 길게 천천히 눌러야 인식이 잘됩니다
 - 좌표 기반: Shizuku가 실행 중이고 권한이 부여되어 있는지 확인
 - UI 요소 기반: 대상 앱이 실행 중이고 해당 UI 요소가 화면에 표시되어 있는지 확인
-
-**펜 제스처 무시가 작동하지 않을 때**
-- 네비게이션 바 설정에서 "스타일러스 입력 무시"가 별도로 있음
-- 와콤 펜 설정의 "펜 제스처 무시"는 시스템 펜 제스처용 설정
 
 ### 개발 정보
 
@@ -209,7 +204,6 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 **Wacom Pen**
 - Configure pen button A/B actions in the `Wacom Pen` tab
 - Automate tool switching in OneNote, Samsung Notes, etc. with auto touch
-- Prevent drawing app interference with pen gesture ignore setting
 
 **App Settings**
 - Check permission status and configure Shizuku in the `App Settings` tab
@@ -235,10 +229,6 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 - Press the pen button slowly and hold briefly rather than quick short presses for better recognition
 - Coordinate-based: Verify Shizuku is running and permission is granted
 - UI Element-based: Ensure target app is running and the UI element is visible on screen
-
-**When pen gesture ignore doesn't work**
-- "Ignore stylus input" in Navigation Bar settings is a separate setting
-- "Ignore pen gestures" in Wacom Pen settings is for system pen gestures
 
 ### Development
 
