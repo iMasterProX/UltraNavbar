@@ -48,6 +48,10 @@ class KeyEventHandler(private val context: Context) {
             return false
         }
 
+        // 실제 KeyEvent의 메타 상태와 내부 추적 상태가 다르면 동기화
+        // (앱 전환, 포커스 손실 등으로 modifier가 stuck 될 수 있음)
+        syncModifiersWithEvent(event)
+
         // 텍스트 입력 중 (IME 표시 중)에는 단축키 비활성화
         if (isImeVisible) {
             Log.d(TAG, "IME is visible, shortcuts disabled")
@@ -213,6 +217,26 @@ class KeyEventHandler(private val context: Context) {
      */
     private fun executeCustomAction(actionData: String) {
         Log.d(TAG, "Custom action not implemented yet: $actionData")
+    }
+
+    /**
+     * 실제 KeyEvent의 메타 상태와 내부 추적 상태 동기화
+     * 앱 전환 등으로 UP 이벤트를 놓친 stuck modifier 해소
+     */
+    private fun syncModifiersWithEvent(event: KeyEvent) {
+        val meta = event.metaState
+        val expectedModifiers = mutableSetOf<Int>()
+        if (meta and KeyEvent.META_CTRL_ON != 0) expectedModifiers.add(KeyEvent.KEYCODE_CTRL_LEFT)
+        if (meta and KeyEvent.META_SHIFT_ON != 0) expectedModifiers.add(KeyEvent.KEYCODE_SHIFT_LEFT)
+        if (meta and KeyEvent.META_ALT_ON != 0) expectedModifiers.add(KeyEvent.KEYCODE_ALT_LEFT)
+        if (meta and KeyEvent.META_META_ON != 0) expectedModifiers.add(KeyEvent.KEYCODE_META_LEFT)
+
+        // 내부 상태에 있지만 실제로는 눌려있지 않은 modifier 제거
+        val stuckModifiers = pressedModifiers - expectedModifiers
+        if (stuckModifiers.isNotEmpty()) {
+            Log.d(TAG, "Clearing stuck modifiers: $stuckModifiers (meta=$meta)")
+            pressedModifiers.removeAll(stuckModifiers)
+        }
     }
 
     /**

@@ -166,12 +166,20 @@ class WindowAnalyzer(
             if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
 
             val root = try { window.root } catch (e: Exception) { null } ?: continue
-            val packageName = root.packageName?.toString() ?: continue
-            val className = root.className?.toString() ?: ""
-            val layer = window.layer
+            try {
+                val packageName = root.packageName?.toString()
+                if (packageName == null) {
+                    root.recycle()
+                    continue
+                }
+                val className = root.className?.toString() ?: ""
+                val layer = window.layer
 
-            if (best == null || layer > best.layer) {
-                best = TopAppWindow(packageName, className, layer)
+                if (best == null || layer > best.layer) {
+                    best = TopAppWindow(packageName, className, layer)
+                }
+            } finally {
+                root.recycle()
             }
         }
 
@@ -213,13 +221,16 @@ class WindowAnalyzer(
         )
 
         for (id in targetIds) {
-            val nodes = rootNode.findAccessibilityNodeInfosByViewId(id)
+            val nodes = try { rootNode.findAccessibilityNodeInfosByViewId(id) } catch (e: Exception) { null }
             if (!nodes.isNullOrEmpty()) {
+                var found = false
                 for (node in nodes) {
-                    if (node.isVisibleToUser) {
-                        return true
+                    if (!found && node.isVisibleToUser) {
+                        found = true
                     }
+                    node.recycle()
                 }
+                if (found) return true
             }
         }
         return false
@@ -257,7 +268,9 @@ class WindowAnalyzer(
 
         for (w in windows) {
             if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
-            val rootPkg = try { w.root?.packageName?.toString() } catch (e: Exception) { null }
+            val root = try { w.root } catch (e: Exception) { null }
+            val rootPkg = root?.packageName?.toString()
+            root?.recycle()
             if (rootPkg != "com.android.systemui") continue
 
             val r = Rect()
@@ -391,7 +404,9 @@ class WindowAnalyzer(
 
         for (w in windows) {
             if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
-            val rootPkg = try { w.root?.packageName?.toString() } catch (e: Exception) { null }
+            val root = try { w.root } catch (e: Exception) { null }
+            val rootPkg = root?.packageName?.toString()
+            root?.recycle()
             if (rootPkg != "com.android.systemui") continue
 
             val r = Rect()
@@ -426,12 +441,15 @@ class WindowAnalyzer(
 
         for (w in windows) {
             if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
-            val rootPkg = try { w.root?.packageName?.toString() } catch (e: Exception) { null }
-            if (rootPkg != "com.android.systemui") continue
-
-            val root = try { w.root } catch (e: Exception) { null }
-            if (isQuickSettingsExpanded(root, screen)) {
-                return true
+            val root = try { w.root } catch (e: Exception) { null } ?: continue
+            try {
+                val rootPkg = root.packageName?.toString()
+                if (rootPkg != "com.android.systemui") continue
+                if (isQuickSettingsExpanded(root, screen)) {
+                    return true
+                }
+            } finally {
+                root.recycle()
             }
         }
 
@@ -459,18 +477,20 @@ class WindowAnalyzer(
         for (id in targetIds) {
             val nodes = try { rootNode.findAccessibilityNodeInfosByViewId(id) } catch (e: Exception) { null }
             if (!nodes.isNullOrEmpty()) {
+                var found = false
                 for (node in nodes) {
-                    if (!node.isVisibleToUser) continue
-                    val r = Rect()
-                    try {
-                        node.getBoundsInScreen(r)
-                    } catch (e: Exception) {
-                        continue
+                    if (!found && node.isVisibleToUser) {
+                        val r = Rect()
+                        try {
+                            node.getBoundsInScreen(r)
+                            if (r.height() >= minHeight && r.width() >= minWidth) {
+                                found = true
+                            }
+                        } catch (e: Exception) { /* ignore */ }
                     }
-                    if (r.height() >= minHeight && r.width() >= minWidth) {
-                        return true
-                    }
+                    node.recycle()
                 }
+                if (found) return true
             }
         }
 
@@ -489,7 +509,9 @@ class WindowAnalyzer(
         if (isRecentsOpen(rootNode)) return true
 
         for (window in windows) {
-            val className = try { window.root?.className?.toString() } catch (e: Exception) { null }
+            val root = try { window.root } catch (e: Exception) { null }
+            val className = root?.className?.toString()
+            root?.recycle()
             if (isRecentsClassName(className ?: "")) {
                 return true
             }
@@ -515,11 +537,14 @@ class WindowAnalyzer(
         for (id in targetIds) {
             val nodes = try { rootNode.findAccessibilityNodeInfosByViewId(id) } catch (e: Exception) { null }
             if (!nodes.isNullOrEmpty()) {
+                var found = false
                 for (node in nodes) {
-                    if (node.isVisibleToUser) {
-                        return true
+                    if (!found && node.isVisibleToUser) {
+                        found = true
                     }
+                    node.recycle()
                 }
+                if (found) return true
             }
         }
 
@@ -545,7 +570,10 @@ class WindowAnalyzer(
             }
             if (bounds.width() <= 0 || bounds.height() <= 0) continue
 
-            val pkg = try { window.root?.packageName?.toString() } catch (e: Exception) { null }
+            val root = try { window.root } catch (e: Exception) { null }
+            val pkg = root?.packageName?.toString()
+            root?.recycle()
+
             if (pkg == null) {
                 hasUnknownAppWindow = true
                 continue

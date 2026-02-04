@@ -140,6 +140,7 @@ class NavBarAccessibilityService : AccessibilityService() {
                     // 새 작업 예약
                     unlockFadeRunnable = Runnable {
                         unlockFadeRunnable = null
+                        if (instance == null) return@Runnable
                         overlay?.startUnlockFade()
                     }
                     handler.postDelayed(unlockFadeRunnable!!, Constants.Timing.UNLOCK_FADE_DELAY_MS)
@@ -172,9 +173,20 @@ class NavBarAccessibilityService : AccessibilityService() {
                         intent.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE)
                     }
                     Log.d(TAG, "Bluetooth device disconnected: ${device?.name}")
-                    if (device != null && isBluetoothKeyboard(device)) {
-                        Log.d(TAG, "Keyboard disconnected, removing orientation lock")
-                        removeOrientationLock()
+                    // 방향 고정이 활성 상태일 때만 처리
+                    if (orientationLockView != null) {
+                        // 물리 키보드가 아직 연결되어 있는지 확인
+                        // (isBluetoothKeyboard는 권한/디바이스 상태에 따라 실패할 수 있으므로
+                        //  InputDevice API로 실제 연결 상태를 직접 확인)
+                        handler.postDelayed({
+                            if (instance == null) return@postDelayed
+                            if (!hasConnectedPhysicalKeyboard()) {
+                                Log.d(TAG, "No physical keyboard connected, removing orientation lock")
+                                removeOrientationLock()
+                            } else {
+                                Log.d(TAG, "Physical keyboard still connected, keeping orientation lock")
+                            }
+                        }, 500L) // BT 연결 해제 반영 대기
                     }
                 }
             }
@@ -288,6 +300,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         instance = null
 
         cancelPendingTasks()
+        handler.removeCallbacksAndMessages(null)  // 모든 대기 콜백 제거
         unregisterReceivers()
         destroyOverlay()
         removeOrientationLockOverlay()
@@ -325,8 +338,8 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         Log.d(TAG, "Configuration changed: orientation=${newConfig.orientation}, changed=$orientationChanged")
 
-        overlay?.handleOrientationChange(newConfig.orientation)
-        overlay?.updateDarkMode()
+        // 방향 + 다크 모드를 통합 처리 (비트맵 리로드 1회, 올바른 순서 보장)
+        overlay?.handleConfigurationChange(newConfig.orientation)
 
         if (orientationChanged) {
             // 화면 회전 시간 기록 (안정화 기간 동안 auto-hide 차단)
@@ -339,6 +352,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
             // 화면 회전 후 일정 시간 후에 상태 재확인
             handler.postDelayed({
+                if (instance == null) return@postDelayed
                 Log.d(TAG, "Re-checking overlay visibility after orientation change")
                 updateOverlayVisibility(forceFade = false)
             }, 200)
@@ -577,6 +591,9 @@ class NavBarAccessibilityService : AccessibilityService() {
         currentPackage = packageName
         Log.d(TAG, "Foreground app ($source): $packageName")
 
+        // 앱 전환 시 키보드 수정자 키 상태 초기화 (stuck modifier 방지)
+        keyEventHandler.resetModifiers()
+
         val wasDisabled = previousPackage.isNotEmpty() && settings.isAppDisabled(previousPackage)
         val isDisabled = settings.isAppDisabled(packageName)
         if (wasDisabled || isDisabled) {
@@ -600,6 +617,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun scheduleStateCheck() {
         pendingStateCheck?.let { handler.removeCallbacks(it) }
         pendingStateCheck = Runnable {
+            if (instance == null) return@Runnable
             checkFullscreenState()
             checkNotificationPanelState()
             checkQuickSettingsState()
@@ -1182,7 +1200,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * 현재 연결된 키보드 확인 및 방향 고정 적용
+     * 현재 연결된 물리 키보드 확인 및 방향 고정 적용
      */
     private fun checkAndApplyOrientationLock() {
         val lockMode = settings.keyboardOrientationLock
@@ -1191,35 +1209,30 @@ class NavBarAccessibilityService : AccessibilityService() {
             return
         }
 
-        try {
-            val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
-            val bluetoothAdapter = bluetoothManager?.adapter
-
-            if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
-                Log.d(TAG, "Bluetooth not available or disabled")
-                return
-            }
-
-            // 연결된 블루투스 기기 확인 (권한 체크 필요)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    Log.w(TAG, "BLUETOOTH_CONNECT permission not granted")
-                    return
-                }
-            }
-
-            val connectedDevices = bluetoothAdapter.bondedDevices
-            val hasKeyboard = connectedDevices?.any { device ->
-                isBluetoothKeyboard(device)
-            } ?: false
-
-            if (hasKeyboard) {
-                Log.d(TAG, "Keyboard already connected on service start, applying orientation lock")
-                applyOrientationLock()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to check for connected keyboards", e)
+        // InputDevice API로 실제 연결된 물리 키보드 확인
+        // (bondedDevices는 페어링만 된 기기도 포함하므로 부정확)
+        if (hasConnectedPhysicalKeyboard()) {
+            Log.d(TAG, "Physical keyboard connected on service start, applying orientation lock")
+            applyOrientationLock()
         }
+    }
+
+    /**
+     * 실제 연결된 물리 키보드가 있는지 확인
+     * BT API 대신 InputDevice API 사용 (권한 불필요, 실제 연결 상태 반영)
+     */
+    private fun hasConnectedPhysicalKeyboard(): Boolean {
+        val deviceIds = android.view.InputDevice.getDeviceIds()
+        for (id in deviceIds) {
+            val device = android.view.InputDevice.getDevice(id) ?: continue
+            if (device.sources and android.view.InputDevice.SOURCE_KEYBOARD == android.view.InputDevice.SOURCE_KEYBOARD &&
+                device.keyboardType == android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC &&
+                !device.isVirtual) {
+                Log.d(TAG, "Physical keyboard found: ${device.name}")
+                return true
+            }
+        }
+        return false
     }
 
     // ===== 자동 터치 기능 =====

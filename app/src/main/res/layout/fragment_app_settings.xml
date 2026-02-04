@@ -460,6 +460,18 @@
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/txtGithubLink"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/about_github_url"
+                        android:textSize="13sp"
+                        android:textColor="?colorPrimary"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:background="?selectableItemBackground" />
+
+                    <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
@@ -467,6 +479,55 @@
                         android:textSize="12sp"
                         android:textColor="?android:textColorSecondary" />
                 </LinearLayout>
+
+                <!-- 상표권 면책 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/trademark_disclaimer"
+                    android:textSize="11sp"
+                    android:textColor="?android:textColorSecondary" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 오픈소스 라이선스 카드 -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardElevation="4dp"
+            app:cardCornerRadius="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/open_source_licenses_title"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/open_source_licenses_summary"
+                    android:textSize="12sp"
+                    android:textColor="?android:textColorSecondary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnOpenSourceLicenses"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/open_source_licenses_view" />
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

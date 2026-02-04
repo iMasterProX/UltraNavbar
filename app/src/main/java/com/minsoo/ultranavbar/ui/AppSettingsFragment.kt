@@ -162,6 +162,17 @@ class AppSettingsFragment : Fragment() {
 
         // 버전 정보 UI
         txtVersion = view.findViewById(R.id.txtVersion)
+
+        // GitHub 링크 클릭 → 브라우저
+        view.findViewById<TextView>(R.id.txtGithubLink).setOnClickListener {
+            val url = getString(R.string.about_github_url)
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }
+
+        // 오픈소스 라이선스 버튼
+        view.findViewById<MaterialButton>(R.id.btnOpenSourceLicenses).setOnClickListener {
+            showOpenSourceLicensesDialog()
+        }
     }
 
     private fun updateServiceStatus() {
@@ -298,6 +309,43 @@ class AppSettingsFragment : Fragment() {
         } else {
             Toast.makeText(requireContext(), R.string.bluetooth_permission_already_granted, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun showOpenSourceLicensesDialog() {
+        val licenses = """
+            <b>Shizuku</b><br>
+            Copyright (c) RikkaApps<br>
+            License: Apache License 2.0<br>
+            <a href="https://github.com/RikkaApps/Shizuku">https://github.com/RikkaApps/Shizuku</a><br><br>
+
+            <b>AndroidX Libraries</b><br>
+            Copyright (c) The Android Open Source Project<br>
+            (core-ktx, appcompat, constraintlayout, preference, recyclerview, lifecycle)<br>
+            License: Apache License 2.0<br><br>
+
+            <b>Material Components for Android</b><br>
+            Copyright (c) Google LLC<br>
+            License: Apache License 2.0<br><br>
+
+            <b>Kotlin Coroutines</b><br>
+            Copyright (c) JetBrains s.r.o.<br>
+            License: Apache License 2.0<br><br>
+
+            <hr>
+            <small>Apache License 2.0:<br>
+            Licensed under the Apache License, Version 2.0. You may obtain a copy of the License at
+            <a href="https://www.apache.org/licenses/LICENSE-2.0">https://www.apache.org/licenses/LICENSE-2.0</a></small>
+        """.trimIndent()
+
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.open_source_licenses_title)
+            .setMessage(Html.fromHtml(licenses, Html.FROM_HTML_MODE_LEGACY))
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+
+        // 다이얼로그 내 링크 클릭 가능하게 설정
+        dialog.findViewById<TextView>(android.R.id.message)?.movementMethod =
+            android.text.method.LinkMovementMethod.getInstance()
     }
 
     private fun showShizukuSetupGuide() {

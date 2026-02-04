@@ -180,7 +180,14 @@
     <string name="setup_skip">Skip</string>
     <string name="setup_next">Next</string>
 
-    <string name="credits_text">Creator: iMasterProX with Vibe Coding (AI used), GitHub: https://github.com/iMasterProX/UltraNavbar</string>
+    <string name="about_github_url">https://github.com/iMasterProX/UltraNavbar</string>
+    <string name="credits_text">Creator: iMasterProX with Vibe Coding (AI used)</string>
+    <string name="trademark_disclaimer">\"LG\" and the LG logo are trademarks of LG Electronics Inc. This app is not made by, affiliated with, or endorsed by LG Electronics.</string>
+
+    <!-- Open Source Licenses -->
+    <string name="open_source_licenses_title">Open Source Licenses</string>
+    <string name="open_source_licenses_summary">This app uses the following open source libraries.</string>
+    <string name="open_source_licenses_view">View Licenses</string>
 
     <!-- Keyboard Shortcuts -->
     <string name="shortcut_management">Shortcut Management</string>

@@ -52,9 +52,9 @@ object ImageCropUtil {
     fun cropAndSaveFromUri(context: Context, uri: Uri, isLandscape: Boolean, isDarkMode: Boolean = false): Boolean {
         return try {
             // 이미지 로드
-            val inputStream = context.contentResolver.openInputStream(uri)
-            val originalBitmap = BitmapFactory.decodeStream(inputStream)
-            inputStream?.close()
+            val originalBitmap = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                BitmapFactory.decodeStream(inputStream)
+            }
 
             if (originalBitmap == null) {
                 Log.e(TAG, "Failed to decode bitmap from URI")
@@ -98,9 +98,9 @@ object ImageCropUtil {
             // 내부 저장소에 저장
             val filename = getFilename(isLandscape, isDarkMode)
             val file = File(context.filesDir, filename)
-            val outputStream = FileOutputStream(file)
-            croppedBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-            outputStream.close()
+            FileOutputStream(file).use { outputStream ->
+                croppedBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+            }
             croppedBitmap.recycle()
 
             // 설정에 파일명 저장

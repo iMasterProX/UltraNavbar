@@ -180,7 +180,14 @@
     <string name="setup_skip">건너뛰기</string>
     <string name="setup_next">다음</string>
 
-    <string name="credits_text">제작: iMasterProX with Vibe Coding (AI 활용), GitHub: https://github.com/iMasterProX/UltraNavbar</string>
+    <string name="about_github_url">https://github.com/iMasterProX/UltraNavbar</string>
+    <string name="credits_text">제작: iMasterProX with Vibe Coding (AI 활용)</string>
+    <string name="trademark_disclaimer">\"LG\" 및 LG 로고는 LG전자의 상표입니다. 이 앱은 LG전자가 제작하거나 제휴 또는 승인한 앱이 아닙니다.</string>
+
+    <!-- 오픈소스 라이선스 -->
+    <string name="open_source_licenses_title">오픈소스 라이선스</string>
+    <string name="open_source_licenses_summary">이 앱은 다음 오픈소스 라이브러리를 사용합니다.</string>
+    <string name="open_source_licenses_view">라이선스 보기</string>
 
     <!-- 키보드 단축키 -->
     <string name="shortcut_management">단축키 관리</string>

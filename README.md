@@ -291,3 +291,26 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+---
+
+## Trademark / 상표권 고지
+
+"LG" 및 LG 로고는 LG전자의 상표입니다. 이 앱은 LG전자가 제작하거나 제휴 또는 승인한 앱이 아닙니다.
+
+"LG" and the LG logo are trademarks of LG Electronics Inc. This app is not made by, affiliated with, or endorsed by LG Electronics.
+
+---
+
+## Third-Party Licenses / 서드파티 라이선스
+
+이 앱은 다음 오픈소스 라이브러리를 사용합니다. / This app uses the following open-source libraries:
+
+| Library | Copyright | License |
+|---|---|---|
+| [Shizuku](https://github.com/RikkaApps/Shizuku) | RikkaApps | Apache License 2.0 |
+| AndroidX Libraries (core-ktx, appcompat, constraintlayout, preference, recyclerview, lifecycle) | The Android Open Source Project | Apache License 2.0 |
+| [Material Components for Android](https://github.com/material-components/material-components-android) | Google LLC | Apache License 2.0 |
+| [Kotlin Coroutines](https://github.com/Kotlin/kotlinx.coroutines) | JetBrains s.r.o. | Apache License 2.0 |
+
+Apache License 2.0 전문은 https://www.apache.org/licenses/LICENSE-2.0 에서 확인할 수 있습니다.

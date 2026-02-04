@@ -16,6 +16,7 @@ import android.util.Log
 import androidx.core.app.ActivityCompat
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * BLE GATT를 통해 배터리 레벨을 읽는 유틸리티
@@ -93,6 +94,16 @@ object BleGattBatteryReader {
 
         Log.d(TAG, "Starting GATT battery read for ${device.name ?: address}")
 
+        // 콜백 중복 호출 방지용 플래그
+        val callbackDelivered = AtomicBoolean(false)
+
+        /** 콜백을 안전하게 한 번만 호출 */
+        fun deliverCallback(result: Int?) {
+            if (callbackDelivered.compareAndSet(false, true)) {
+                handler.post { callback?.invoke(result) }
+            }
+        }
+
         val gattCallback = object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
                 Log.d(TAG, "Connection state changed: status=$status, newState=$newState")
@@ -104,12 +115,14 @@ object BleGattBatteryReader {
                             gatt.discoverServices()
                         } catch (e: SecurityException) {
                             Log.e(TAG, "SecurityException during service discovery", e)
-                            cleanup(gatt, address, callback)
+                            deliverCallback(getCachedBatteryLevel(address))
+                            cleanupGatt(gatt, address)
                         }
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         Log.d(TAG, "Disconnected from GATT server")
-                        cleanup(gatt, address, callback)
+                        deliverCallback(getCachedBatteryLevel(address))
+                        cleanupGatt(gatt, address)
                     }
                 }
             }
@@ -119,7 +132,8 @@ object BleGattBatteryReader {
 
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     Log.w(TAG, "Service discovery failed with status $status")
-                    cleanup(gatt, address, callback)
+                    deliverCallback(getCachedBatteryLevel(address))
+                    cleanupGatt(gatt, address)
                     return
                 }
 
@@ -127,7 +141,8 @@ object BleGattBatteryReader {
                 val batteryService: BluetoothGattService? = gatt.getService(BATTERY_SERVICE_UUID)
                 if (batteryService == null) {
                     Log.w(TAG, "Battery Service not found on device")
-                    cleanup(gatt, address, callback)
+                    deliverCallback(getCachedBatteryLevel(address))
+                    cleanupGatt(gatt, address)
                     return
                 }
 
@@ -135,7 +150,8 @@ object BleGattBatteryReader {
                 val batteryLevelChar = batteryService.getCharacteristic(BATTERY_LEVEL_UUID)
                 if (batteryLevelChar == null) {
                     Log.w(TAG, "Battery Level Characteristic not found")
-                    cleanup(gatt, address, callback)
+                    deliverCallback(getCachedBatteryLevel(address))
+                    cleanupGatt(gatt, address)
                     return
                 }
 
@@ -145,11 +161,13 @@ object BleGattBatteryReader {
                     val success = gatt.readCharacteristic(batteryLevelChar)
                     if (!success) {
                         Log.w(TAG, "Failed to initiate characteristic read")
-                        cleanup(gatt, address, callback)
+                        deliverCallback(getCachedBatteryLevel(address))
+                        cleanupGatt(gatt, address)
                     }
                 } catch (e: SecurityException) {
                     Log.e(TAG, "SecurityException during characteristic read", e)
-                    cleanup(gatt, address, callback)
+                    deliverCallback(getCachedBatteryLevel(address))
+                    cleanupGatt(gatt, address)
                 }
             }
 
@@ -164,26 +182,18 @@ object BleGattBatteryReader {
                     Log.d(TAG, "Battery level read: $batteryLevel%")
 
                     if (batteryLevel in 0..100) {
-                        // 캐시에 저장
                         batteryCache[address] = batteryLevel
                         cacheTimestamps[address] = System.currentTimeMillis()
-
-                        handler.post {
-                            callback?.invoke(batteryLevel)
-                        }
+                        deliverCallback(batteryLevel)
                     } else {
-                        handler.post {
-                            callback?.invoke(null)
-                        }
+                        deliverCallback(null)
                     }
                 } else {
                     Log.w(TAG, "Failed to read battery level: status=$status")
-                    handler.post {
-                        callback?.invoke(null)
-                    }
+                    deliverCallback(null)
                 }
 
-                cleanup(gatt, address, null)
+                cleanupGatt(gatt, address)
             }
 
             // Android 13+ 버전용
@@ -200,23 +210,16 @@ object BleGattBatteryReader {
                     if (batteryLevel in 0..100) {
                         batteryCache[address] = batteryLevel
                         cacheTimestamps[address] = System.currentTimeMillis()
-
-                        handler.post {
-                            callback?.invoke(batteryLevel)
-                        }
+                        deliverCallback(batteryLevel)
                     } else {
-                        handler.post {
-                            callback?.invoke(null)
-                        }
+                        deliverCallback(null)
                     }
                 } else {
                     Log.w(TAG, "Failed to read battery level (API 33+): status=$status")
-                    handler.post {
-                        callback?.invoke(null)
-                    }
+                    deliverCallback(null)
                 }
 
-                cleanup(gatt, address, null)
+                cleanupGatt(gatt, address)
             }
         }
 
@@ -235,7 +238,8 @@ object BleGattBatteryReader {
                 handler.postDelayed({
                     if (readingInProgress.contains(address)) {
                         Log.w(TAG, "GATT operation timed out for $address")
-                        cleanup(gatt, address, callback)
+                        deliverCallback(getCachedBatteryLevel(address))
+                        cleanupGatt(gatt, address)
                     }
                 }, 15000)
             } else {
@@ -250,7 +254,7 @@ object BleGattBatteryReader {
         }
     }
 
-    private fun cleanup(gatt: BluetoothGatt, address: String, callback: ((Int?) -> Unit)?) {
+    private fun cleanupGatt(gatt: BluetoothGatt, address: String) {
         readingInProgress.remove(address)
         activeConnections.remove(address)
 
@@ -258,13 +262,6 @@ object BleGattBatteryReader {
             gatt.close()
         } catch (e: Exception) {
             Log.w(TAG, "Error closing GATT: ${e.message}")
-        }
-
-        // 콜백이 아직 호출되지 않았다면 캐시된 값 반환
-        if (callback != null) {
-            handler.post {
-                callback.invoke(getCachedBatteryLevel(address))
-            }
         }
     }
 

@@ -140,36 +140,15 @@ class BackgroundManager(
     }
 
     /**
-     * 비트맵 리사이클 (메모리 누수 방지)
+     * 비트맵 참조 해제
+     * 명시적 recycle() 호출 제거: TransitionDrawable이 아직 참조 중인 bitmap을
+     * recycle하면 "Canvas: trying to use a recycled bitmap" 크래시 발생.
+     * API 12+ 에서는 Bitmap이 관리 힙에 할당되므로 GC가 자동 회수함.
      */
     private fun recycleBitmaps() {
-        landscapeBitmap?.let { bitmap ->
-            if (!bitmap.isRecycled) {
-                bitmap.recycle()
-            }
-        }
         landscapeBitmap = null
-
-        portraitBitmap?.let { bitmap ->
-            if (!bitmap.isRecycled) {
-                bitmap.recycle()
-            }
-        }
         portraitBitmap = null
-
-        // 다크 모드 비트맵 리사이클
-        darkLandscapeBitmap?.let { bitmap ->
-            if (!bitmap.isRecycled) {
-                bitmap.recycle()
-            }
-        }
         darkLandscapeBitmap = null
-
-        darkPortraitBitmap?.let { bitmap ->
-            if (!bitmap.isRecycled) {
-                bitmap.recycle()
-            }
-        }
         darkPortraitBitmap = null
     }
 

@@ -215,7 +215,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (!isCreated) return
 
         try {
+            // isCreated를 먼저 false로 설정하여 진행 중인 콜백이 즉시 중단되도록 함
+            isCreated = false
+
             cancelPendingTasks()
+            cancelCurrentAnimator()
+            handler.removeCallbacksAndMessages(null)  // 이 handler의 모든 대기 콜백 제거
             gestureHandler.cleanup()
             backgroundManager.cleanup()
             buttonManager.clear()
@@ -228,7 +233,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             hotspotView = null
             currentWindowHeight = -1
 
-            isCreated = false
             Log.i(TAG, "Overlay destroyed")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to destroy overlay", e)
@@ -616,6 +620,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         // 언락 페이드 완료 후 상태 동기화 (버튼 색상 등)
                         if (!unlockFadeCancelled && !isUnlockPending) {
                             handler.postDelayed({
+                                if (!isCreated) return@postDelayed
                                 ensureVisualStateSync()
                             }, 50L)
                         }
@@ -1018,6 +1023,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         // 홈 진입 완료 후 상태 동기화 예약 (애니메이션 완료 후)
         handler.postDelayed({
+            if (!isCreated) return@postDelayed
             ensureVisualStateSync()
         }, Constants.Timing.BG_TRANSITION_DURATION_MS + 50L)
     }
@@ -1201,6 +1207,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             currentWindowHeight = params.height
         }
 
+        // 진행 중인 배경 전환 취소 (stale bitmap reference 방지)
+        backgroundManager.cancelBackgroundTransition()
+
         // 방향 변경 시 반드시 새 배경 로드 (가로/세로 이미지가 다름)
         backgroundManager.loadBackgroundBitmaps(forceReload = true)
         updateNavBarBackground()
@@ -1209,9 +1218,72 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     // ===== 다크 모드 =====
 
     fun updateDarkMode() {
-        checkDarkModeChange()
-        // 다크 모드 변경 시 배경 업데이트
-        updateNavBarBackground()
+        val darkModeChanged = backgroundManager.updateDarkMode()
+        if (darkModeChanged) {
+            darkModeTransitionTime = SystemClock.elapsedRealtime()
+            Log.d(TAG, "Dark mode changed: ${backgroundManager.isDarkMode}")
+
+            // 진행 중인 배경 전환 취소 (색상 전환이 필요하므로)
+            backgroundManager.cancelBackgroundTransition()
+
+            // 다크 모드 전환 시 비트맵 리로드 (다크 변형 사용을 위해)
+            backgroundManager.loadBackgroundBitmaps(forceReload = true)
+
+            // forceUpdate=true로 호출하여 dedup 로직을 우회
+            // (useCustom 값이 같아도 색상이 WHITE↔BLACK으로 바뀌므로 반드시 업데이트 필요)
+            val bar = navBarView ?: return
+            val shouldUseCustom = shouldUseCustomBackground()
+            backgroundManager.applyBackground(bar, shouldUseCustom, forceUpdate = true, animate = true)
+            if (!shouldUseCustom) {
+                backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+            }
+        }
+    }
+
+    /**
+     * 방향 변경 + 다크 모드 변경을 한 번에 처리
+     * onConfigurationChanged에서 호출하여 비트맵 리로드를 한 번만 수행
+     */
+    fun handleConfigurationChange(newOrientation: Int) {
+        val orientationChanged = currentOrientation != newOrientation
+        val darkModeChanged = backgroundManager.updateDarkMode()
+
+        if (darkModeChanged) {
+            darkModeTransitionTime = SystemClock.elapsedRealtime()
+            Log.d(TAG, "Dark mode changed during config change: ${backgroundManager.isDarkMode}")
+        }
+
+        if (orientationChanged) {
+            currentOrientation = newOrientation
+            backgroundManager.handleOrientationChange(newOrientation)
+
+            val orientationName = if (newOrientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+            Log.d(TAG, "Orientation changed during config change: $orientationName")
+
+            rootView?.let { root ->
+                val params = createLayoutParams()
+                windowManager.updateViewLayout(root, params)
+                currentWindowHeight = params.height
+            }
+        }
+
+        if (orientationChanged || darkModeChanged) {
+            // 진행 중인 배경 전환 취소 후 비트맵 리로드 (1회만)
+            backgroundManager.cancelBackgroundTransition()
+            backgroundManager.loadBackgroundBitmaps(forceReload = true)
+
+            // forceUpdate로 배경 강제 적용 (dedup 우회)
+            val bar = navBarView ?: return
+            val shouldUseCustom = shouldUseCustomBackground()
+            backgroundManager.applyBackground(
+                bar, shouldUseCustom,
+                forceUpdate = true,
+                animate = !orientationChanged  // 방향 전환 시는 즉시, 다크 모드만 변경 시는 페이드
+            )
+            if (!shouldUseCustom) {
+                backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+            }
+        }
     }
 
     // ===== 배경 업데이트 =====
@@ -1386,7 +1458,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun refreshSettings() {
         if (!isCreated) return
 
-        // 설정 새로고침 시 강제 리로드
+        // 진행 중인 전환 취소 후 강제 리로드
+        backgroundManager.cancelBackgroundTransition()
         backgroundManager.loadBackgroundBitmaps(forceReload = true)
 
         rootView?.let { root ->
@@ -1410,7 +1483,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     fun reloadBackgroundImages() {
-        // 배경 이미지 변경 시 강제 리로드
+        // 진행 중인 전환 취소 후 배경 이미지 강제 리로드
+        backgroundManager.cancelBackgroundTransition()
         backgroundManager.loadBackgroundBitmaps(forceReload = true)
         updateNavBarBackground()
     }

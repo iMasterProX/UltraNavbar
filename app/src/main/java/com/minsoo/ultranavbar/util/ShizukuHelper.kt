@@ -4,8 +4,6 @@ import android.content.pm.PackageManager
 import android.util.Log
 import android.view.KeyEvent
 import rikka.shizuku.Shizuku
-import java.io.BufferedReader
-import java.io.InputStreamReader
 
 /**
  * Shizuku를 통한 입력 이벤트 주입 헬퍼
@@ -95,22 +93,22 @@ object ShizukuHelper {
                 null
             ) as Process
 
-            val result = StringBuilder()
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
-            val errorReader = BufferedReader(InputStreamReader(process.errorStream))
+            try {
+                val result = StringBuilder()
+                process.inputStream.bufferedReader().use { reader ->
+                    reader.forEachLine { line -> result.append(line).append("\n") }
+                }
+                process.errorStream.bufferedReader().use { errorReader ->
+                    errorReader.forEachLine { line -> result.append(line).append("\n") }
+                }
 
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                result.append(line).append("\n")
+                val exitCode = process.waitFor()
+                Log.d(TAG, "Shizuku shell result: exitCode=$exitCode, output=${result.toString().trim()}")
+
+                Pair(exitCode, result.toString().trim())
+            } finally {
+                process.destroy()
             }
-            while (errorReader.readLine().also { line = it } != null) {
-                result.append(line).append("\n")
-            }
-
-            val exitCode = process.waitFor()
-            Log.d(TAG, "Shizuku shell result: exitCode=$exitCode, output=${result.toString().trim()}")
-
-            Pair(exitCode, result.toString().trim())
         } catch (e: Exception) {
             Log.e(TAG, "Shizuku shell command failed", e)
             Pair(-999, e.message ?: "Shizuku error") // -999: Shizuku 실패 표시
@@ -124,24 +122,24 @@ object ShizukuHelper {
         return try {
             Log.d(TAG, "Executing via Runtime: $command")
 
-            val result = StringBuilder()
             val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
 
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
-            val errorReader = BufferedReader(InputStreamReader(process.errorStream))
+            try {
+                val result = StringBuilder()
+                process.inputStream.bufferedReader().use { reader ->
+                    reader.forEachLine { line -> result.append(line).append("\n") }
+                }
+                process.errorStream.bufferedReader().use { errorReader ->
+                    errorReader.forEachLine { line -> result.append(line).append("\n") }
+                }
 
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                result.append(line).append("\n")
+                val exitCode = process.waitFor()
+                Log.d(TAG, "Runtime shell result: exitCode=$exitCode, output=${result.toString().trim()}")
+
+                Pair(exitCode, result.toString().trim())
+            } finally {
+                process.destroy()
             }
-            while (errorReader.readLine().also { line = it } != null) {
-                result.append(line).append("\n")
-            }
-
-            val exitCode = process.waitFor()
-            Log.d(TAG, "Runtime shell result: exitCode=$exitCode, output=${result.toString().trim()}")
-
-            Pair(exitCode, result.toString().trim())
         } catch (e: Exception) {
             Log.e(TAG, "Runtime shell command failed", e)
             Pair(-1, e.message ?: "Unknown error")
