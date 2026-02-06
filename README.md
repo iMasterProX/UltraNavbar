@@ -45,13 +45,13 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 기능 앱�
   - **비활성화**: 버튼 동작 없음
   - **앱 실행**: 지정된 앱 바로 실행
   - **바로가기 실행**: 앱에서 제공하는 바로가기 실행
-  - **자동 터치 (좌표 기반)**: 지정한 화면 좌표를 자동으로 터치 (Shizuku 권장)
-  - **자동 터치 (UI 요소 기반)**: 접근성 서비스로 특정 UI 요소 클릭 (Shizuku 불필요)
+  - **자동 터치 (좌표 기반)**: 지정한 화면 좌표를 자동으로 터치
+  - **자동 터치 (UI 요소 기반)**: 접근성 서비스로 특정 UI 요소 클릭
 - **시스템 설정 동기화**: 앱 설정과 시스템 펜 설정 자동 동기화
 
 #### ⚙️ 시스템 통합
 - **접근성 서비스**: 네비게이션 바 표시, 윈도우 상태 감지, 펜 버튼 동작 실행
-- **Shizuku 지원**: 좌표 기반 자동 터치를 위한 고급 권한 (선택사항)
+- **Shizuku 지원**: 선택사항
 - **배터리 최적화 제외**: 서비스 안정성을 위한 백그라운드 실행 보장
 - **블루투스 권한**: 키보드 감지 및 배터리 정보 읽기
 - **저장소 접근**: 배경화면 자동 생성
@@ -61,14 +61,13 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 기능 앱�
 #### 요구사항
 - Android 12 이상
 - LG UltraTab 기기 (다른 태블릿에서도 작동 가능하지만 보장은 안합니다)
-- Shizuku (좌표 기반 자동 터치 사용 시 권장, 선택사항)
+- Shizuku (실험적 기능 관련, 선택사항)
 
 #### 초기 설정
 1. 앱 설치 후 실행
 2. 접근성 서비스 활성화 (설정 > 접근성 > 다운로드한 서비스 > UltraNavbar)
 3. 필요한 권한 허용 (블루투스, 저장소 등)
 4. 배터리 최적화에서 제외 (안정성 향상)
-5. (선택) Shizuku 설치 및 권한 부여 (좌표 기반 자동 터치 사용 시)
 
 #### 주요 설정
 
@@ -85,7 +84,7 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 기능 앱�
 - 펜 제스처 무시 설정으로 드로잉 앱에서 오작동 방지
 
 **앱 설정**
-- `앱 설정` 탭에서 권한 상태 확인 및 Shizuku 설정
+- `앱 설정` 탭에서 권한 상태 확인
 
 ### 문제 해결
 
@@ -106,7 +105,6 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 기능 앱�
 **펜 버튼 자동 터치가 작동하지 않을 때**
 - 접근성 서비스가 활성화되어 있는지 확인
 - 펜 버튼을 짧고 빠르게 누르기보다 조금 길게 천천히 눌러야 인식이 잘됩니다
-- 좌표 기반: Shizuku가 실행 중이고 권한이 부여되어 있는지 확인
 - UI 요소 기반: 대상 앱이 실행 중이고 해당 UI 요소가 화면에 표시되어 있는지 확인
 
 ### 개발 정보
@@ -173,7 +171,7 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 
 #### ⚙️ System Integration
 - **Accessibility Service**: Display navigation bar, detect window states, execute pen button actions
-- **Shizuku Support**: Advanced permissions for coordinate-based auto touch (optional)
+- **Shizuku Support**: (optional)
 - **Battery Optimization Exemption**: Ensure service reliability with background execution
 - **Bluetooth Permission**: Detect keyboards and read battery information
 - **Storage Access**: Auto-generate wallpaper backgrounds
@@ -183,7 +181,7 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 #### Requirements
 - Android 12 or higher
 - LG UltraTab device (may work on other tablets, but not guaranteed)
-- Shizuku (recommended for coordinate-based auto touch, optional)
+- Shizuku (optional)
 
 #### Initial Setup
 1. Install and launch the app
@@ -206,7 +204,7 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 - Automate tool switching in OneNote, Samsung Notes, etc. with auto touch
 
 **App Settings**
-- Check permission status and configure Shizuku in the `App Settings` tab
+- Check permission status in the `App Settings` tab
 
 ### Troubleshooting
 
@@ -227,7 +225,6 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 **When pen button auto touch doesn't work**
 - Verify that accessibility service is enabled
 - Press the pen button slowly and hold briefly rather than quick short presses for better recognition
-- Coordinate-based: Verify Shizuku is running and permission is granted
 - UI Element-based: Ensure target app is running and the UI element is visible on screen
 
 ### Development
