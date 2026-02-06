@@ -59,9 +59,6 @@ class SettingsManager private constructor(context: Context) {
         // Recent Apps Taskbar
         private const val KEY_RECENT_APPS_TASKBAR_ENABLED = "recent_apps_taskbar_enabled"
 
-        // Shizuku-based auto touch (coordinate)
-        private const val KEY_SHIZUKU_AUTO_TOUCH_ENABLED = "shizuku_auto_touch_enabled"
-
         // Wacom Pen Settings
         private const val KEY_PEN_POINTER_ENABLED = "pen_pointer_enabled"
         private const val KEY_PEN_IGNORE_NAV_GESTURES = "pen_ignore_nav_gestures"
@@ -78,13 +75,13 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_PEN_A_PAINT_FUNCTION = "pen_a_paint_function"
         private const val KEY_PEN_B_PAINT_FUNCTION = "pen_b_paint_function"
 
-        // 터치 포인트 설정 (좌표 기반 - Shizuku 필요)
+        // 터치 포인트 설정 (좌표 기반 - dispatchGesture 사용)
         private const val KEY_PEN_A_TOUCH_X = "pen_a_touch_x"
         private const val KEY_PEN_A_TOUCH_Y = "pen_a_touch_y"
         private const val KEY_PEN_B_TOUCH_X = "pen_b_touch_x"
         private const val KEY_PEN_B_TOUCH_Y = "pen_b_touch_y"
 
-        // 노드 선택 설정 (접근성 노드 기반 - Shizuku 불필요)
+        // 노드 선택 설정 (접근성 노드 기반 - 권장)
         private const val KEY_PEN_A_NODE_ID = "pen_a_node_id"
         private const val KEY_PEN_A_NODE_TEXT = "pen_a_node_text"
         private const val KEY_PEN_A_NODE_CLASS = "pen_a_node_class"
@@ -231,11 +228,6 @@ class SettingsManager private constructor(context: Context) {
     var recentAppsTaskbarEnabled: Boolean
         get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, value).apply()
-
-    // Shizuku 기반 자동 터치 (좌표 기반)
-    var shizukuAutoTouchEnabled: Boolean
-        get() = prefs.getBoolean(KEY_SHIZUKU_AUTO_TOUCH_ENABLED, false)
-        set(value) = prefs.edit().putBoolean(KEY_SHIZUKU_AUTO_TOUCH_ENABLED, value).apply()
 
     // Wacom 펜 포인터 표시
     var penPointerEnabled: Boolean

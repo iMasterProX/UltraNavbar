@@ -51,8 +51,13 @@ class RecentAppsTaskbar(
 
     /**
      * Center group 생성
+     * 기존 상태를 초기화하여 updateApps가 제대로 동작하도록 함
      */
     fun createCenterGroup(barHeightPx: Int, buttonColor: Int): LinearLayout {
+        // 기존 상태 초기화 (updateApps의 중복 체크를 통과하기 위해)
+        iconViews.clear()
+        currentApps = emptyList()
+
         val group = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL

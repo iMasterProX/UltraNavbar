@@ -59,7 +59,13 @@
       "Bash(echo:*)",
       "Bash(done)",
       "Bash(find:*)",
-      "Bash(.\\\\gradlew.bat assembleDebug:*)"
+      "Bash(.\\\\gradlew.bat assembleDebug:*)",
+      "Bash(Select-String -Pattern \"SplitScreen|NavBarAccess|ShizukuHelper|split|stack\")",
+      "Bash(Select-Object -Last 100)",
+      "Bash(cmd /c \"gradlew.bat assembleDebug\")",
+      "Bash(grep:*)",
+      "Bash(Select-String -Pattern \"Split|NavBar\")",
+      "Bash(.\\\\gradlew assembleDebug:*)"
     ]
   }
 }

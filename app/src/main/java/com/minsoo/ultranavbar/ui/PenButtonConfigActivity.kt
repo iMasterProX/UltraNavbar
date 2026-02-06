@@ -331,7 +331,7 @@ class PenButtonConfigActivity : AppCompatActivity() {
 
     /**
      * 노드 클릭 설정 - 안내 다이얼로그 표시 후 설정 시작
-     * Shizuku 없이 작동하는 UI 요소 클릭 기능
+     * 접근성 서비스 기반 UI 요소 클릭 기능 (권장)
      */
     private fun selectNodeClick() {
         // 접근성 서비스가 실행 중인지 확인

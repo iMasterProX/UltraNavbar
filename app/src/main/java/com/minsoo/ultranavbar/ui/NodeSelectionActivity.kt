@@ -20,8 +20,8 @@ import com.minsoo.ultranavbar.settings.SettingsManager
 /**
  * UI 요소(노드) 선택 Activity
  *
- * Shizuku 없이 작동하는 자동 클릭 기능을 위해
- * 접근성 노드 정보를 저장합니다.
+ * 접근성 서비스 기반의 자동 클릭 기능을 위해
+ * 접근성 노드 정보를 저장합니다. (권장)
  *
  * UX 플로우:
  * 1단계: 플로팅 버튼 표시 → 사용자가 원하는 앱으로 이동

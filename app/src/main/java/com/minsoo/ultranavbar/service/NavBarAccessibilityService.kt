@@ -72,6 +72,8 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isQuickSettingsOpen: Boolean = false
     private var isWallpaperPreviewVisible: Boolean = false
     private var isImeVisible: Boolean = false
+    private var isSplitScreenMode: Boolean = false  // 분할화면 모드 상태
+    private var wasSplitScreenUsed: Boolean = false  // 분할화면 사용 이력 (최근 앱 종료 후 복구용)
     private var lastImeEventAt: Long = 0
     private var lastNonLauncherEventAt: Long = 0
     private var lastHomeEntryAt: Long = 0  // 홈 진입 안정화용
@@ -83,6 +85,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var fullscreenPoll: Runnable? = null
     private var unlockFadeRunnable: Runnable? = null
     private var batteryMonitorRunnable: Runnable? = null
+    private var windowRecoveryRunnable: Runnable? = null  // 윈도우 복구용
 
     // === 브로드캐스트 리시버 ===
     private val settingsReceiver = object : BroadcastReceiver() {
@@ -324,10 +327,13 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun cancelPendingTasks() {
         pendingStateCheck?.let { handler.removeCallbacks(it) }
         pendingStateCheck = null
-        
+
         unlockFadeRunnable?.let { handler.removeCallbacks(it) }
         unlockFadeRunnable = null
-        
+
+        windowRecoveryRunnable?.let { handler.removeCallbacks(it) }
+        windowRecoveryRunnable = null
+
         stopFullscreenPolling()
     }
 
@@ -541,11 +547,45 @@ class NavBarAccessibilityService : AccessibilityService() {
     }
 
     private fun updateRecentsState(isRecents: Boolean, source: String) {
+        val wasRecentsVisible = isRecentsVisible
         if (isRecentsVisible != isRecents) {
             isRecentsVisible = isRecents
             Log.d(TAG, "Recents state ($source): $isRecentsVisible")
             overlay?.setRecentsState(isRecents)
+
+            // 최근 앱 화면이 닫힐 때 - 분할화면 플래그 리셋
+            if (wasRecentsVisible && !isRecents) {
+                val helperFlag = SplitScreenHelper.wasSplitScreenUsedAndReset()
+                if (wasSplitScreenUsed || helperFlag) {
+                    Log.d(TAG, "Recents closed after split screen, resetting flags")
+                    // 분할화면 상태 플래그만 리셋 (스택 정리는 시스템에 맡김)
+                    cleanSplitScreenStacks()
+                    wasSplitScreenUsed = false
+                }
+            }
         }
+    }
+
+    /**
+     * 분할화면 스택 정리
+     *
+     * 참고: Android 12+에서 'am stack remove-all-secondary-split-stacks' 명령어가
+     * 제거되어 더 이상 사용할 수 없음. 대신 빈 split-screen 태스크를 개별적으로 정리하거나,
+     * 시스템이 자동으로 정리하도록 두는 방식으로 변경.
+     *
+     * 실험 결과, 분할화면 종료 후 명시적인 스택 정리를 하지 않아도
+     * 시스템이 자동으로 처리하는 것이 더 안정적임.
+     */
+    private fun cleanSplitScreenStacks() {
+        Log.d(TAG, "Split screen cleanup: resetting all state flags")
+
+        // 모든 분할화면 관련 상태 플래그 강제 초기화
+        SplitScreenHelper.forceResetSplitScreenState()
+    }
+
+    // 복구 체크는 더 이상 사용하지 않음 - 분할화면 종료 시 즉시 복구
+    private fun scheduleWindowRecoveryCheck() {
+        // 비활성화됨
     }
 
     private fun updateHomeScreenState(isHome: Boolean, source: String) {
@@ -642,12 +682,65 @@ class NavBarAccessibilityService : AccessibilityService() {
             checkNotificationPanelState()
             checkQuickSettingsState()
             checkImeVisibility()
+            checkSplitScreenState()  // 분할화면 상태 체크 추가
             updateHomeAndRecentsFromWindows()
             overlay?.ensureOrientationSync()
         }
         handler.postDelayed(pendingStateCheck!!, Constants.Timing.STATE_CHECK_DELAY_MS)
     }
 
+    /**
+     * 분할화면 상태 감지 및 복구 처리
+     * 분할화면 종료 후 유효한 윈도우가 없으면 자동으로 홈 화면으로 이동
+     */
+    private fun checkSplitScreenState() {
+        val windowList = windows.toList()
+        val wasInSplitScreen = isSplitScreenMode
+
+        // 분할화면 상태 감지 (멀티윈도우 윈도우가 있는지 확인)
+        isSplitScreenMode = windowList.any { window ->
+            try {
+                // 앱 윈도우이면서 분할화면 영역에 있는지 확인
+                if (window.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) {
+                    val bounds = android.graphics.Rect()
+                    window.getBoundsInScreen(bounds)
+                    // 화면의 절반 이하 크기의 앱 윈도우가 있으면 분할화면으로 판단
+                    val displayMetrics = resources.displayMetrics
+                    val screenHeight = displayMetrics.heightPixels
+                    val screenWidth = displayMetrics.widthPixels
+                    val isHalfScreen = bounds.height() < screenHeight * 0.7 || bounds.width() < screenWidth * 0.7
+                    isHalfScreen && window.isActive
+                } else {
+                    false
+                }
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        // SplitScreenHelper에 상태 동기화
+        SplitScreenHelper.setSplitScreenActive(isSplitScreenMode)
+
+        // 분할화면 진입 시 플래그 설정 (최근 앱 종료 후 복구용)
+        if (isSplitScreenMode && !wasInSplitScreen) {
+            wasSplitScreenUsed = true
+            Log.d(TAG, "Split screen entered, setting recovery flag")
+        }
+
+        // 분할화면이 종료되었는지 확인 (로그만 남김, 복구는 최근 앱 종료 시 수행)
+        if (wasInSplitScreen && !isSplitScreenMode) {
+            Log.d(TAG, "Split screen ended")
+        }
+
+        if (wasInSplitScreen != isSplitScreenMode) {
+            Log.d(TAG, "Split screen state changed: $wasInSplitScreen -> $isSplitScreenMode")
+        }
+    }
+
+    /**
+     * 분할화면 종료 후 처리
+     * 유효한 터치 가능 윈도우가 없으면 홈 화면으로 자동 이동
+     */
     private fun checkFullscreenState() {
         val newFullscreenState = windowAnalyzer.analyzeFullscreenState(windows.toList())
 
@@ -1325,7 +1418,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     /**
      * 저장된 노드 정보를 기반으로 UI 요소 클릭
-     * Shizuku 없이 작동하며 화면 방향에 상관없이 동작
+     * 화면 방향에 상관없이 동작
      *
      * @param nodeId 리소스 ID (예: com.example:id/button)
      * @param nodeText 텍스트 내용

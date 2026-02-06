@@ -39,6 +39,9 @@ class NavBarSettingsFragment : Fragment() {
     // 버튼 배치 반전 (Android 12L 스타일)
     private lateinit var switchNavButtonsSwap: SwitchMaterial
 
+    // 최근 앱 작업 표시줄
+    private lateinit var switchRecentAppsTaskbar: SwitchMaterial
+
     // 롱프레스 설정
     private lateinit var txtLongPressAction: TextView
     private lateinit var btnChangeLongPressAction: MaterialButton
@@ -152,6 +155,9 @@ class NavBarSettingsFragment : Fragment() {
         // 버튼 배치 반전 스위치
         switchNavButtonsSwap = view.findViewById(R.id.switchNavButtonsSwap)
 
+        // 최근 앱 작업 표시줄 스위치
+        switchRecentAppsTaskbar = view.findViewById(R.id.switchRecentAppsTaskbar)
+
         // 롱프레스 설정
         txtLongPressAction = view.findViewById(R.id.txtLongPressAction)
         btnChangeLongPressAction = view.findViewById<MaterialButton>(R.id.btnChangeLongPressAction).apply {
@@ -243,6 +249,9 @@ class NavBarSettingsFragment : Fragment() {
         // 버튼 배치 반전 상태 로드
         switchNavButtonsSwap.isChecked = settings.navButtonsSwapped
 
+        // 최근 앱 작업 표시줄 상태 로드
+        switchRecentAppsTaskbar.isChecked = settings.recentAppsTaskbarEnabled
+
         // 재호출 설정 로드
         switchHotspot.isChecked = settings.hotspotEnabled
 
@@ -293,6 +302,12 @@ class NavBarSettingsFragment : Fragment() {
         // 버튼 배치 반전 (Android 12L 스타일)
         switchNavButtonsSwap.setOnCheckedChangeListener { _, isChecked ->
             settings.navButtonsSwapped = isChecked
+            notifySettingsChanged()
+        }
+
+        // 최근 앱 작업 표시줄
+        switchRecentAppsTaskbar.setOnCheckedChangeListener { _, isChecked ->
+            settings.recentAppsTaskbarEnabled = isChecked
             notifySettingsChanged()
         }
 

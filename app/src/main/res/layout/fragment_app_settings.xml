@@ -325,50 +325,6 @@
                         android:text="@string/setup_grant_permission" />
                 </LinearLayout>
 
-                <!-- Shizuku 권한 (선택사항) -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="16dp"
-                    android:gravity="center_vertical">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/permission_shizuku"
-                            android:textSize="14sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/permission_shizuku_summary"
-                            android:textSize="12sp"
-                            android:textColor="?android:textColorSecondary" />
-
-                        <TextView
-                            android:id="@+id/txtPermShizuku"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="@string/shizuku_status_not_installed"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPermShizuku"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/setup_shizuku_setup_guide" />
-                </LinearLayout>
-
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

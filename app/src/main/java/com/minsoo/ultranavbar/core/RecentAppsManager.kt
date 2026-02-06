@@ -3,6 +3,7 @@ package com.minsoo.ultranavbar.core
 import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -23,6 +24,8 @@ class RecentAppsManager(
     companion object {
         private const val TAG = "RecentAppsManager"
         const val MAX_RECENT_APPS = 6
+        private const val PREFS_NAME = "recent_apps_prefs"
+        private const val KEY_RECENT_APPS = "recent_apps_list"
     }
 
     /**
@@ -47,6 +50,7 @@ class RecentAppsManager(
 
     private val settings: SettingsManager = SettingsManager.getInstance(context)
     private val packageManager: PackageManager = context.packageManager
+    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     // 제외할 패키지 목록
     private val excludedPackages: MutableSet<String> = mutableSetOf()
@@ -63,24 +67,42 @@ class RecentAppsManager(
     }
 
     /**
-     * 초기 최근 앱 로드 (UsageStatsManager 사용)
+     * 초기 최근 앱 로드 (저장된 목록 우선, 없으면 UsageStatsManager 사용)
      */
     fun loadInitialRecentApps() {
         Log.d(TAG, "Loading initial recent apps")
-        val recentPackages = queryUsageStats()
 
-        for (packageName in recentPackages) {
-            if (recentApps.size >= MAX_RECENT_APPS) break
+        // 먼저 저장된 목록 로드 시도
+        val savedPackages = loadSavedRecentApps()
+        if (savedPackages.isNotEmpty()) {
+            Log.d(TAG, "Loading from saved list: ${savedPackages.size} apps")
+            for (packageName in savedPackages) {
+                if (recentApps.size >= MAX_RECENT_APPS) break
 
-            val icon = loadAppIcon(packageName) ?: continue
-            val label = loadAppLabel(packageName) ?: packageName
+                val icon = loadAppIcon(packageName) ?: continue
+                val label = loadAppLabel(packageName) ?: packageName
 
-            recentApps.add(RecentAppInfo(packageName, icon, label, true))
+                recentApps.add(RecentAppInfo(packageName, icon, label, true))
+            }
+        } else {
+            // 저장된 목록이 없으면 UsageStats에서 로드
+            Log.d(TAG, "No saved list, loading from UsageStats")
+            val recentPackages = queryUsageStats()
+
+            for (packageName in recentPackages) {
+                if (recentApps.size >= MAX_RECENT_APPS) break
+
+                val icon = loadAppIcon(packageName) ?: continue
+                val label = loadAppLabel(packageName) ?: packageName
+
+                recentApps.add(RecentAppInfo(packageName, icon, label, true))
+            }
         }
 
         Log.d(TAG, "Loaded ${recentApps.size} initial apps")
         if (recentApps.isNotEmpty()) {
             listener.onRecentAppsChanged(recentApps.toList())
+            saveRecentApps() // 로드 후 저장하여 동기화
         }
     }
 
@@ -115,6 +137,7 @@ class RecentAppsManager(
         }
 
         listener.onRecentAppsChanged(recentApps.toList())
+        saveRecentApps() // 변경사항 저장
     }
 
     /**
@@ -232,5 +255,27 @@ class RecentAppsManager(
             Log.e(TAG, "Failed to query usage stats", e)
             emptyList()
         }
+    }
+
+    /**
+     * 최근 앱 목록을 SharedPreferences에 저장
+     */
+    private fun saveRecentApps() {
+        val packageNames = recentApps.map { it.packageName }
+        val joinedString = packageNames.joinToString(",")
+        prefs.edit().putString(KEY_RECENT_APPS, joinedString).apply()
+        Log.d(TAG, "Saved ${packageNames.size} recent apps")
+    }
+
+    /**
+     * SharedPreferences에서 저장된 최근 앱 목록 로드
+     */
+    private fun loadSavedRecentApps(): List<String> {
+        val joinedString = prefs.getString(KEY_RECENT_APPS, null) ?: return emptyList()
+        if (joinedString.isEmpty()) return emptyList()
+
+        return joinedString.split(",")
+            .filter { it.isNotEmpty() && !isExcluded(it) }
+            .take(MAX_RECENT_APPS)
     }
 }

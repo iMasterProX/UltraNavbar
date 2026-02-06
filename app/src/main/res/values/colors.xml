@@ -13,4 +13,8 @@
     <color name="navbar_button_normal">#FFFFFFFF</color>
     <color name="navbar_button_pressed">#FF03DAC5</color>
     <color name="hotspot_indicator">#80FFFFFF</color>
+
+    <!-- 실험적 기능 경고 색상 -->
+    <color name="experimental_warning">#FFB74D</color>
+    <color name="experimental_warning_bg">#1AFFB74D</color>
 </resources>

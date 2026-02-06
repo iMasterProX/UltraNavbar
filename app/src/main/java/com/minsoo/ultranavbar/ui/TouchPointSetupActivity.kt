@@ -426,13 +426,6 @@ class TouchPointSetupActivity : Activity() {
             Toast.LENGTH_SHORT
         ).show()
 
-        // API 한계 경고 메시지
-        Toast.makeText(
-            this,
-            getString(R.string.auto_touch_api_warning),
-            Toast.LENGTH_LONG
-        ).show()
-
         cleanup()
         setResult(RESULT_OK)
         finish()

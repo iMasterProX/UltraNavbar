@@ -25,10 +25,6 @@
             android:id="@+id/nav_app_settings"
             android:icon="@drawable/ic_settings"
             android:title="@string/nav_menu_app_settings" />
-        <item
-            android:id="@+id/nav_experimental"
-            android:icon="@drawable/ic_experimental"
-            android:title="@string/nav_menu_experimental" />
     </group>
 
 </menu>

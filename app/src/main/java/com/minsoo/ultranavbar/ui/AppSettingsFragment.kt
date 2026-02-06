@@ -21,10 +21,6 @@ import com.google.android.material.card.MaterialCardView
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
-import com.minsoo.ultranavbar.util.ShizukuHelper
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.appcompat.app.AlertDialog
 import android.text.Html
 
@@ -63,7 +59,6 @@ class AppSettingsFragment : Fragment() {
     private lateinit var txtPermStorage: TextView
     private lateinit var txtPermBattery: TextView
     private lateinit var txtPermBluetooth: TextView
-    private var txtPermShizuku: TextView? = null  // 레이아웃에 없을 수 있음
 
     // 버전 정보 UI
     private lateinit var txtVersion: TextView
@@ -154,12 +149,6 @@ class AppSettingsFragment : Fragment() {
             requestBluetoothPermission()
         }
 
-        // Shizuku 권한 (레이아웃에 없으면 null)
-        txtPermShizuku = view.findViewById(R.id.txtPermShizuku)
-        view.findViewById<MaterialButton?>(R.id.btnPermShizuku)?.setOnClickListener {
-            showShizukuSetupGuide()
-        }
-
         // 버전 정보 UI
         txtVersion = view.findViewById(R.id.txtVersion)
 
@@ -231,18 +220,6 @@ class AppSettingsFragment : Fragment() {
         } else {
             getString(R.string.permission_status_not_granted)
         }
-
-        // Shizuku 권한 상태 확인 (레이아웃에 있는 경우에만)
-        try {
-            val isShizukuAvailable = ShizukuHelper.isShizukuAvailable() && ShizukuHelper.hasShizukuPermission()
-            txtPermShizuku?.text = when {
-                !ShizukuHelper.isShizukuAvailable() -> getString(R.string.shizuku_status_not_installed)
-                !ShizukuHelper.hasShizukuPermission() -> getString(R.string.shizuku_status_no_permission)
-                else -> getString(R.string.shizuku_status_ready)
-            }
-        } catch (e: Exception) {
-            // 레이아웃에 없으면 무시
-        }
     }
 
     private fun loadVersionInfo() {
@@ -313,11 +290,6 @@ class AppSettingsFragment : Fragment() {
 
     private fun showOpenSourceLicensesDialog() {
         val licenses = """
-            <b>Shizuku</b><br>
-            Copyright (c) RikkaApps<br>
-            License: Apache License 2.0<br>
-            <a href="https://github.com/RikkaApps/Shizuku">https://github.com/RikkaApps/Shizuku</a><br><br>
-
             <b>AndroidX Libraries</b><br>
             Copyright (c) The Android Open Source Project<br>
             (core-ktx, appcompat, constraintlayout, preference, recyclerview, lifecycle)<br>
@@ -346,36 +318,5 @@ class AppSettingsFragment : Fragment() {
         // 다이얼로그 내 링크 클릭 가능하게 설정
         dialog.findViewById<TextView>(android.R.id.message)?.movementMethod =
             android.text.method.LinkMovementMethod.getInstance()
-    }
-
-    private fun showShizukuSetupGuide() {
-        val message = Html.fromHtml(getString(R.string.shizuku_setup_guide_message_experimental), Html.FROM_HTML_MODE_LEGACY)
-
-        AlertDialog.Builder(requireContext())
-            .setTitle(R.string.shizuku_setup_guide_title)
-            .setMessage(message)
-            .setPositiveButton(R.string.shizuku_copy_command) { _, _ ->
-                // ADB 명령어 클립보드 복사
-                val command = "adb shell sh /storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh"
-                val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("Shizuku ADB Command", command)
-                clipboard.setPrimaryClip(clip)
-                Toast.makeText(requireContext(), R.string.shizuku_command_copied, Toast.LENGTH_SHORT).show()
-            }
-            .setNeutralButton(R.string.shizuku_grant_permission) { _, _ ->
-                // Shizuku 권한 요청
-                if (ShizukuHelper.isShizukuAvailable()) {
-                    if (ShizukuHelper.hasShizukuPermission()) {
-                        Toast.makeText(requireContext(), R.string.shizuku_permission_already_granted, Toast.LENGTH_SHORT).show()
-                    } else {
-                        ShizukuHelper.requestShizukuPermission()
-                        Toast.makeText(requireContext(), "권한 요청을 보냈습니다", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    Toast.makeText(requireContext(), R.string.shizuku_not_running, Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
     }
 }

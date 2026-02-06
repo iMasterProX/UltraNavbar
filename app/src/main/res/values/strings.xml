@@ -21,24 +21,11 @@
     <string name="navbar_enable_summary">Show custom navigation bar overlay</string>
 
     <string name="nav_buttons_swap_title">Swap Button Layout</string>
-    <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (Notifications/Screenshot) to left side (Android 12L style)</string>
+    <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (Notifications/Screenshot) to left side</string>
 
     <string name="recent_apps_taskbar_title">Recent Apps Taskbar</string>
     <string name="recent_apps_taskbar_summary">Show recent app icons in the center of the navigation bar. Tap to switch, slide up for split screen.</string>
-    <string name="recent_apps_taskbar_requires_shizuku">Requires Shizuku permission for split screen feature</string>
-    <string name="recent_apps_taskbar_shizuku_not_ready">Shizuku permission required</string>
-    <string name="shizuku_required_for_feature">This feature requires Shizuku permission. Go to App Settings → Shizuku Status to view the setup guide.</string>
     <string name="split_screen_not_supported">%1$s does not support split screen</string>
-
-    <!-- Experimental Features -->
-    <string name="experimental_title">Experimental Features</string>
-    <string name="experimental_warning_title">⚠️ Warning</string>
-    <string name="experimental_warning_message">These features are experimental and may be unstable. They can cause system instability, app crashes, or require device restart. Use at your own risk.</string>
-    <string name="experimental_recent_apps_taskbar_summary">Show recent app icons in navbar center. Tap to switch apps, slide up for split screen.&lt;br&gt;&lt;br&gt;&lt;b&gt;Known issues:&lt;/b&gt;&lt;br&gt;• Split screen may cause system instability&lt;br&gt;• May require device restart if issues occur</string>
-
-    <!-- Shizuku Auto Touch -->
-    <string name="shizuku_auto_touch_title">Fast Auto Touch (Shizuku)</string>
-    <string name="shizuku_auto_touch_summary">Use Shizuku for faster and more reliable coordinate-based auto touch when using pen buttons. Without this, auto touch uses the slower Android accessibility API.</string>
 
     <string name="disabled_apps_settings">Disabled apps</string>
     <string name="disabled_apps_summary">Select apps where the custom navigation bar will be completely disabled. In these apps, only the default navigation bar will be used.</string>
@@ -136,7 +123,6 @@
     <string name="nav_menu_wacom_pen">Wacom Pen</string>
     <string name="nav_menu_hardware">Hardware</string>
     <string name="nav_menu_app_settings">App Settings</string>
-    <string name="nav_menu_experimental">Experimental</string>
     <string name="hardware_info_desc">View device CPU, display, sensors, and input device information.</string>
 
     <!-- App settings screen -->
@@ -391,37 +377,11 @@
     <!-- System Pen Settings Warning -->
     <string name="pen_settings_system_warning">LG UltraTab Extension pen settings are currently active. To avoid conflicts, please disable pen settings in the app first before using system settings.</string>
 
-    <!-- Auto Touch API Warning -->
-    <string name="auto_touch_api_warning">Note: This feature may respond slowly or inconsistently due to Android dispatchGesture API limitations. For reliable operation, Shizuku is required.</string>
-
-    <!-- Shizuku Auto Touch -->
-    <string name="shizuku_status_title">Shizuku Status</string>
-    <string name="shizuku_status_ready">Ready (Fast mode enabled)</string>
-    <string name="shizuku_status_no_permission">Permission required</string>
-    <string name="shizuku_status_not_installed">Not installed</string>
-    <string name="shizuku_request_permission">Request Shizuku Permission</string>
-    <string name="shizuku_install_guide">Install Shizuku for reliable auto touch</string>
-    <string name="shizuku_install_link">https://shizuku.rikka.app/</string>
-
-    <!-- Setup - Shizuku (removed from setup wizard, kept for reference) -->
-    <string name="setup_shizuku_setup_guide">Setup Guide</string>
-    <string name="permission_shizuku">Shizuku permission</string>
-    <string name="permission_shizuku_summary">Required for experimental features.</string>
-
-    <!-- Shizuku Setup Guide -->
-    <string name="shizuku_setup_guide_title">Shizuku Setup Guide</string>
-    <string name="shizuku_setup_guide_message_experimental">Granting Shizuku permission unlocks the &lt;b&gt;Experimental Features&lt;/b&gt; menu in the left menu.&lt;br&gt;&lt;br&gt;&lt;b&gt;Experimental features include:&lt;/b&gt;&lt;br&gt;• Recent Apps Taskbar with split screen&lt;br&gt;• Fast coordinate-based auto touch for pen buttons&lt;br&gt;&lt;br&gt;&lt;b&gt;How to enable Shizuku:&lt;/b&gt;&lt;br&gt;&lt;br&gt;1. Install Shizuku app from Play Store or GitHub&lt;br&gt;&lt;br&gt;2. Connect device to PC via USB&lt;br&gt;&lt;br&gt;3. Enable USB debugging in Developer Options&lt;br&gt;&lt;br&gt;4. Run the following ADB command on PC:&lt;br&gt;&lt;b&gt;adb shell sh /storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh&lt;/b&gt;&lt;br&gt;&lt;br&gt;5. Return to this app and tap \"Grant Permission\"&lt;br&gt;&lt;br&gt;&lt;b&gt;Important:&lt;/b&gt; Shizuku does NOT persist after reboot. You must run the ADB command again each time you restart your device.</string>
-    <string name="shizuku_permission_already_granted">Shizuku permission is already granted</string>
-    <string name="shizuku_copy_command">Copy ADB Command</string>
-    <string name="shizuku_grant_permission">Grant Permission</string>
-    <string name="shizuku_command_copied">ADB command copied to clipboard</string>
-    <string name="shizuku_not_running">Shizuku is not running. Please execute the ADB command first.</string>
-
-    <!-- Node Selection (No Shizuku required) -->
+    <!-- Node Selection (Recommended) -->
     <string name="pen_button_action_node_click">Auto Touch (UI Element)</string>
     <string name="node_selection_title">UI Element Selection</string>
     <string name="node_selection_guide_title">UI Element Selection Guide</string>
-    <string name="node_selection_guide_message">This feature clicks a specific UI element when the pen button is pressed.\n\n• Works without Shizuku\n• Works regardless of screen orientation\n• Target app must be open for it to work\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nTap \'Start Setup\' to select a UI element.</string>
+    <string name="node_selection_guide_message">This feature clicks a specific UI element when the pen button is pressed.\n\n• Works regardless of screen orientation\n• Target app must be open for it to work\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nTap \'Start Setup\' to select a UI element.</string>
     <string name="node_selection_guide_start">Start Setup</string>
     <string name="node_selection_instruction">Open the target app and tap on the UI element you want to click.\n\nTap the floating button when ready.</string>
     <string name="node_selection_overlay_hint">Tap the element you want to select</string>
@@ -439,8 +399,12 @@
 
     <!-- Auto Touch Method Selection -->
     <string name="auto_touch_method_title">Select Auto Touch Method</string>
-    <string name="auto_touch_method_coordinate">Coordinate Touch (Shizuku Required)</string>
-    <string name="auto_touch_method_coordinate_desc">Fast and precise. Requires Shizuku permission.</string>
-    <string name="auto_touch_method_node">UI Element Click (No Shizuku)</string>
-    <string name="auto_touch_method_node_desc">Works without Shizuku. Clicks a specific UI element regardless of screen orientation.</string>
+    <string name="auto_touch_method_coordinate">Auto Touch (Coordinate)</string>
+    <string name="auto_touch_method_coordinate_desc">Tap at saved coordinates. May be slow due to API limitations.</string>
+    <string name="auto_touch_method_node">UI Element Click (Recommended)</string>
+    <string name="auto_touch_method_node_desc">Clicks a specific UI element regardless of screen orientation.</string>
+
+    <!-- Experimental Features -->
+    <string name="experimental_features_title">⚠️ Experimental Features</string>
+    <string name="experimental_features_warning">These features are experimental and may not work properly. They may cause unexpected behavior, crashes, or other issues. Use at your own risk.</string>
 </resources>

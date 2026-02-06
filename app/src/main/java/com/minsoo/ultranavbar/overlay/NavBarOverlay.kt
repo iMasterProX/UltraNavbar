@@ -174,10 +174,47 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private val taskbarListener = object : RecentAppsTaskbar.TaskbarActionListener {
         override fun onAppTapped(packageName: String) {
-            val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-            intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (intent != null) {
-                context.startActivity(intent)
+            Log.d(TAG, "App tapped: $packageName")
+            launchApp(packageName)
+        }
+
+        /**
+         * 앱 실행
+         * 분할화면 상태면 종료 후 실행, 아니면 바로 실행
+         */
+        private fun launchApp(packageName: String) {
+            val isSplitScreen = SplitScreenHelper.isSplitScreenActive()
+
+            if (isSplitScreen) {
+                // 분할화면 종료 후 앱 실행
+                service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
+                Log.d(TAG, "Exiting split screen before launch: $packageName")
+
+                handler.postDelayed({
+                    launchAppDirect(packageName)
+                }, 150L)
+            } else {
+                // 바로 앱 실행
+                launchAppDirect(packageName)
+            }
+        }
+
+        /**
+         * 앱 직접 실행
+         */
+        private fun launchAppDirect(packageName: String) {
+            try {
+                val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+                if (intent != null) {
+                    intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                   android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                    context.startActivity(intent)
+                    Log.d(TAG, "App launched: $packageName")
+                } else {
+                    Log.w(TAG, "Cannot find launch intent for: $packageName")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Launch failed: $packageName", e)
             }
         }
 
@@ -314,6 +351,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         pendingRecentsState = null
         pendingPanelClose?.let { handler.removeCallbacks(it) }
         pendingPanelClose = null
+        taskbarEntryAnimator?.cancel()
+        taskbarEntryAnimator = null
+        taskbarExitAnimator?.cancel()
+        taskbarExitAnimator = null
     }
 
     // ===== 네비바 생성 =====
@@ -980,8 +1021,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 clearHomeExitSuppression()
                 Log.d(TAG, "Home screen state: true")
 
-                // 홈화면에서는 최근 앱 작업 표시줄 숨김
-                centerGroupView?.visibility = View.GONE
+                // 홈화면에서는 최근 앱 작업 표시줄 숨김 (애니메이션 적용)
+                animateTaskbarExit()
 
                 // 언락 페이드 중에는 배경 전환하지 않음 (언락 완료 후 자동 업데이트)
                 if (isUnlockPending || isUnlockFadeRunning || isUnlockFadeSuppressed) {
@@ -1025,8 +1066,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             isOnHomeScreen = false
             Log.d(TAG, "Home screen state: false (debounced)")
 
-            // 앱이 실행중이면 최근 앱 작업 표시줄 표시
-            centerGroupView?.visibility = View.VISIBLE
+            // 앱이 실행중이면 최근 앱 작업 표시줄 표시 (애니메이션 적용)
+            animateTaskbarEntry()
 
             updateNavBarBackground()
         }
@@ -1035,6 +1076,127 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         updateNavBarBackground()
         pendingHomeState = task
         handler.postDelayed(task, Constants.Timing.HOME_STATE_DEBOUNCE_MS)
+    }
+
+    // ===== 최근 앱 작업 표시줄 애니메이션 =====
+
+    private var taskbarEntryAnimator: AnimatorSet? = null
+    private var taskbarExitAnimator: AnimatorSet? = null
+
+    /**
+     * 최근 앱 작업 표시줄 등장 애니메이션 (홈 → 앱)
+     * Android 12 스타일: 아래에서 슬라이드 + 페이드 + 스케일
+     */
+    private fun animateTaskbarEntry() {
+        val view = centerGroupView ?: return
+
+        // 퇴장 애니메이션 취소
+        taskbarExitAnimator?.cancel()
+        taskbarExitAnimator = null
+
+        // 등장 애니메이션 취소 (중복 방지)
+        taskbarEntryAnimator?.cancel()
+
+        // 초기 상태 설정
+        view.alpha = 0f
+        view.translationY = context.dpToPx(30).toFloat()
+        view.scaleX = 0.85f
+        view.scaleY = 0.85f
+        view.visibility = View.VISIBLE
+
+        // 애니메이션 생성
+        val alphaAnim = ObjectAnimator.ofFloat(view, "alpha", 0f, 1f)
+        val translateAnim = ObjectAnimator.ofFloat(view, "translationY", context.dpToPx(30).toFloat(), 0f)
+        val scaleXAnim = ObjectAnimator.ofFloat(view, "scaleX", 0.85f, 1f)
+        val scaleYAnim = ObjectAnimator.ofFloat(view, "scaleY", 0.85f, 1f)
+
+        taskbarEntryAnimator = AnimatorSet().apply {
+            playTogether(alphaAnim, translateAnim, scaleXAnim, scaleYAnim)
+            duration = 250L
+            interpolator = android.view.animation.DecelerateInterpolator(2f)
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    taskbarEntryAnimator = null
+                }
+            })
+            start()
+        }
+    }
+
+    /**
+     * 최근 앱 작업 표시줄 퇴장 애니메이션 (앱 → 홈)
+     * Android 12 스타일: 아래로 슬라이드 + 페이드 + 스케일
+     */
+    private fun animateTaskbarExit() {
+        val view = centerGroupView ?: return
+
+        // 등장 애니메이션 취소
+        taskbarEntryAnimator?.cancel()
+        taskbarEntryAnimator = null
+
+        // 이미 숨겨져 있거나 퇴장 애니메이션 진행 중이면 스킵
+        if (view.visibility != View.VISIBLE || taskbarExitAnimator?.isRunning == true) {
+            if (view.visibility != View.VISIBLE) {
+                view.visibility = View.GONE
+            }
+            return
+        }
+
+        // 이전 퇴장 애니메이션 취소
+        taskbarExitAnimator?.cancel()
+
+        // 현재 상태에서 시작 (진행 중인 등장 애니메이션이 있었을 수 있음)
+        val currentAlpha = view.alpha
+        val currentTranslationY = view.translationY
+        val currentScaleX = view.scaleX
+        val currentScaleY = view.scaleY
+
+        // 애니메이션 생성 - 현재 상태에서 목표 상태로
+        val targetTranslationY = context.dpToPx(25).toFloat()
+        val alphaAnim = ObjectAnimator.ofFloat(view, "alpha", currentAlpha, 0f)
+        val translateAnim = ObjectAnimator.ofFloat(view, "translationY", currentTranslationY, targetTranslationY)
+        val scaleXAnim = ObjectAnimator.ofFloat(view, "scaleX", currentScaleX, 0.85f)
+        val scaleYAnim = ObjectAnimator.ofFloat(view, "scaleY", currentScaleY, 0.85f)
+
+        taskbarExitAnimator = AnimatorSet().apply {
+            playTogether(alphaAnim, translateAnim, scaleXAnim, scaleYAnim)
+            duration = 180L
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    view.visibility = View.GONE
+                    // 상태 리셋
+                    view.alpha = 1f
+                    view.translationY = 0f
+                    view.scaleX = 1f
+                    view.scaleY = 1f
+                    taskbarExitAnimator = null
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    taskbarExitAnimator = null
+                }
+            })
+            start()
+        }
+    }
+
+    /**
+     * 최근 앱 작업 표시줄 즉시 숨김 (애니메이션 없이)
+     */
+    private fun hideTaskbarImmediate() {
+        taskbarEntryAnimator?.cancel()
+        taskbarExitAnimator?.cancel()
+        taskbarEntryAnimator = null
+        taskbarExitAnimator = null
+
+        centerGroupView?.apply {
+            visibility = View.GONE
+            alpha = 1f
+            translationY = 0f
+            scaleX = 1f
+            scaleY = 1f
+        }
     }
 
     private fun startHomeExitSuppression() {
@@ -1756,6 +1918,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             centerGroupView = null
             createNavBar()
             createHotspot()
+
+            // 최근 앱 목록 복원 (createNavBar가 새 centerGroup을 만들었으므로)
+            if (settings.recentAppsTaskbarEnabled) {
+                recentAppsManager?.getRecentApps()?.let { apps ->
+                    if (apps.isNotEmpty()) {
+                        recentAppsTaskbar?.updateApps(apps)
+                    }
+                }
+            }
 
             val params = createLayoutParams()
             windowManager.updateViewLayout(root, params)

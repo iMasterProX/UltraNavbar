@@ -9,11 +9,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.minsoo.ultranavbar.model.PaintFunction
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
-import com.minsoo.ultranavbar.util.ShizukuHelper
-import kotlin.concurrent.thread
 
 /**
  * 펜 버튼 A 브릿지 Activity
@@ -32,11 +29,7 @@ class PenButtonABridgeActivity : Activity() {
         // 재시도 간격
         private const val RETRY_DELAY_MS = 100L
         // 최대 재시도 횟수 (dispatchGesture용)
-        private const val MAX_RETRIES = 250
-        // Shizuku tap 재시도 횟수 (0 = 재시도 없이 1회만 실행)
-        private const val SHIZUKU_MAX_RETRIES = 0
-        // 키 이벤트 주입용 딜레이
-        private const val KEY_INJECT_DELAY_MS = 300L
+        private const val MAX_RETRIES = 5
         // 노드 클릭 재시도 설정
         private const val NODE_CLICK_DELAY_MS = 50L
         private const val NODE_CLICK_MAX_RETRIES = 5
@@ -64,16 +57,6 @@ class PenButtonABridgeActivity : Activity() {
         Log.d(TAG, "Action type: $actionType")
 
         when (actionType) {
-            "PAINT_FUNCTION" -> {
-                val paintFunctionName = settings.penAPaintFunction
-                Log.d(TAG, "Paint function: $paintFunctionName")
-                if (paintFunctionName != null) {
-                    val function = PaintFunction.fromName(paintFunctionName)
-                    if (function != null) {
-                        injectKeyEventWithDelay(function.keyCode, function.metaState)
-                    }
-                }
-            }
             "TOUCH_POINT" -> {
                 val x = settings.penATouchX
                 val y = settings.penATouchY
@@ -90,7 +73,7 @@ class PenButtonABridgeActivity : Activity() {
                 }
             }
             "NODE_CLICK" -> {
-                // UI 요소 클릭 (Shizuku 불필요)
+                // UI 요소 클릭 (화면 방향 무관)
                 val nodeId = settings.penANodeId
                 val nodeText = settings.penANodeText
                 val nodeDesc = settings.penANodeDesc
@@ -105,18 +88,6 @@ class PenButtonABridgeActivity : Activity() {
         finish()
     }
 
-    private fun injectKeyEventWithDelay(keyCode: Int, metaState: Int) {
-        thread {
-            try {
-                Thread.sleep(KEY_INJECT_DELAY_MS)
-                val success = ShizukuHelper.injectKeyEvent(keyCode, metaState)
-                Log.d(TAG, "Key injection result: $success")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to inject key event", e)
-            }
-        }
-    }
-
     private fun launchShortcut(shortcutUri: String) {
         try {
             val shortcutIntent = Intent.parseUri(shortcutUri, Intent.URI_INTENT_SCHEME)
@@ -129,7 +100,7 @@ class PenButtonABridgeActivity : Activity() {
     }
 
     /**
-     * UI 요소 클릭 (Shizuku 불필요, 화면 방향 무관)
+     * UI 요소 클릭 (화면 방향 무관)
      * 재시도 메커니즘 포함 - 50ms 간격으로 시도
      */
     private fun performNodeClick(nodeId: String?, nodeText: String?, nodeDesc: String?, nodePackage: String?) {
@@ -174,64 +145,15 @@ class PenButtonABridgeActivity : Activity() {
     }
 
     /**
-     * 자동 터치 수행 (Shizuku 설정 활성화 시 Shizuku 사용, 아니면 dispatchGesture)
+     * 자동 터치 수행 (dispatchGesture 사용)
      */
     private fun performAutoTouch(x: Float, y: Float) {
-        val settings = SettingsManager.getInstance(this)
-
-        // Shizuku 자동 터치가 활성화되어 있고 권한이 있으면 Shizuku 사용
-        if (settings.shizukuAutoTouchEnabled && ShizukuHelper.hasShizukuPermission()) {
-            performShizukuTapWithRetry(x, y, 0, mySessionId)
-            return
-        }
-
-        // 그 외에는 기존 dispatchGesture 방식 사용
         Log.d(TAG, "Using dispatchGesture for auto touch")
         performTouchWithRetry(x, y, 0, mySessionId)
     }
 
     /**
-     * Shizuku를 통한 터치를 재시도 메커니즘과 함께 수행
-     * 새 버튼 누름 시 이전 재시도는 자동 취소됨
-     *
-     * input tap 명령은 성공해도 실제 터치가 등록되지 않을 수 있어서
-     * 여러 번 시도하여 안정성 향상
-     */
-    private fun performShizukuTapWithRetry(x: Float, y: Float, retryCount: Int, sessionId: Long) {
-        val delay = if (retryCount == 0) INITIAL_DELAY_MS else RETRY_DELAY_MS
-
-        sharedHandler.postDelayed({
-            // 세션이 바뀌었으면 (새 버튼 누름) 이 재시도는 무시
-            if (sessionId != currentSessionId) {
-                Log.d(TAG, "Shizuku session $sessionId expired (current: $currentSessionId), stopping")
-                return@postDelayed
-            }
-
-            // Shizuku tap 실행
-            val success = ShizukuHelper.injectTap(x, y)
-
-            if (!success) {
-                // 명령 자체가 실패하면 dispatchGesture로 fallback
-                Log.w(TAG, "Shizuku tap command failed, falling back to dispatchGesture")
-                performTouchWithRetry(x, y, 0, sessionId)
-                return@postDelayed
-            }
-
-            // 명령은 성공했지만, 실제 터치 등록 여부는 알 수 없음
-            // 최대 재시도 횟수까지 계속 시도
-            if (retryCount < SHIZUKU_MAX_RETRIES) {
-                performShizukuTapWithRetry(x, y, retryCount + 1, sessionId)
-            } else {
-                Log.d(TAG, "Shizuku tap completed $SHIZUKU_MAX_RETRIES attempts at ($x, $y), session: $sessionId")
-            }
-        }, delay)
-    }
-
-    /**
      * 터치 제스처를 재시도 메커니즘과 함께 수행
-     *
-     * 주의: dispatchGesture API의 한계로 인해 불안정할 수 있음
-     * Shizuku를 사용하면 더 안정적인 터치 주입 가능
      */
     private fun performTouchWithRetry(x: Float, y: Float, retryCount: Int, sessionId: Long) {
         val delay = if (retryCount == 0) INITIAL_DELAY_MS else RETRY_DELAY_MS
