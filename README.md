@@ -51,7 +51,6 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 기능 앱�
 
 #### ⚙️ 시스템 통합
 - **접근성 서비스**: 네비게이션 바 표시, 윈도우 상태 감지, 펜 버튼 동작 실행
-- **Shizuku 지원**: 선택사항
 - **배터리 최적화 제외**: 서비스 안정성을 위한 백그라운드 실행 보장
 - **블루투스 권한**: 키보드 감지 및 배터리 정보 읽기
 - **저장소 접근**: 배경화면 자동 생성
@@ -164,14 +163,13 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
   - **Disabled**: No button action
   - **Launch App**: Directly launch a specified app
   - **Run Shortcut**: Execute app-provided shortcuts
-  - **Auto Touch (Coordinate-based)**: Automatically touch specified screen coordinates (Shizuku recommended)
-  - **Auto Touch (UI Element-based)**: Click specific UI elements via accessibility service (no Shizuku required)
+  - **Auto Touch (Coordinate-based)**: Automatically touch specified screen coordinates
+  - **Auto Touch (UI Element-based)**: Click specific UI elements via accessibility service
 - **System Settings Sync**: Automatic synchronization between app and system pen settings
 - **Ignore Pen Gestures**: Prevent pen gesture interference in drawing apps like OneNote
 
 #### ⚙️ System Integration
 - **Accessibility Service**: Display navigation bar, detect window states, execute pen button actions
-- **Shizuku Support**: (optional)
 - **Battery Optimization Exemption**: Ensure service reliability with background execution
 - **Bluetooth Permission**: Detect keyboards and read battery information
 - **Storage Access**: Auto-generate wallpaper backgrounds
