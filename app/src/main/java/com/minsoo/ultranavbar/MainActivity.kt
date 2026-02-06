@@ -13,11 +13,22 @@ import com.minsoo.ultranavbar.ui.NavBarSettingsFragment
 import com.minsoo.ultranavbar.ui.SetupActivity
 import com.minsoo.ultranavbar.ui.WacomPenSettingsFragment
 import com.minsoo.ultranavbar.ui.HardwareInfoFragment
+import com.minsoo.ultranavbar.ui.ExperimentalFragment
 import com.minsoo.ultranavbar.util.DeviceProfile
+import com.minsoo.ultranavbar.util.ShizukuHelper
+import rikka.shizuku.Shizuku
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var navigationView: NavigationView
+
+    // Shizuku 바인더 리스너 - 실험적 기능 메뉴 표시/숨김
+    private val shizukuBinderReceivedListener = Shizuku.OnBinderReceivedListener {
+        runOnUiThread { updateExperimentalMenuVisibility() }
+    }
+    private val shizukuBinderDeadListener = Shizuku.OnBinderDeadListener {
+        runOnUiThread { updateExperimentalMenuVisibility() }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +58,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_wacom_pen -> WacomPenSettingsFragment()
                 R.id.nav_hardware -> HardwareInfoFragment()
                 R.id.nav_app_settings -> AppSettingsFragment()
+                R.id.nav_experimental -> ExperimentalFragment()
                 else -> return@setNavigationItemSelectedListener false
             }
             supportFragmentManager.beginTransaction()
@@ -59,6 +71,29 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) {
             handleNavigationIntent(intent)
         }
+
+        // Shizuku 바인더 리스너 등록
+        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener)
+        Shizuku.addBinderDeadListener(shizukuBinderDeadListener)
+
+        // 초기 실험적 기능 메뉴 상태 설정
+        updateExperimentalMenuVisibility()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener)
+        Shizuku.removeBinderDeadListener(shizukuBinderDeadListener)
+    }
+
+    private fun updateExperimentalMenuVisibility() {
+        val hasShizuku = ShizukuHelper.hasShizukuPermission()
+        navigationView.menu.findItem(R.id.nav_experimental)?.isVisible = hasShizuku
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateExperimentalMenuVisibility()
     }
 
     override fun onNewIntent(intent: Intent?) {

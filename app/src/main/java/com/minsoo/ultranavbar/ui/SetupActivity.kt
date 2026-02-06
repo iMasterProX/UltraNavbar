@@ -19,12 +19,6 @@ import com.minsoo.ultranavbar.MainActivity
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
-import com.minsoo.ultranavbar.util.ShizukuHelper
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import androidx.appcompat.app.AlertDialog
-import android.text.Html
 
 class SetupActivity : AppCompatActivity() {
 
@@ -51,7 +45,7 @@ class SetupActivity : AppCompatActivity() {
     private lateinit var btnSkip: MaterialButton
     private lateinit var btnNext: MaterialButton
 
-    // 현재 단계 (0: 접근성, 1: 저장소, 2: 배터리, 3: 블루투스, 4: Shizuku)
+    // 현재 단계 (0: 접근성, 1: 저장소, 2: 배터리, 3: 블루투스)
     private var currentStep = 0
 
     // 저장소 권한 요청 런처
@@ -135,16 +129,9 @@ class SetupActivity : AppCompatActivity() {
                 btnNext.text = getString(R.string.setup_next)
             }
             3 -> {
-                // 블루투스 권한 단계
+                // 블루투스 권한 단계 (마지막)
                 setupStepTitle.text = getString(R.string.setup_bluetooth_title)
                 setupStepDesc.text = getString(R.string.setup_bluetooth_desc)
-                btnNext.text = getString(R.string.setup_next)
-            }
-            4 -> {
-                // Shizuku 권한 단계 (선택사항)
-                setupStepTitle.text = getString(R.string.setup_shizuku_title)
-                setupStepDesc.text = getString(R.string.setup_shizuku_desc)
-                btnGrantPermission.text = getString(R.string.setup_shizuku_setup_guide)
                 btnNext.text = getString(R.string.setup_complete)
             }
         }
@@ -169,10 +156,6 @@ class SetupActivity : AppCompatActivity() {
                     this,
                     Manifest.permission.BLUETOOTH_CONNECT
                 ) == PackageManager.PERMISSION_GRANTED
-            }
-            4 -> {
-                // Shizuku 권한 확인
-                ShizukuHelper.isShizukuAvailable() && ShizukuHelper.hasShizukuPermission()
             }
             else -> false
         }
@@ -219,40 +202,7 @@ class SetupActivity : AppCompatActivity() {
                     Toast.makeText(this, R.string.bluetooth_permission_already_granted, Toast.LENGTH_SHORT).show()
                 }
             }
-            4 -> {
-                // Shizuku 설정 가이드 표시
-                showShizukuSetupGuide()
-            }
         }
-    }
-
-    private fun showShizukuSetupGuide() {
-        val message = Html.fromHtml(getString(R.string.shizuku_setup_guide_message), Html.FROM_HTML_MODE_LEGACY)
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.shizuku_setup_guide_title)
-            .setMessage(message)
-            .setPositiveButton(R.string.shizuku_copy_command) { _, _ ->
-                // ADB 명령어 클립보드 복사
-                val command = "adb shell chmod +x /data/local/tmp/shizuku_starter && /data/local/tmp/shizuku_starter"
-                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("Shizuku ADB Command", command)
-                clipboard.setPrimaryClip(clip)
-                Toast.makeText(this, R.string.shizuku_command_copied, Toast.LENGTH_SHORT).show()
-            }
-            .setNeutralButton(R.string.shizuku_grant_permission) { _, _ ->
-                // Shizuku 권한 요청
-                if (ShizukuHelper.isShizukuAvailable()) {
-                    ShizukuHelper.requestShizukuPermission()
-                    Toast.makeText(this, "권한 요청을 보냈습니다", Toast.LENGTH_SHORT).show()
-                    // 상태 업데이트
-                    updateStepStatus()
-                } else {
-                    Toast.makeText(this, R.string.shizuku_not_running, Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
     }
 
     private fun requestIgnoreBatteryOptimizations() {
@@ -276,7 +226,7 @@ class SetupActivity : AppCompatActivity() {
     }
 
     private fun nextStep() {
-        if (currentStep < 4) {
+        if (currentStep < 3) {
             currentStep++
             showStep(currentStep)
         } else {

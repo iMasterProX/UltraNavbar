@@ -18,6 +18,7 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.minsoo.ultranavbar.core.Constants
+import com.minsoo.ultranavbar.core.SplitScreenHelper
 import com.minsoo.ultranavbar.core.WindowAnalyzer
 import com.minsoo.ultranavbar.model.NavAction
 import com.minsoo.ultranavbar.overlay.NavBarOverlay
@@ -206,6 +207,9 @@ class NavBarAccessibilityService : AccessibilityService() {
         Log.i(TAG, "Service connected")
         instance = this
 
+        // SplitScreenHelper에 접근성 서비스 참조 설정
+        SplitScreenHelper.setAccessibilityService(this)
+
         initializeComponents()
         setupServiceInfo()
         registerReceivers()
@@ -216,6 +220,11 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         createOverlay()
         updateOverlayVisibility(forceFade = false)
+
+        // Initialize recent apps if enabled
+        if (settings.recentAppsTaskbarEnabled) {
+            overlay?.initializeRecentApps(windowAnalyzer.getLauncherPackages())
+        }
         checkImeVisibility()
 
         // 배터리 모니터링 시작
@@ -298,6 +307,9 @@ class NavBarAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         Log.i(TAG, "Service destroyed")
         instance = null
+
+        // SplitScreenHelper 참조 해제
+        SplitScreenHelper.setAccessibilityService(null)
 
         cancelPendingTasks()
         handler.removeCallbacksAndMessages(null)  // 모든 대기 콜백 제거
@@ -430,13 +442,16 @@ class NavBarAccessibilityService : AccessibilityService() {
         var category: String? = null
         var isOngoing = false
 
+        // 알림 제거 이벤트 감지
+        val isRemoval = parcelableData == null
+
         if (parcelableData is android.app.Notification) {
             notificationKey = "${packageName}:${parcelableData.hashCode()}"
             category = parcelableData.category
             isOngoing = (parcelableData.flags and android.app.Notification.FLAG_ONGOING_EVENT) != 0
         }
 
-        Log.d(TAG, "Notification state: pkg=$packageName, key=$notificationKey, category=$category, ongoing=$isOngoing")
+        Log.d(TAG, "Notification state: pkg=$packageName, key=$notificationKey, category=$category, ongoing=$isOngoing, removal=$isRemoval")
 
         // NotificationTracker로 새 알림인지 판단
         val isNewNotification = notificationTracker.processNotificationEvent(
@@ -444,12 +459,17 @@ class NavBarAccessibilityService : AccessibilityService() {
             packageName = packageName,
             category = category,
             isOngoing = isOngoing,
-            isRemoval = false
+            isRemoval = isRemoval
         )
 
         // 새 알림이고 확인하지 않은 알림이 있으면 깜빡임 시작
         if (isNewNotification && notificationTracker.hasUnseenNotifications()) {
             overlay?.setNotificationPresent(true)
+        }
+
+        // 알림이 제거되었거나 더 이상 미확인 알림이 없으면 깜빡임 중지
+        if (isRemoval || !notificationTracker.hasUnseenNotifications()) {
+            overlay?.setNotificationPresent(false)
         }
     }
 

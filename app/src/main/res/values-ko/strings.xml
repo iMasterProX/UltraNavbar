@@ -23,6 +23,23 @@
     <string name="nav_buttons_swap_title">버튼 배치 반전</string>
     <string name="nav_buttons_swap_summary">네비게이션 버튼(뒤로/홈/최근앱)을 오른쪽으로, 추가 버튼(알림/캡처)을 왼쪽으로 이동 (Android 12L 스타일)</string>
 
+    <string name="recent_apps_taskbar_title">최근 앱 작업 표시줄</string>
+    <string name="recent_apps_taskbar_summary">네비게이션 바 중앙에 최근 앱 아이콘을 표시합니다. 탭하여 전환, 위로 슬라이드하여 분할 화면.</string>
+    <string name="recent_apps_taskbar_requires_shizuku">분할 화면 기능을 위해 Shizuku 권한이 필요합니다</string>
+    <string name="recent_apps_taskbar_shizuku_not_ready">Shizuku 권한이 필요합니다</string>
+    <string name="shizuku_required_for_feature">이 기능을 사용하려면 Shizuku 권한이 필요합니다. 앱 설정 → Shizuku 상태에서 설정 가이드를 확인하세요.</string>
+    <string name="split_screen_not_supported">%1$s은(는) 분할 화면을 지원하지 않습니다</string>
+
+    <!-- 실험적 기능 -->
+    <string name="experimental_title">실험적 기능</string>
+    <string name="experimental_warning_title">⚠️ 경고</string>
+    <string name="experimental_warning_message">이 기능들은 실험적이며 불안정할 수 있습니다. 시스템 불안정, 앱 충돌 또는 기기 재시작이 필요할 수 있습니다. 사용에 주의하세요.</string>
+    <string name="experimental_recent_apps_taskbar_summary">네비바 중앙에 최근 앱 아이콘을 표시합니다. 탭하여 앱 전환, 위로 슬라이드하여 분할 화면.&lt;br&gt;&lt;br&gt;&lt;b&gt;알려진 문제:&lt;/b&gt;&lt;br&gt;• 분할 화면이 시스템 불안정을 유발할 수 있음&lt;br&gt;• 문제 발생 시 기기 재시작이 필요할 수 있음</string>
+
+    <!-- Shizuku 자동 터치 -->
+    <string name="shizuku_auto_touch_title">빠른 자동 터치 (Shizuku)</string>
+    <string name="shizuku_auto_touch_summary">펜 버튼 사용 시 Shizuku를 활용하여 더 빠르고 안정적인 좌표 기반 자동 터치를 사용합니다. 비활성화 시 느린 Android 접근성 API를 사용합니다.</string>
+
     <string name="disabled_apps_settings">비활성화 앱</string>
     <string name="disabled_apps_summary">커스텀 네비게이션 바를 비활성화할 앱을 선택합니다. 해당 앱에서는 기본 네비게이션 바만 사용됩니다.</string>
     <string name="manage_disabled_apps">비활성화 앱 관리</string>
@@ -119,6 +136,7 @@
     <string name="nav_menu_wacom_pen">와콤 펜</string>
     <string name="nav_menu_hardware">하드웨어</string>
     <string name="nav_menu_app_settings">앱 설정</string>
+    <string name="nav_menu_experimental">실험적 기능</string>
     <string name="hardware_info_desc">기기 CPU, 디스플레이, 센서 및 입력 장치 정보를 확인합니다.</string>
 
     <!-- 앱 설정 화면 -->
@@ -366,8 +384,7 @@
 
     <!-- 자동 터치 가이드 -->
     <string name="touch_point_guide_title">자동 터치 설정 안내</string>
-    <string name="touch_point_guide_message">자동 터치 설정 방법:\n\n1. 플로팅 버튼이 나타납니다\n2. 자동 터치를 사용할 앱으로 이동합니다\n3. 플로팅 버튼을 탭합니다\n4. 할당할 위치를 탭합니다\n5. \"자동 터치 활성화\"를 탭하여 확정합니다\n\n최상의 성능을 위해:\n• Shizuku 앱을 설치하면 빠르고 안정적으로 작동합니다\n• Shizuku 없이는 느리거나 불안정할 수 있습니다\n\n활용 팁:\n• OneNote 같은 드로잉 앱에서 실행취소 버튼 위치를 A버튼에, 되돌리기 버튼 위치를 B버튼에 할당하면 펜 버튼으로 빠르게 사용할 수 있습니다\n• 지우개나 색상 선택 버튼에 할당해도 좋습니다\n\n유의사항:\n• 자동 터치는 펜이 화면 가까이 있을 때만 작동합니다</string>
-    <string name="touch_point_guide_message_shizuku_ready">자동 터치 설정 방법:\n\n1. 플로팅 버튼이 나타납니다\n2. 자동 터치를 사용할 앱으로 이동합니다\n3. 플로팅 버튼을 탭합니다\n4. 할당할 위치를 탭합니다\n5. \"자동 터치 활성화\"를 탭하여 확정합니다\n\n활용 팁:\n• OneNote 같은 드로잉 앱에서 실행취소 버튼 위치를 A버튼에, 되돌리기 버튼 위치를 B버튼에 할당하면 펜 버튼으로 빠르게 사용할 수 있습니다\n• 지우개나 색상 선택 버튼에 할당해도 좋습니다\n\n유의사항:\n• 자동 터치는 펜이 화면 가까이 있을 때만 작동합니다</string>
+    <string name="touch_point_guide_message_simple">자동 터치 설정 방법:\n\n1. 플로팅 버튼이 나타납니다\n2. 자동 터치를 사용할 앱으로 이동합니다\n3. 플로팅 버튼을 탭합니다\n4. 할당할 위치를 탭합니다\n5. \"자동 터치 활성화\"를 탭하여 확정합니다\n\n활용 팁:\n• OneNote 같은 드로잉 앱에서 실행취소 버튼 위치를 A버튼에, 되돌리기 버튼 위치를 B버튼에 할당하면 펜 버튼으로 빠르게 사용할 수 있습니다\n• 지우개나 색상 선택 버튼에 할당해도 좋습니다\n\n유의사항:\n• 자동 터치는 펜이 화면 가까이 있을 때만 작동합니다</string>
     <string name="touch_point_guide_start">설정 시작</string>
     <string name="touch_point_confirm">해당 위치로 자동 터치 활성화</string>
 
@@ -386,16 +403,14 @@
     <string name="shizuku_install_guide">안정적인 자동 터치를 위해 Shizuku를 설치하세요</string>
     <string name="shizuku_install_link">https://shizuku.rikka.app/</string>
 
-    <!-- 초기 설정 - Shizuku -->
-    <string name="setup_shizuku_title">Shizuku 권한 (선택사항)</string>
-    <string name="setup_shizuku_desc">안정적인 자동 터치 기능을 위해 Shizuku가 필요합니다. Android dispatchGesture API의 한계로 인해 Shizuku 없이는 자동 터치가 느리거나 불안정할 수 있습니다.\n\n선택사항이며 건너뛸 수 있습니다.</string>
+    <!-- 초기 설정 - Shizuku (설정 마법사에서 제거됨, 참조용으로 보관) -->
     <string name="setup_shizuku_setup_guide">설정 가이드</string>
     <string name="permission_shizuku">Shizuku 권한</string>
-    <string name="permission_shizuku_summary">빠르고 안정적인 자동 터치 기능에 필요합니다.</string>
+    <string name="permission_shizuku_summary">실험적 기능 사용에 필요합니다.</string>
 
     <!-- Shizuku 설정 가이드 -->
     <string name="shizuku_setup_guide_title">Shizuku 설정 가이드</string>
-    <string name="shizuku_setup_guide_message">안정적인 자동 터치를 위한 Shizuku 설정:\n\n1. Play 스토어 또는 GitHub에서 Shizuku 앱 설치\n\n2. USB로 기기를 PC에 연결\n\n3. 개발자 옵션에서 USB 디버깅 활성화\n\n4. PC에서 다음 ADB 명령어 실행:\n<b>adb shell chmod +x /data/local/tmp/shizuku_starter &amp;&amp; /data/local/tmp/shizuku_starter</b>\n\n5. 앱에서 권한 요청 시 승인\n\n\n참고: 한 번만 설정하면 됩니다. 재부팅 후에도 Shizuku가 자동으로 시작됩니다.</string>
+    <string name="shizuku_setup_guide_message_experimental">Shizuku 권한을 부여하면 왼쪽 메뉴에 &lt;b&gt;실험적 기능&lt;/b&gt; 메뉴가 나타납니다.&lt;br&gt;&lt;br&gt;&lt;b&gt;실험적 기능 포함:&lt;/b&gt;&lt;br&gt;• 분할 화면이 포함된 최근 앱 작업 표시줄&lt;br&gt;• 펜 버튼용 빠른 좌표 기반 자동 터치&lt;br&gt;&lt;br&gt;&lt;b&gt;Shizuku 활성화 방법:&lt;/b&gt;&lt;br&gt;&lt;br&gt;1. Play 스토어 또는 GitHub에서 Shizuku 앱 설치&lt;br&gt;&lt;br&gt;2. USB로 기기를 PC에 연결&lt;br&gt;&lt;br&gt;3. 개발자 옵션에서 USB 디버깅 활성화&lt;br&gt;&lt;br&gt;4. PC에서 다음 ADB 명령어 실행:&lt;br&gt;&lt;b&gt;adb shell sh /storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh&lt;/b&gt;&lt;br&gt;&lt;br&gt;5. 이 앱으로 돌아와 \"권한 부여\"를 탭&lt;br&gt;&lt;br&gt;&lt;b&gt;중요:&lt;/b&gt; Shizuku는 재부팅 후 유지되지 않습니다. 기기를 재시작할 때마다 ADB 명령어를 다시 실행해야 합니다.</string>
     <string name="shizuku_permission_already_granted">이미 Shizuku 권한이 부여되어 있습니다</string>
     <string name="shizuku_copy_command">ADB 명령어 복사</string>
     <string name="shizuku_grant_permission">권한 부여</string>

@@ -349,14 +349,14 @@ class AppSettingsFragment : Fragment() {
     }
 
     private fun showShizukuSetupGuide() {
-        val message = Html.fromHtml(getString(R.string.shizuku_setup_guide_message), Html.FROM_HTML_MODE_LEGACY)
+        val message = Html.fromHtml(getString(R.string.shizuku_setup_guide_message_experimental), Html.FROM_HTML_MODE_LEGACY)
 
         AlertDialog.Builder(requireContext())
             .setTitle(R.string.shizuku_setup_guide_title)
             .setMessage(message)
             .setPositiveButton(R.string.shizuku_copy_command) { _, _ ->
                 // ADB 명령어 클립보드 복사
-                val command = "adb shell chmod +x /data/local/tmp/shizuku_starter && /data/local/tmp/shizuku_starter"
+                val command = "adb shell sh /storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh"
                 val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val clip = ClipData.newPlainText("Shizuku ADB Command", command)
                 clipboard.setPrimaryClip(clip)

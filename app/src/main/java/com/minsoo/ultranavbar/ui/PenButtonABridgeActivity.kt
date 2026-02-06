@@ -174,17 +174,19 @@ class PenButtonABridgeActivity : Activity() {
     }
 
     /**
-     * 자동 터치 수행 (Shizuku 우선, fallback to dispatchGesture)
+     * 자동 터치 수행 (Shizuku 설정 활성화 시 Shizuku 사용, 아니면 dispatchGesture)
      */
     private fun performAutoTouch(x: Float, y: Float) {
-        // Shizuku 사용 가능하면 재시도 방식으로 실행
-        if (ShizukuHelper.hasShizukuPermission()) {
+        val settings = SettingsManager.getInstance(this)
+
+        // Shizuku 자동 터치가 활성화되어 있고 권한이 있으면 Shizuku 사용
+        if (settings.shizukuAutoTouchEnabled && ShizukuHelper.hasShizukuPermission()) {
             performShizukuTapWithRetry(x, y, 0, mySessionId)
             return
         }
 
-        // Shizuku 없으면 기존 dispatchGesture 방식 사용
-        Log.d(TAG, "Shizuku not available, using dispatchGesture")
+        // 그 외에는 기존 dispatchGesture 방식 사용
+        Log.d(TAG, "Using dispatchGesture for auto touch")
         performTouchWithRetry(x, y, 0, mySessionId)
     }
 

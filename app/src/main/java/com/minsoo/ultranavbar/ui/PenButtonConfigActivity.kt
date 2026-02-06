@@ -21,7 +21,6 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
-import com.minsoo.ultranavbar.util.ShizukuHelper
 
 /**
  * 펜 버튼 설정 Activity
@@ -311,17 +310,10 @@ class PenButtonConfigActivity : AppCompatActivity() {
             return
         }
 
-        // Shizuku 권한 상태에 따라 다른 안내 메시지 표시
-        val guideMessage = if (ShizukuHelper.hasShizukuPermission()) {
-            R.string.touch_point_guide_message_shizuku_ready
-        } else {
-            R.string.touch_point_guide_message
-        }
-
         // 안내 다이얼로그 표시
         AlertDialog.Builder(this)
             .setTitle(R.string.touch_point_guide_title)
-            .setMessage(guideMessage)
+            .setMessage(R.string.touch_point_guide_message_simple)
             .setPositiveButton(R.string.touch_point_guide_start) { _, _ ->
                 val intent = Intent(this, TouchPointSetupActivity::class.java).apply {
                     putExtra(TouchPointSetupActivity.EXTRA_BUTTON, buttonName)

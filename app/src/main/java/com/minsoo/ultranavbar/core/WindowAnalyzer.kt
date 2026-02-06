@@ -400,7 +400,9 @@ class WindowAnalyzer(
      */
     fun analyzeNotificationPanelState(windows: List<AccessibilityWindowInfo>): Boolean {
         val screen = getScreenBounds()
-        val minPanelHeight = context.dpToPx(Constants.Dimension.MIN_PANEL_HEIGHT_DP)
+        // Heads-up 알림 윈도우(~100-150dp)와 실제 패널(화면 30%+)을 구분하기 위해
+        // 고정 dp 대신 화면 높이 비율 사용
+        val minPanelHeight = (screen.height() * Constants.Threshold.NOTIFICATION_PANEL_MIN_HEIGHT_RATIO).toInt()
 
         for (w in windows) {
             if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
@@ -593,6 +595,11 @@ class WindowAnalyzer(
     fun isLauncherPackage(packageName: String): Boolean {
         return launcherPackages.contains(packageName)
     }
+
+    /**
+     * 런처 패키지 목록 반환
+     */
+    fun getLauncherPackages(): Set<String> = launcherPackages
 
     /**
      * 최근 앱 화면 클래스명인지 확인

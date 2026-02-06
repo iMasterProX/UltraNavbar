@@ -17,8 +17,9 @@ object Constants {
         const val DEFAULT_HOTSPOT_HEIGHT_DP = 24
         const val MIN_IME_HEIGHT_DP = 80
         const val MIN_NAV_BAR_HEIGHT_DP = 40
-        const val MIN_PANEL_HEIGHT_DP = 100
         const val CROP_HEIGHT_PX = 72
+        const val TASKBAR_ICON_SIZE_DP = 36
+        const val TASKBAR_ICON_SPACING_DP = 6
     }
 
     // ===== 타이밍 관련 (ms) =====
@@ -35,6 +36,7 @@ object Constants {
         const val IME_VISIBILITY_DELAY_MS = 500L
         const val UNLOCK_FADE_DELAY_MS = 400L
         const val TRANSITION_DEDUP_GRACE_MS = 500L  // 로딩화면→앱 전환 시 중복 페이드 방지 유예 시간
+        const val SPLIT_SCREEN_LAUNCH_DELAY_MS = 1000L
     }
 
     // ===== 비율 및 임계값 =====
@@ -43,6 +45,7 @@ object Constants {
         const val GESTURE_ONLY_HEIGHT_DP = 24f
         const val BRIGHTNESS_THRESHOLD = 128.0
         const val LUMINANCE_SAMPLE_SIZE = 10
+        const val NOTIFICATION_PANEL_MIN_HEIGHT_RATIO = 0.25f  // 화면 높이의 25% 이상이어야 패널로 판단
     }
 
     // ===== 회전 각도 =====
