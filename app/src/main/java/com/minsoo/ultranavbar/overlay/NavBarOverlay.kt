@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Point
+import android.graphics.Rect
 import android.graphics.PixelFormat
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
@@ -219,23 +220,43 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         override fun onAppDraggedToSplit(packageName: String) {
-            // 분할화면 지원 여부 확인
             if (!SplitScreenHelper.isResizeableActivity(context, packageName)) {
-                // 앱 이름 가져오기
-                val appName = try {
-                    val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
-                    context.packageManager.getApplicationLabel(appInfo)
-                } catch (e: Exception) {
-                    packageName
-                }
-                android.widget.Toast.makeText(
-                    context,
-                    context.getString(R.string.split_screen_not_supported, appName),
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
+                showSplitNotSupportedToast(packageName)
                 return
             }
-            SplitScreenHelper.launchSplitScreen(context, packageName, currentPackage)
+            val launchContext = service.getSplitLaunchContext()
+            if (launchContext.isOnHomeScreen && !launchContext.isRecentsVisible) {
+                Log.d(TAG, "Split request ignored on home screen")
+                return
+            }
+            val fallbackPrimary = getFallbackPrimaryPackage(packageName)
+            val launched = SplitScreenHelper.launchSplitScreen(context, packageName, launchContext, fallbackPrimary)
+            if (!launched) {
+                val failure = SplitScreenHelper.getLastLaunchFailure()
+                when (failure) {
+                    SplitScreenHelper.SplitLaunchFailure.TARGET_UNSUPPORTED -> {
+                        showSplitNotSupportedToast(packageName)
+                    }
+                    SplitScreenHelper.SplitLaunchFailure.CURRENT_UNSUPPORTED -> {
+                        val current = launchContext.currentPackage.takeIf { it.isNotEmpty() }
+                        showSplitNotSupportedToast(current)
+                    }
+                    else -> {
+                        Log.w(TAG, "Split launch failed: $failure (target=$packageName)")
+                    }
+                }
+            }
+        }
+
+        fun getFallbackPrimaryPackage(targetPackage: String): String? {
+            val apps = recentAppsManager?.getRecentApps() ?: return null
+            for (app in apps) {
+                val pkg = app.packageName
+                if (pkg == targetPackage) continue
+                if (!SplitScreenHelper.isResizeableActivity(context, pkg)) continue
+                return pkg
+            }
+            return null
         }
 
         override fun onDragStateChanged(isDragging: Boolean, progress: Float) {
@@ -244,6 +265,25 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         override fun shouldIgnoreTouch(toolType: Int): Boolean {
             return settings.ignoreStylus && toolType == MotionEvent.TOOL_TYPE_STYLUS
+        }
+    }
+
+    private fun showSplitNotSupportedToast(packageName: String?) {
+        val label = packageName?.let { getAppLabel(it) }
+        val message = if (!label.isNullOrEmpty()) {
+            context.getString(R.string.split_screen_not_supported, label)
+        } else {
+            context.getString(R.string.split_screen_not_supported_generic)
+        }
+        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    private fun getAppLabel(packageName: String): String? {
+        return try {
+            val info = context.packageManager.getApplicationInfo(packageName, 0)
+            context.packageManager.getApplicationLabel(info)?.toString()?.trim()
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -573,7 +613,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         val rotation = display.rotation
         val size = Point()
-        val bounds = windowManager.currentWindowMetrics.bounds
+        val bounds = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager.maximumWindowMetrics.bounds
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.getRealSize(size)
+            Rect(0, 0, size.x, size.y)
+        }
         size.x = bounds.width()
         size.y = bounds.height()
 
@@ -1839,7 +1885,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      */
     private fun createSplitScreenOverlay() {
         val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
-        val bounds = windowManager.currentWindowMetrics.bounds
+        val bounds = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager.maximumWindowMetrics.bounds
+        } else {
+            val size = Point()
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.getRealSize(size)
+            Rect(0, 0, size.x, size.y)
+        }
         val screenWidth = bounds.width()
         val screenHeight = bounds.height()
 

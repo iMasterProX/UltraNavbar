@@ -36,7 +36,7 @@ object Constants {
         const val IME_VISIBILITY_DELAY_MS = 500L
         const val UNLOCK_FADE_DELAY_MS = 400L
         const val TRANSITION_DEDUP_GRACE_MS = 500L  // 로딩화면→앱 전환 시 중복 페이드 방지 유예 시간
-        const val SPLIT_SCREEN_LAUNCH_DELAY_MS = 1000L
+        const val SPLIT_SCREEN_LAUNCH_DELAY_MS = 3000L
     }
 
     // ===== 비율 및 임계값 =====

@@ -17,6 +17,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import com.minsoo.ultranavbar.core.Constants
 import com.minsoo.ultranavbar.core.SplitScreenHelper
 import com.minsoo.ultranavbar.core.WindowAnalyzer
@@ -39,6 +40,8 @@ class NavBarAccessibilityService : AccessibilityService() {
         private const val HOME_ENTRY_STABILIZE_MS = 400L  // 홈 진입 후 안정화 시간
         private const val HOME_EXIT_STABILIZE_MS = 500L   // 홈 이탈 후 안정화 시간 (windows 소스의 잘못된 재진입 방지)
         private const val ORIENTATION_CHANGE_STABILIZE_MS = 500L  // 화면 회전 후 안정화 시간
+        private const val SPLIT_FOREGROUND_STALE_MS = 2500L
+        private const val EMPTY_SPLIT_EXIT_MS = 5000L
 
         // 방향 고정 브로드캐스트 액션
         const val ACTION_APPLY_ORIENTATION_LOCK = "com.minsoo.ultranavbar.ACTION_APPLY_ORIENTATION_LOCK"
@@ -79,6 +82,10 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var lastHomeEntryAt: Long = 0  // 홈 진입 안정화용
     private var lastHomeExitAt: Long = 0   // 홈 이탈 안정화용
     private var lastOrientationChangeAt: Long = 0  // 화면 회전 안정화용
+    private var lastSplitRecoveryAt: Long = 0
+    private var lastNonLauncherPackage: String = ""
+    private var lastNonLauncherPackageAt: Long = 0
+    private var emptySplitSince: Long = 0
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
@@ -557,10 +564,16 @@ class NavBarAccessibilityService : AccessibilityService() {
             if (wasRecentsVisible && !isRecents) {
                 val helperFlag = SplitScreenHelper.wasSplitScreenUsedAndReset()
                 if (wasSplitScreenUsed || helperFlag) {
-                    Log.d(TAG, "Recents closed after split screen, resetting flags")
-                    // 분할화면 상태 플래그만 리셋 (스택 정리는 시스템에 맡김)
-                    cleanSplitScreenStacks()
-                    wasSplitScreenUsed = false
+                    val splitLikelyActive = isSplitScreenMode ||
+                        SplitScreenHelper.isSplitScreenActive() ||
+                        SplitScreenHelper.isSplitActiveOrRecent(4000)
+                    if (splitLikelyActive) {
+                        Log.d(TAG, "Recents closed but split still active; skipping cleanup")
+                    } else {
+                        Log.d(TAG, "Recents closed after split screen, resetting flags")
+                        cleanSplitScreenStacks()
+                        wasSplitScreenUsed = false
+                    }
                 }
             }
         }
@@ -571,15 +584,9 @@ class NavBarAccessibilityService : AccessibilityService() {
      *
      * 참고: Android 12+에서 'am stack remove-all-secondary-split-stacks' 명령어가
      * 제거되어 더 이상 사용할 수 없음. 대신 빈 split-screen 태스크를 개별적으로 정리하거나,
-     * 시스템이 자동으로 정리하도록 두는 방식으로 변경.
-     *
-     * 실험 결과, 분할화면 종료 후 명시적인 스택 정리를 하지 않아도
-     * 시스템이 자동으로 처리하는 것이 더 안정적임.
      */
     private fun cleanSplitScreenStacks() {
         Log.d(TAG, "Split screen cleanup: resetting all state flags")
-
-        // 모든 분할화면 관련 상태 플래그 강제 초기화
         SplitScreenHelper.forceResetSplitScreenState()
     }
 
@@ -603,8 +610,6 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
 
         // 홈 이탈 안정화: 홈을 떠난 직후 windows 소스의 잘못된 홈 재진입 방지
-        // 앱 실행 시 event 소스가 먼저 홈 이탈을 감지하지만, windows 소스는
-        // 앱 윈도우가 아직 나타나지 않아 런처가 최상위로 보여 잘못된 홈 재진입을 시도함
         if (isHome && !isOnHomeScreen && source == "windows") {
             val elapsed = now - lastHomeExitAt
             if (elapsed < HOME_EXIT_STABILIZE_MS) {
@@ -613,12 +618,9 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
         }
 
-        // 홈 진입 시 타임스탬프 기록
         if (isHome && !isOnHomeScreen) {
             lastHomeEntryAt = now
         }
-
-        // 홈 이탈 시 타임스탬프 기록
         if (!isHome && isOnHomeScreen) {
             lastHomeExitAt = now
         }
@@ -660,10 +662,119 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
         }
 
-        // NavBarOverlay에 현재 패키지 전달
         overlay?.setForegroundPackage(packageName)
-
         return true
+    }
+
+    /**
+     * 분할화면용 포그라운드 패키지 해석
+     * - 런처/시스템 제외
+     * - 윈도우 루트 기반 폴백
+     * - 최근 비런처 앱 캐시 사용
+     */
+    fun resolveForegroundPackageForSplit(
+        windowList: List<AccessibilityWindowInfo> = windows.toList()
+    ): String {
+        val now = SystemClock.elapsedRealtime()
+        val top = windowAnalyzer.getTopApplicationWindow(windowList)
+        var candidate = top?.packageName ?: ""
+        if (candidate == packageName || candidate == "com.android.systemui") {
+            candidate = ""
+        }
+        if (candidate.isNotEmpty() && windowAnalyzer.isLauncherPackage(candidate)) {
+            candidate = ""
+        }
+
+        val fallbackPkg = windowList.firstNotNullOfOrNull { window ->
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) return@firstNotNullOfOrNull null
+            val root = try { window.root } catch (e: Exception) { null }
+            val pkg = root?.packageName?.toString()
+            val className = root?.className?.toString()
+            root?.recycle()
+            if (pkg.isNullOrEmpty()) return@firstNotNullOfOrNull null
+            if (pkg == packageName || pkg == "com.android.systemui") return@firstNotNullOfOrNull null
+            if (windowAnalyzer.isLauncherPackage(pkg) || windowAnalyzer.isRecentsClassName(className ?: "")) {
+                return@firstNotNullOfOrNull null
+            }
+            pkg
+        }
+        if (!fallbackPkg.isNullOrEmpty()) {
+            return fallbackPkg
+        }
+
+        if (lastNonLauncherPackage.isNotEmpty() &&
+            now - lastNonLauncherPackageAt < SPLIT_FOREGROUND_STALE_MS
+        ) {
+            return lastNonLauncherPackage
+        }
+
+        return candidate
+    }
+
+    data class SplitLaunchContext(
+        val currentPackage: String,
+        val isOnHomeScreen: Boolean,
+        val isRecentsVisible: Boolean,
+        val hasVisibleNonLauncherApp: Boolean,
+        val isSplitScreenMode: Boolean
+    )
+
+    fun getSplitLaunchContext(): SplitLaunchContext {
+        val windowList = windows.toList()
+        val hasVisibleNonLauncher = windowAnalyzer.hasVisibleNonLauncherAppWindow(windowList, packageName)
+        val current = resolveForegroundPackageForSplit(windowList)
+        return SplitLaunchContext(
+            currentPackage = current,
+            isOnHomeScreen = isOnHomeScreen,
+            isRecentsVisible = isRecentsVisible,
+            hasVisibleNonLauncherApp = hasVisibleNonLauncher,
+            isSplitScreenMode = isSplitScreenMode
+        )
+    }
+
+    fun isRecentsVisibleForSplit(): Boolean = isRecentsVisible
+
+    fun isOnHomeScreenForSplit(): Boolean = isOnHomeScreen
+
+    fun isLauncherTopForSplit(): Boolean {
+        val windowList = windows.toList()
+        val top = windowAnalyzer.getTopApplicationWindow(windowList) ?: return false
+        return windowAnalyzer.isLauncherPackage(top.packageName) ||
+            windowAnalyzer.isRecentsClassName(top.className)
+    }
+
+    fun getLauncherWindowPackageForSplit(): String? {
+        val windowList = windows.toList()
+        val top = windowAnalyzer.getTopApplicationWindow(windowList)
+        if (top != null) {
+            val pkg = top.packageName
+            if (windowAnalyzer.isLauncherPackage(pkg) ||
+                windowAnalyzer.isRecentsClassName(top.className)
+            ) {
+                return pkg
+            }
+        }
+
+        for (window in windowList) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val root = try { window.root } catch (e: Exception) { null } ?: continue
+            val pkg = root.packageName?.toString()
+            val className = root.className?.toString() ?: ""
+            root.recycle()
+            if (pkg.isNullOrEmpty()) continue
+            if (windowAnalyzer.isLauncherPackage(pkg) || windowAnalyzer.isRecentsClassName(className)) {
+                return pkg
+            }
+        }
+        return null
+    }
+
+    fun isSplitSelectionVisibleForSplit(): Boolean {
+        return windowAnalyzer.analyzeSplitSelectionState(windows.toList(), packageName)
+    }
+
+    fun hasVisibleNonLauncherAppForSplit(): Boolean {
+        return windowAnalyzer.hasVisibleNonLauncherAppWindow(windows.toList(), packageName)
     }
 
     private fun handleSystemUiState(isSystemUi: Boolean, isRecents: Boolean, source: String): Boolean {
@@ -697,29 +808,73 @@ class NavBarAccessibilityService : AccessibilityService() {
         val windowList = windows.toList()
         val wasInSplitScreen = isSplitScreenMode
 
-        // 분할화면 상태 감지 (멀티윈도우 윈도우가 있는지 확인)
-        isSplitScreenMode = windowList.any { window ->
+        val displayMetrics = resources.displayMetrics
+        val screenHeight = displayMetrics.heightPixels
+        val screenWidth = displayMetrics.widthPixels
+        val distinctPackages = mutableSetOf<String>()
+        var hasSmallWindow = false
+
+        for (window in windowList) {
+            if (window.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val bounds = android.graphics.Rect()
             try {
-                // 앱 윈도우이면서 분할화면 영역에 있는지 확인
-                if (window.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) {
-                    val bounds = android.graphics.Rect()
-                    window.getBoundsInScreen(bounds)
-                    // 화면의 절반 이하 크기의 앱 윈도우가 있으면 분할화면으로 판단
-                    val displayMetrics = resources.displayMetrics
-                    val screenHeight = displayMetrics.heightPixels
-                    val screenWidth = displayMetrics.widthPixels
-                    val isHalfScreen = bounds.height() < screenHeight * 0.7 || bounds.width() < screenWidth * 0.7
-                    isHalfScreen && window.isActive
-                } else {
-                    false
-                }
+                window.getBoundsInScreen(bounds)
             } catch (e: Exception) {
-                false
+                continue
+            }
+            if (bounds.width() <= 0 || bounds.height() <= 0) continue
+
+            val root = try { window.root } catch (e: Exception) { null }
+            val pkg = root?.packageName?.toString()
+            root?.recycle()
+            if (pkg != null &&
+                pkg != packageName &&
+                pkg != "com.android.systemui" &&
+                !windowAnalyzer.isLauncherPackage(pkg)
+            ) {
+                distinctPackages.add(pkg)
+            }
+
+            val widthRatio = bounds.width().toFloat() / screenWidth
+            val heightRatio = bounds.height().toFloat() / screenHeight
+            if (widthRatio < 0.9f || heightRatio < 0.9f) {
+                hasSmallWindow = true
             }
         }
 
+        // 분할화면 상태 감지 (작은 창 또는 2개 이상 앱 창)
+        isSplitScreenMode = hasSmallWindow || distinctPackages.size >= 2
+
         // SplitScreenHelper에 상태 동기화
         SplitScreenHelper.setSplitScreenActive(isSplitScreenMode)
+
+        val nonLauncherAppCount = windowList.count { window ->
+            if (window.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) return@count false
+            val root = try { window.root } catch (e: Exception) { null } ?: return@count false
+            val pkg = root.packageName?.toString()
+            root.recycle()
+            pkg != null && pkg != packageName && !windowAnalyzer.isLauncherPackage(pkg)
+        }
+
+        // 분할화면인데 유효한 앱 창이 없으면 복구 (검은 화면/오류 방지)
+        if (isSplitScreenMode && nonLauncherAppCount == 0 && !isRecentsVisible) {
+            val now = SystemClock.elapsedRealtime()
+            if (emptySplitSince == 0L) {
+                emptySplitSince = now
+            }
+            val emptyElapsed = now - emptySplitSince
+            if (!SplitScreenHelper.isInRecoveryGracePeriod() && emptyElapsed > EMPTY_SPLIT_EXIT_MS) {
+                if (now - lastSplitRecoveryAt > 1000L) {
+                    lastSplitRecoveryAt = now
+                    Log.w(TAG, "Split screen empty, exiting to recover")
+                    performGlobalAction(GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
+                    SplitScreenHelper.forceResetSplitScreenState()
+                    isSplitScreenMode = false
+                }
+            }
+        } else {
+            emptySplitSince = 0L
+        }
 
         // 분할화면 진입 시 플래그 설정 (최근 앱 종료 후 복구용)
         if (isSplitScreenMode && !wasInSplitScreen) {
@@ -1438,19 +1593,43 @@ class NavBarAccessibilityService : AccessibilityService() {
             return false
         }
 
+        var targetRoot: AccessibilityNodeInfo? = null
         try {
             // 패키지 확인 (선택사항) - 패키지 불일치 시에도 노드 찾기 시도
             val currentPackage = rootNode.packageName?.toString()
-            if (!nodePackage.isNullOrEmpty() && currentPackage != nodePackage) {
-                Log.d(TAG, "performNodeClick: Package hint mismatch ($currentPackage vs $nodePackage), trying anyway")
+            val requestedPackage = nodePackage?.takeIf { it.isNotBlank() }
+            targetRoot = if (!requestedPackage.isNullOrEmpty() && currentPackage != requestedPackage) {
+                var altRoot: AccessibilityNodeInfo? = null
+                val windowList = windows.toList()
+                for (window in windowList) {
+                    if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+                    val root = try { window.root } catch (e: Exception) { null } ?: continue
+                    val pkg = root.packageName?.toString()
+                    if (pkg == requestedPackage) {
+                        altRoot = root
+                        break
+                    }
+                    root.recycle()
+                }
+                if (altRoot == null) {
+                    Log.d(TAG, "performNodeClick: Package mismatch ($currentPackage vs $requestedPackage), aborting")
+                    rootNode.recycle()
+                    return false
+                }
+                Log.d(TAG, "performNodeClick: Switching root from $currentPackage to $requestedPackage")
+                altRoot
+            } else {
+                rootNode
             }
+
+            val activeRoot = targetRoot ?: rootNode
 
             // 노드 찾기 (여러 방법 시도)
             var targetNode: AccessibilityNodeInfo? = null
 
             // 1. Resource ID로 찾기 (가장 신뢰할 수 있음)
             if (!nodeId.isNullOrEmpty()) {
-                val nodes = rootNode.findAccessibilityNodeInfosByViewId(nodeId)
+                val nodes = activeRoot.findAccessibilityNodeInfosByViewId(nodeId)
                 if (nodes.isNotEmpty()) {
                     // 클릭 가능한 노드 우선 선택
                     for (node in nodes) {
@@ -1475,7 +1654,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
             // 2. contentDescription으로 찾기
             if (!nodeDesc.isNullOrEmpty() && targetNode == null) {
-                targetNode = findNodeByContentDescription(rootNode, nodeDesc)
+                targetNode = findNodeByContentDescription(activeRoot, nodeDesc)
                 if (targetNode != null) {
                     Log.d(TAG, "performNodeClick: Found node by description: $nodeDesc")
                 }
@@ -1483,7 +1662,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
             // 3. 텍스트로 찾기 (부분 일치 포함)
             if (!nodeText.isNullOrEmpty() && targetNode == null) {
-                val nodes = rootNode.findAccessibilityNodeInfosByText(nodeText)
+                val nodes = activeRoot.findAccessibilityNodeInfosByText(nodeText)
                 // 정확한 일치 우선
                 for (node in nodes) {
                     val text = node.text?.toString()
@@ -1513,7 +1692,10 @@ class NavBarAccessibilityService : AccessibilityService() {
 
             if (targetNode == null) {
                 Log.w(TAG, "performNodeClick: Node not found (id=$nodeId, text=$nodeText, desc=$nodeDesc)")
-                rootNode.recycle()
+                activeRoot.recycle()
+                if (activeRoot != rootNode) {
+                    rootNode.recycle()
+                }
                 return false
             }
 
@@ -1542,11 +1724,23 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
 
             targetNode.recycle()
-            rootNode.recycle()
+            activeRoot.recycle()
+            if (activeRoot != rootNode) {
+                rootNode.recycle()
+            }
             return result
         } catch (e: Exception) {
             Log.e(TAG, "performNodeClick: Failed", e)
-            try { rootNode.recycle() } catch (_: Exception) {}
+            try {
+                if (targetRoot != null) {
+                    targetRoot?.recycle()
+                    if (targetRoot != rootNode) {
+                        rootNode.recycle()
+                    }
+                } else {
+                    rootNode.recycle()
+                }
+            } catch (_: Exception) {}
             return false
         }
     }
@@ -1557,8 +1751,10 @@ class NavBarAccessibilityService : AccessibilityService() {
      */
     private fun findNodeByContentDescription(node: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
         val nodeDesc = node.contentDescription?.toString()
-        if (nodeDesc == desc) {
-            return AccessibilityNodeInfo.obtain(node)
+        if (!nodeDesc.isNullOrEmpty()) {
+            if (nodeDesc.equals(desc, ignoreCase = true) || nodeDesc.contains(desc, ignoreCase = true)) {
+                return AccessibilityNodeInfo.obtain(node)
+            }
         }
 
         for (i in 0 until node.childCount) {
@@ -1573,3 +1769,5 @@ class NavBarAccessibilityService : AccessibilityService() {
         return null
     }
 }
+
+

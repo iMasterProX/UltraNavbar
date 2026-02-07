@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.navigation.NavigationView
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.ui.AppSettingsFragment
+import com.minsoo.ultranavbar.ui.ExperimentalFeaturesFragment
 import com.minsoo.ultranavbar.ui.KeyboardSettingsFragment
 import com.minsoo.ultranavbar.ui.NavBarSettingsFragment
 import com.minsoo.ultranavbar.ui.SetupActivity
@@ -47,6 +48,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_wacom_pen -> WacomPenSettingsFragment()
                 R.id.nav_hardware -> HardwareInfoFragment()
                 R.id.nav_app_settings -> AppSettingsFragment()
+                R.id.nav_experimental -> ExperimentalFeaturesFragment()
                 else -> return@setNavigationItemSelectedListener false
             }
             supportFragmentManager.beginTransaction()

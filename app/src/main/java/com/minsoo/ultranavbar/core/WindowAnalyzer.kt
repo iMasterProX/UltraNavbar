@@ -85,6 +85,19 @@ class WindowAnalyzer(
             // QuickStep 및 Nova Launcher 폴백
             launcherPackages = setOf("com.android.launcher3", "com.teslacoilsw.launcher")
         }
+
+        val extraLaunchers = setOf(
+            "com.android.launcher3",
+            "com.android.quickstep",
+            "com.google.android.apps.nexuslauncher",
+            "com.lge.launcher3",
+            "com.lge.launcher",
+            "com.samsung.android.launcher",
+            "com.miui.home",
+            "com.oneplus.launcher"
+        )
+        launcherPackages = (launcherPackages + extraLaunchers).toSet()
+        Log.d(TAG, "Launcher packages (extended): $launcherPackages")
     }
 
     /**
@@ -510,6 +523,34 @@ class WindowAnalyzer(
     ): Boolean {
         if (isRecentsOpen(rootNode)) return true
 
+        val topWindow = getTopApplicationWindow(windows)
+        if (topWindow != null) {
+            if (isRecentsClassName(topWindow.className)) return true
+            if (isLauncherPackage(topWindow.packageName)) {
+                val hasNonLauncher = windows.any { window ->
+                    if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) return@any false
+                    val bounds = Rect()
+                    try {
+                        window.getBoundsInScreen(bounds)
+                    } catch (e: Exception) {
+                        return@any false
+                    }
+                    if (bounds.width() <= 0 || bounds.height() <= 0) return@any false
+
+                    val root = try { window.root } catch (e: Exception) { null }
+                    val pkg = root?.packageName?.toString()
+                    val className = root?.className?.toString()
+                    root?.recycle()
+
+                    if (pkg.isNullOrEmpty()) return@any false
+                    if (pkg == context.packageName || pkg == "com.android.systemui") return@any false
+                    if (isLauncherPackage(pkg) || isRecentsClassName(className ?: "")) return@any false
+                    true
+                }
+                if (hasNonLauncher) return true
+            }
+        }
+
         for (window in windows) {
             val root = try { window.root } catch (e: Exception) { null }
             val className = root?.className?.toString()
@@ -525,6 +566,51 @@ class WindowAnalyzer(
         }
 
         return false
+    }
+
+    /**
+     * 분할 화면 선택(런처 + 도킹 앱) 상태인지 판단.
+     * 런처가 보이면서, 런처가 아닌 앱 창이 화면의 상당 부분을 차지하고 있으면 true.
+     */
+    fun analyzeSplitSelectionState(
+        windows: List<AccessibilityWindowInfo>,
+        selfPackage: String
+    ): Boolean {
+        val screen = getScreenBounds()
+        var launcherVisible = false
+        var dockedAppVisible = false
+
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val bounds = Rect()
+            try {
+                window.getBoundsInScreen(bounds)
+            } catch (e: Exception) {
+                continue
+            }
+            if (bounds.width() <= 0 || bounds.height() <= 0) continue
+
+            val root = try { window.root } catch (e: Exception) { null }
+            val pkg = root?.packageName?.toString()
+            val className = root?.className?.toString()
+            root?.recycle()
+            if (pkg.isNullOrEmpty()) continue
+
+            val isLauncherLike = isLauncherPackage(pkg) || isRecentsClassName(className ?: "")
+            if (isLauncherLike) {
+                launcherVisible = true
+                continue
+            }
+            if (pkg == selfPackage || pkg == "com.android.systemui") continue
+
+            val widthRatio = bounds.width().toFloat() / screen.width()
+            val heightRatio = bounds.height().toFloat() / screen.height()
+            if (widthRatio < 0.9f || heightRatio < 0.9f) {
+                dockedAppVisible = true
+            }
+        }
+
+        return launcherVisible && dockedAppVisible
     }
 
     fun isRecentsOpen(rootNode: AccessibilityNodeInfo?): Boolean {
@@ -574,6 +660,7 @@ class WindowAnalyzer(
 
             val root = try { window.root } catch (e: Exception) { null }
             val pkg = root?.packageName?.toString()
+            val className = root?.className?.toString()
             root?.recycle()
 
             if (pkg == null) {
@@ -581,7 +668,7 @@ class WindowAnalyzer(
                 continue
             }
             if (pkg == selfPackage) continue
-            if (isLauncherPackage(pkg)) continue
+            if (isLauncherPackage(pkg) || isRecentsClassName(className ?: "")) continue
             return true
         }
         return hasUnknownAppWindow
