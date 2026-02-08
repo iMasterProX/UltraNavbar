@@ -261,8 +261,12 @@ object SplitScreenHelper {
             val splitSelectionVisible = navService?.isSplitSelectionVisibleForSplit() == true
             val launcherTopReady = navService?.isLauncherTopForSplit() == true
             val selectionLike = launchContext.isRecentsVisible || splitSelectionVisible || launcherTopReady
-            val isSplitActive = launchContext.isSplitScreenMode || isSplitActiveNow() ||
-                wasSplitActiveRecently() || splitSelectionVisible
+            val splitActiveNow = isSplitActiveNow()
+            val recentlyActive = wasSplitActiveRecently()
+            val isSplitActive = launchContext.isSplitScreenMode ||
+                splitActiveNow ||
+                splitSelectionVisible ||
+                (recentlyActive && selectionLike)
             if (isSplitActive) {
                 markSplitScreenUsed()
                 if (lastSplitFallbackPackage.isEmpty() && resolvedCurrent.isNotEmpty()) {
