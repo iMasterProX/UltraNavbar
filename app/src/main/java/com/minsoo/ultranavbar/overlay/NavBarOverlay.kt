@@ -104,6 +104,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     // 디바운스용 Runnable
     private var pendingHomeState: Runnable? = null
     private var pendingRecentsState: Runnable? = null
+    private var pendingRecentsClose: Runnable? = null
     private var pendingPanelClose: Runnable? = null
 
     // 숨김 애니메이션 진행 중 추적 (홈 화면 복귀 시 복원 여부 결정)
@@ -389,6 +390,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         clearHomeExitSuppression()
         pendingRecentsState?.let { handler.removeCallbacks(it) }
         pendingRecentsState = null
+        pendingRecentsClose?.let { handler.removeCallbacks(it) }
+        pendingRecentsClose = null
         pendingPanelClose?.let { handler.removeCallbacks(it) }
         pendingPanelClose = null
         taskbarEntryAnimator?.cancel()
@@ -521,7 +524,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 centerGroupView = centerView
 
                 // 홈화면이면 숨김
-                if (isOnHomeScreen) {
+                if (isOnHomeScreen || isRecentsVisible) {
                     centerView.visibility = View.GONE
                 }
             }
@@ -1113,7 +1116,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             Log.d(TAG, "Home screen state: false (debounced)")
 
             // 앱이 실행중이면 최근 앱 작업 표시줄 표시 (애니메이션 적용)
-            animateTaskbarEntry()
+            if (isRecentsVisible) {
+                hideTaskbarImmediate()
+            } else {
+                animateTaskbarEntry()
+            }
 
             updateNavBarBackground()
         }
@@ -1394,10 +1401,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             if (isRecentsVisible) return
             pendingRecentsState?.let { handler.removeCallbacks(it) }
             pendingRecentsState = null
+            pendingRecentsClose?.let { handler.removeCallbacks(it) }
+            pendingRecentsClose = null
 
             if (!isOnHomeScreen) {
                 isRecentsVisible = true
                 updateNavBarBackground()
+                animateTaskbarExit()
                 return
             }
 
@@ -1406,6 +1416,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 if (isRecentsVisible) return@Runnable
                 isRecentsVisible = true
                 updateNavBarBackground()
+                hideTaskbarImmediate()
             }
             pendingRecentsState = task
             handler.postDelayed(task, Constants.Timing.RECENTS_STATE_DEBOUNCE_MS)
@@ -1414,9 +1425,25 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         pendingRecentsState?.let { handler.removeCallbacks(it) }
         pendingRecentsState = null
+        pendingRecentsClose?.let { handler.removeCallbacks(it) }
+        pendingRecentsClose = null
         if (!isRecentsVisible) return
         isRecentsVisible = false
         updateNavBarBackground()
+        if (isOnHomeScreen) {
+            hideTaskbarImmediate()
+        } else {
+            val task = Runnable {
+                pendingRecentsClose = null
+                if (isRecentsVisible || isOnHomeScreen) {
+                    hideTaskbarImmediate()
+                    return@Runnable
+                }
+                animateTaskbarEntry()
+            }
+            pendingRecentsClose = task
+            handler.postDelayed(task, Constants.Timing.RECENTS_STATE_DEBOUNCE_MS)
+        }
     }
 
     fun setImeVisible(visible: Boolean) {
