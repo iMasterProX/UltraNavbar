@@ -2,8 +2,8 @@ package com.minsoo.ultranavbar.ui
 
 import android.app.Activity
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.Editable
@@ -136,30 +136,38 @@ class AppListActivity : AppCompatActivity() {
     private fun getInstalledApps(): List<AppInfo> {
         val pm = packageManager
         val apps = mutableListOf<AppInfo>()
+        val seen = mutableSetOf<String>()
 
-        val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+        // LAUNCHER 카테고리로 런처에 표시되는 앱 조회 (QUERY_ALL_PACKAGES 불필요)
+        val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        val resolveInfos: List<ResolveInfo> = pm.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
 
-        for (appInfo in installedApps) {
-            // 시스템 앱이 아닌 것만 (선택적으로 시스템 앱도 포함 가능)
-            val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+        for (resolveInfo in resolveInfos) {
+            val packageName = resolveInfo.activityInfo.packageName
+            if (!seen.add(packageName)) continue
 
-            // 런처에 표시되는 앱만 필터링
-            val launchIntent = pm.getLaunchIntentForPackage(appInfo.packageName)
-            if (launchIntent != null || isSystemApp) {
-                val name = pm.getApplicationLabel(appInfo).toString()
-                val icon = try {
-                    pm.getApplicationIcon(appInfo)
-                } catch (e: Exception) {
-                    null
-                }
-
-                apps.add(AppInfo(
-                    packageName = appInfo.packageName,
-                    name = name,
-                    icon = icon,
-                    isSystemApp = isSystemApp
-                ))
+            val appInfo = try {
+                pm.getApplicationInfo(packageName, 0)
+            } catch (e: PackageManager.NameNotFoundException) {
+                continue
             }
+
+            val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+            val name = pm.getApplicationLabel(appInfo).toString()
+            val icon = try {
+                pm.getApplicationIcon(appInfo)
+            } catch (e: Exception) {
+                null
+            }
+
+            apps.add(AppInfo(
+                packageName = packageName,
+                name = name,
+                icon = icon,
+                isSystemApp = isSystemApp
+            ))
         }
 
         // 선택된 앱을 상단에, 그 외는 이름순 정렬

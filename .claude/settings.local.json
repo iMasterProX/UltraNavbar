@@ -70,7 +70,11 @@
       "WebFetch(domain:issuetracker.google.com)",
       "WebFetch(domain:android.googlesource.com)",
       "Bash(cmd /c \"gradlew.bat assembleDebug 2>&1\")",
-      "Bash(powershell.exe -Command:*)"
+      "Bash(powershell.exe -Command:*)",
+      "Bash(del:*)",
+      "Bash(\"$JAVA_HOME/bin/java\" -version)",
+      "Bash(python3:*)",
+      "Bash(python -c:*)"
     ]
   }
 }

@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
@@ -32,23 +31,10 @@ import android.text.Html
  *
  * 포함 기능:
  * - 서비스 상태 표시
- * - 권한 상태 확인 및 요청 (접근성, 저장소, 배터리 최적화)
+ * - 권한 상태 확인 및 요청 (접근성, 배터리 최적화)
  * - 앱 정보 표시 (버전, 개발자, GitHub 등)
  */
 class AppSettingsFragment : Fragment() {
-
-    companion object {
-        /**
-         * API 레벨에 따라 적절한 저장소 권한 반환
-         */
-        private fun getStoragePermission(): String {
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                Manifest.permission.READ_MEDIA_IMAGES
-            } else {
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            }
-        }
-    }
 
     private lateinit var settings: SettingsManager
 
@@ -61,25 +47,12 @@ class AppSettingsFragment : Fragment() {
     private lateinit var txtPermAccessibility: TextView
     private lateinit var txtPermOverlay: TextView
     private lateinit var txtPermWriteSettings: TextView
-    private lateinit var txtPermStorage: TextView
     private lateinit var txtPermBattery: TextView
     private lateinit var txtPermBluetooth: TextView
     private lateinit var txtPermAdb: TextView
 
     // 버전 정보 UI
     private lateinit var txtVersion: TextView
-
-    // 저장소 읽기 권한 요청 런처
-    private val storagePermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            Toast.makeText(requireContext(), R.string.permission_granted_storage, Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(requireContext(), R.string.permission_denied, Toast.LENGTH_SHORT).show()
-        }
-        updatePermissionStatus()
-    }
 
     // 블루투스 권한 요청 런처
     private val bluetoothPermissionLauncher = registerForActivityResult(
@@ -133,7 +106,6 @@ class AppSettingsFragment : Fragment() {
         txtPermAccessibility = view.findViewById(R.id.txtPermAccessibility)
         txtPermOverlay = view.findViewById(R.id.txtPermOverlay)
         txtPermWriteSettings = view.findViewById(R.id.txtPermWriteSettings)
-        txtPermStorage = view.findViewById(R.id.txtPermStorage)
         txtPermBattery = view.findViewById(R.id.txtPermBattery)
         txtPermBluetooth = view.findViewById(R.id.txtPermBluetooth)
 
@@ -150,11 +122,6 @@ class AppSettingsFragment : Fragment() {
         // 시스템 설정 수정 권한 버튼
         view.findViewById<MaterialButton>(R.id.btnPermWriteSettings).setOnClickListener {
             requestWriteSettingsPermission()
-        }
-
-        // 저장소 권한 버튼
-        view.findViewById<MaterialButton>(R.id.btnPermStorage).setOnClickListener {
-            requestStoragePermission()
         }
 
         // 배터리 최적화 버튼
@@ -187,6 +154,11 @@ class AppSettingsFragment : Fragment() {
         // 오픈소스 라이선스 버튼
         view.findViewById<MaterialButton>(R.id.btnOpenSourceLicenses).setOnClickListener {
             showOpenSourceLicensesDialog()
+        }
+
+        // 개인정보 처리방침 버튼
+        view.findViewById<MaterialButton>(R.id.btnPrivacyPolicy).setOnClickListener {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://imasterprox.github.io/UltraNavbar/privacy.html")))
         }
     }
 
@@ -224,18 +196,6 @@ class AppSettingsFragment : Fragment() {
         // 시스템 설정 수정 권한 상태 확인
         val isWriteSettingsGranted = Settings.System.canWrite(requireContext())
         txtPermWriteSettings.text = if (isWriteSettingsGranted) {
-            getString(R.string.permission_status_granted)
-        } else {
-            getString(R.string.permission_status_not_granted)
-        }
-
-        // 저장소 권한 상태 확인
-        val isStorageGranted = ContextCompat.checkSelfPermission(
-            requireContext(),
-            getStoragePermission()
-        ) == PackageManager.PERMISSION_GRANTED
-
-        txtPermStorage.text = if (isStorageGranted) {
             getString(R.string.permission_status_granted)
         } else {
             getString(R.string.permission_status_not_granted)
@@ -343,18 +303,6 @@ class AppSettingsFragment : Fragment() {
     private fun openAccessibilitySettings() {
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         startActivity(intent)
-    }
-
-    private fun requestStoragePermission() {
-        if (ContextCompat.checkSelfPermission(
-                requireContext(),
-                getStoragePermission()
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            storagePermissionLauncher.launch(getStoragePermission())
-        } else {
-            Toast.makeText(requireContext(), R.string.storage_permission_already_granted, Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun requestIgnoreBatteryOptimizations(isTriggeredByUser: Boolean = false) {

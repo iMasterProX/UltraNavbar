@@ -229,6 +229,11 @@
     <string name="open_source_licenses_summary">이 앱은 다음 오픈소스 라이브러리를 사용합니다.</string>
     <string name="open_source_licenses_view">라이선스 보기</string>
 
+    <!-- 개인정보 처리방침 -->
+    <string name="privacy_policy_title">개인정보 처리방침</string>
+    <string name="privacy_policy_summary">개인정보가 어떻게 처리되는지 확인하세요.</string>
+    <string name="privacy_policy_view">개인정보 처리방침 보기</string>
+
     <!-- 키보드 단축키 -->
     <string name="shortcut_management">단축키 관리</string>
     <string name="manage_shortcuts">단축키 관리</string>

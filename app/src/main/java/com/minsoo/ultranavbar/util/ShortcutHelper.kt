@@ -1,7 +1,9 @@
 package com.minsoo.ultranavbar.util
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.LauncherApps
+import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.os.Build
 import android.os.Process
@@ -24,12 +26,18 @@ object ShortcutHelper {
         val userHandle = Process.myUserHandle()
         val shortcuts = mutableListOf<ShortcutInfo>()
 
-        // 설치된 모든 앱의 shortcuts 수집
-        val packages = context.packageManager.getInstalledApplications(0)
-        for (app in packages) {
+        // 런처에 표시되는 앱의 shortcuts 수집 (QUERY_ALL_PACKAGES 불필요)
+        val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        val resolveInfos = context.packageManager.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
+        val seen = mutableSetOf<String>()
+        for (ri in resolveInfos) {
+            val packageName = ri.activityInfo.packageName
+            if (!seen.add(packageName)) continue
             try {
                 val query = LauncherApps.ShortcutQuery()
-                query.setPackage(app.packageName)
+                query.setPackage(packageName)
                 query.setQueryFlags(
                     LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
                     LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
@@ -41,7 +49,7 @@ object ShortcutHelper {
                 }
             } catch (e: Exception) {
                 // 권한 없는 앱은 스킵
-                android.util.Log.w("ShortcutHelper", "Failed to get shortcuts for ${app.packageName}: ${e.message}")
+                android.util.Log.w("ShortcutHelper", "Failed to get shortcuts for $packageName: ${e.message}")
             }
         }
 

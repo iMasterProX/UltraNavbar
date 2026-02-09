@@ -7,12 +7,10 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.graphics.Point
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.TransitionDrawable
-import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
@@ -159,6 +157,9 @@ class BackgroundManager(
      * - 없으면 일반 배경으로 폴백
      */
     fun getCurrentBitmap(): Bitmap? {
+        // 실제 시스템 방향을 직접 확인 (캐시된 값 대신)
+        // onConfigurationChanged가 호출되지 않는 경우에도 정확한 방향을 반영
+        syncOrientationWithSystem()
         val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
 
         // 실제 시스템 다크 모드 상태를 직접 확인 (캐시된 값 대신)
@@ -225,20 +226,19 @@ class BackgroundManager(
     }
 
     private fun getActualOrientation(): Int {
-        @Suppress("DEPRECATION")
-        val display = windowManager.defaultDisplay
+        // API 30+ display rotation 사용 (minSdk 31이므로 항상 가능)
+        val display = context.display
             ?: return context.resources.configuration.orientation
 
         val rotation = display.rotation
-        val size = Point()
         val bounds = windowManager.currentWindowMetrics.bounds
-        size.x = bounds.width()
-        size.y = bounds.height()
+        val width = bounds.width()
+        val height = bounds.height()
 
         val naturalPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
-            size.x < size.y
+            width < height
         } else {
-            size.x > size.y
+            width > height
         }
 
         val isPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
