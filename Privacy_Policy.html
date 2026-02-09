@@ -1,0 +1,163 @@
+# 개인정보처리방침 (Privacy Policy)
+최종 업데이트: 2026-02-09  
+앱 이름: LG UltraTab Extension  
+개발자: MinSoo Song  
+문의 이메일: imasterprox@gmail.com  
+
+"LG" 및 LG 로고는 LG Electronics Inc.의 상표입니다. 이 앱은 LG Electronics와 무관하며, 후원/제휴 관계가 아닙니다.
+
+본 개인정보처리방침은 **LG UltraTab Extension**(이하 “본 앱”)의 데이터 처리 방식과 권한 사용 목적을 설명합니다. [page:10]  
+본 앱은 광고를 포함하지 않으며, 사용자 개인정보를 수집하거나 제3자에게 공유하지 않도록 설계되었습니다. [page:10]
+
+---
+
+## 1) 수집하는 데이터 (Data Collection)
+본 앱은 다음 사용자 데이터를 **수집(기기 밖 전송/서버 저장)하지 않습니다**. [page:10]
+- 개인 식별 정보(이름, 이메일, 전화번호, 주소 등) [page:10]
+- 위치 정보 [page:10]
+- 연락처/캘린더 [page:10]
+- 결제/금융 정보, 건강 정보 [page:10]
+- 사진/미디어 파일(사용자가 선택한 이미지는 기기 내에서만 사용) [page:10]
+
+또한 본 앱은 분석/광고 SDK를 사용하여 사용자 데이터를 수집하지 않습니다. [page:10]
+
+## 2) 데이터 공유 (Data Sharing)
+본 앱은 사용자 데이터를 제3자에게 판매/대여/공유하지 않습니다. [page:11]
+
+## 3) 데이터 보관 및 삭제 (Retention & Deletion)
+본 앱은 사용자 개인정보를 수집·저장하지 않으므로 개인정보 보관 기간이 없습니다. [page:10]  
+앱 설정(예: 네비게이션 바 버튼 배치, 단축 동작, 기기별 옵션 등)은 사용자 기기에 로컬로 저장될 수 있으며, 앱 삭제 시 운영체제 정책에 따라 제거될 수 있습니다. [page:10]
+
+## 4) 데이터 보호 (Security)
+본 앱이 접근할 수 있는 개인/민감 정보(예: 설치 앱 목록, 사용 기록 등)는 기능 제공을 위해 **기기 내에서만** 처리되며, 외부로 전송하지 않도록 설계되었습니다. [page:10]  
+본 앱은 가능한 경우 런타임 권한 요청을 사용하고, “특수 권한/접근 권한”이 필요한 경우 관련 시스템 설정 화면으로 안내합니다. [page:10]
+
+---
+
+## 5) 앱 권한 및 사용 목적 (Permissions & Purposes)
+본 앱은 기능 제공을 위해 아래 권한을 사용할 수 있습니다. [page:10]  
+일부 항목은 “런타임 권한” 또는 “특수 권한(설정에서 별도 허용)”으로 제공됩니다. [page:10]
+
+### 5.1 다른 앱 위에 표시 (오버레이)
+- 권한: `android.permission.SYSTEM_ALERT_WINDOW`
+- 목적: 본 앱의 **커스텀 네비게이션 바 UI**를 다른 앱 실행 중에도 화면 위에 표시하기 위해 사용됩니다.
+- 데이터 처리: 오버레이 표시는 UI 제공 목적이며, 이를 통해 사용자 데이터를 수집하거나 외부로 전송하지 않습니다.
+
+### 5.2 접근성 서비스(Accessibility Service)
+- 구성요소: `NavBarAccessibilityService` (`android.permission.BIND_ACCESSIBILITY_SERVICE`)
+- 목적: 오버레이로 동작하는 커스텀 네비게이션 바가 다음 기능을 제공할 수 있도록 하기 위해 필요합니다. [page:11]
+  - 시스템 내비게이션 동작 보조(예: 뒤로/홈/최근 앱 등)
+  - 커스텀 네비바 내 “최근 앱 테스트바”에서의 앱 전환 기능 보조
+  - (목록 갱신) 사용자가 앱을 전환할 때 **현재 포그라운드 앱 변경을 감지**하여 최근 앱 목록을 업데이트
+  - 사용자 설정 기반 단축 동작 수행(사용자가 요청/설정한 기능에 한함; 결정론적/규칙 기반 동작)
+- 데이터 처리: 접근성 서비스는 화면 상태/상호작용 정보에 접근할 수 있으나, 본 앱은 해당 접근을 **기능 제공 목적**으로만 사용하며 광고/분석/프로파일링에 사용하지 않습니다. [page:11]
+- 고지 및 동의: 본 앱이 접근성 도구(장애 지원 목적의 앱)가 아닌 경우, Google Play 정책에 따라 앱 내부에 **명확한 고지(prominent disclosure)** 를 표시하고 사용자의 **적극적 동의(affirmative action)** 를 받은 뒤 접근성 사용을 진행해야 합니다. [page:11]
+
+### 5.3 설치된 앱 목록 조회(전체)
+- 권한: `android.permission.QUERY_ALL_PACKAGES`
+- 목적: 커스텀 네비바/최근 앱 테스트바/바로가기 설정에서 **설치된 앱 목록을 표시·검색**하고 앱 전환/실행 기능을 제공하기 위해 사용됩니다. [page:10]
+- 데이터 처리: 설치된 앱 목록 정보는 기기 내에서만 사용하며 외부로 전송하거나 제3자와 공유하지 않습니다. [page:10]
+- 참고: 설치된 앱 목록(인벤토리)은 개인/민감 데이터에 포함될 수 있으므로, 본 앱은 기능 제공 목적에 한해 최소한으로 사용합니다. [page:10]
+
+### 5.4 앱 사용 기록(최근 앱 기록 / Usage Stats)
+- 권한: `android.permission.PACKAGE_USAGE_STATS`
+- 목적: 커스텀 네비바 내 “최근 앱 테스트바”에서 **최근 앱 목록을 초기 구성**하기 위해 최근 사용 앱 기록(Usage Stats/Usage Access)을 조회할 수 있습니다.
+- 동작: 사용자가 이 권한을 허용하지 않으면, 본 앱은 초기 최근 앱 목록을 구성하지 못할 수 있으며(또는 비어 있는 목록으로 시작), 이후에는 접근성 기반 포그라운드 감지로 목록이 점진적으로 채워질 수 있습니다.
+- 데이터 처리: 사용 기록 정보는 기기 내에서만 사용하며 외부로 전송하거나 공유하지 않습니다. [page:10]
+
+### 5.5 부팅 후 기능 복구/자동 시작
+- 권한: `android.permission.RECEIVE_BOOT_COMPLETED`
+- 목적: 기기 재부팅 후에도 사용자가 선택한 기능(예: 서비스 상태 복구, 위젯/알림 상태 복구)을 유지하기 위해 사용됩니다.
+
+### 5.6 포그라운드 서비스
+- 권한: `android.permission.FOREGROUND_SERVICE`, `android.permission.FOREGROUND_SERVICE_SPECIAL_USE`
+- 목적: 커스텀 네비바/시스템 연동 기능이 백그라운드에서 안정적으로 동작하도록 포그라운드 서비스를 사용할 수 있습니다(필요 시 사용자에게 알림으로 표시될 수 있음).
+
+### 5.7 배터리 최적화 제외(사용자 선택)
+- 권한: `android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
+- 목적: 절전 정책에 의해 커스텀 네비바/연동 기능이 중단되지 않도록, 사용자가 원할 때 배터리 최적화 제외를 요청할 수 있습니다.
+
+### 5.8 알림
+- 권한: `android.permission.POST_NOTIFICATIONS`
+- 목적: 기능 상태 안내, 배터리 알림(예: 블루투스 키보드 배터리 상태), 지속 알림(필요 시) 등을 표시하기 위해 사용됩니다.
+
+### 5.9 블루투스 연결(배터리 조회)
+- 권한: `android.permission.BLUETOOTH`, `android.permission.BLUETOOTH_CONNECT`
+- 목적: 블루투스 키보드 등 주변기기의 **배터리 정보를 조회**하고, 위젯/알림에 표시하기 위해 사용됩니다.
+- 데이터 처리: 블루투스 관련 정보는 배터리 표시 기능 제공 목적에 한해 기기 내에서 사용되며, 외부로 전송하지 않습니다.
+
+### 5.10 시스템 설정 변경
+- 권한: `android.permission.WRITE_SETTINGS`
+- 목적: 화면 방향 등 사용자가 선택한 일부 시스템 설정을 반영하는 기능을 제공하기 위해 사용될 수 있습니다.
+
+### 5.11 보안 설정 변경(ADB로만 부여되는 권한)
+- 권한: `android.permission.WRITE_SECURE_SETTINGS`
+- 목적: 와콤 펜 커스텀(고급 설정) 기능을 위해, 사용자가 **앱 내 ADB 가이드 화면**을 통해 별도 절차로 권한을 부여한 경우에 한해 설정을 적용할 수 있습니다.
+- 권한 부여 방식: 이 권한은 일반적인 앱 권한 허용 절차로 부여되지 않을 수 있으며, 사용자가 명시적으로 선택한 경우에만 해당 기능을 활성화합니다.
+- 데이터 처리: 개인정보 수집/공유 목적이 아닙니다.
+
+### 5.12 기기 내 이미지 읽기(배경화면/미리보기)
+- 권한: `android.permission.READ_MEDIA_IMAGES`(Android 13+), `android.permission.READ_EXTERNAL_STORAGE`(Android 12 이하)
+- 목적: 배경화면/이미지 미리보기 등 사용자가 선택한 이미지를 앱에서 표시하기 위해 사용됩니다.
+- 데이터 처리: 이미지는 기기 내에서만 처리되며 외부로 업로드/전송하지 않습니다.
+
+---
+
+## 6) 아동/청소년 관련 (Children)
+본 앱은 아동을 대상으로 개인정보를 수집하지 않으며, 개인정보를 수집하지 않습니다.
+
+## 7) 정책 변경 (Changes)
+본 정책이 변경되면 이 페이지의 최종 업데이트 일자를 갱신하여 공지합니다.
+
+## 8) 문의 (Contact)
+개인정보 관련 문의: imasterprox@gmail.com
+
+---
+
+# Privacy Policy (English)
+Last updated: 2026-02-09  
+App name: LG UltraTab Extension  
+Developer: MinSoo Song  
+Contact: imasterprox@gmail.com  
+
+"LG" and the LG logo are trademarks of LG Electronics Inc. This app is not made by, affiliated with, or endorsed by LG Electronics.
+
+This Privacy Policy explains how **LG UltraTab Extension** (the “App”) handles user data and permissions. [page:10]  
+The App is designed without ads and does not collect or share personal user data.
+
+## 1) Data We Collect
+The App does not collect personal data (such as name, email address, phone number, or address), location, contacts/calendar, financial/health information, or media content. [page:10]  
+The App does not use analytics or advertising SDKs to collect user data. [page:10]
+
+## 2) Data Sharing
+The App does not sell, rent, or share user data with third parties. [page:11]
+
+## 3) Retention & Deletion
+The App does not collect or store personal user data, so there is no personal-data retention period. [page:10]  
+Some app settings may be stored locally on the user’s device and may be removed when the user uninstalls the App (subject to OS behavior). [page:10]
+
+## 4) Security
+Any sensitive information the App may access (e.g., installed apps list or app usage history) is processed locally on-device for app functionality and is not transmitted off the device. [page:10]  
+The App uses runtime permission requests where available and guides users to the relevant system settings for special access. [page:10]
+
+## 5) Permissions & Purposes
+The App may request the following Android permissions for core functionality:
+
+- SYSTEM_ALERT_WINDOW: To display the custom navigation bar as an overlay on top of other apps.
+- Accessibility Service (BIND_ACCESSIBILITY_SERVICE): Required for the overlay navigation bar to assist navigation actions, enable app switching via the in-app “recent apps test bar,” and update the recent-apps list by detecting foreground app changes. Apps that are not eligible to be declared as accessibility tools must show an in-app prominent disclosure and obtain affirmative consent before using Accessibility API. [page:11]
+- QUERY_ALL_PACKAGES: To list and search installed apps for app switching and shortcut configuration (core feature).
+- PACKAGE_USAGE_STATS: To read usage stats and **build the initial recent-apps list** for the “recent apps test bar.” If not granted, the list may start empty/limited and may only be populated gradually based on subsequent app-switch events detected via Accessibility.
+- RECEIVE_BOOT_COMPLETED: To restore user-enabled behavior after reboot.
+- FOREGROUND_SERVICE / FOREGROUND_SERVICE_SPECIAL_USE: To keep core features running reliably when needed.
+- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: To request battery-optimization exemption when the user chooses to.
+- POST_NOTIFICATIONS: To show important status and battery notifications.
+- BLUETOOTH / BLUETOOTH_CONNECT: To read Bluetooth peripheral battery level and display it in widget/notifications.
+- WRITE_SETTINGS: To apply user-selected system settings (e.g., orientation-related features).
+- WRITE_SECURE_SETTINGS: Advanced Wacom pen customization only when the user explicitly grants it via an extra step using the in-app ADB guide screen.
+- READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE: To display user-selected images locally on the device (e.g., wallpaper/preview).
+
+## 6) Changes
+We update this page by changing the “Last updated” date.
+
+## 7) Contact
+For privacy questions, contact: imasterprox@gmail.com
