@@ -24,15 +24,16 @@ class PenButtonABridgeActivity : Activity() {
         private const val TAG = "PenButtonABridge"
 
         // === 타이밍 설정 ===
-        // 첫 시도 전 대기 시간
-        private const val INITIAL_DELAY_MS = 100L
-        // 재시도 간격
-        private const val RETRY_DELAY_MS = 100L
+        // 첫 시도 전 대기 시간 — Activity 전환 완료 + 포커스 안정화를 위해 충분한 딜레이
+        // Theme.NoDisplay finish() 후 이전 앱으로 포커스가 완전히 복귀해야 제스처가 전달됨
+        private const val INITIAL_DELAY_MS = 350L
+        // 재시도 간격 — 이전 제스처가 완전히 종료된 후 다시 시도
+        private const val RETRY_DELAY_MS = 300L
         // 최대 재시도 횟수 (dispatchGesture용)
-        private const val MAX_RETRIES = 5
+        private const val MAX_RETRIES = 8
         // 노드 클릭 재시도 설정
-        private const val NODE_CLICK_DELAY_MS = 50L
-        private const val NODE_CLICK_MAX_RETRIES = 5
+        private const val NODE_CLICK_DELAY_MS = 80L
+        private const val NODE_CLICK_MAX_RETRIES = 6
 
         // 세션 ID - 새 버튼 누름 시 증가, 이전 재시도 무효화
         @Volatile
@@ -154,6 +155,11 @@ class PenButtonABridgeActivity : Activity() {
 
     /**
      * 터치 제스처를 재시도 메커니즘과 함께 수행
+     *
+     * 개선사항:
+     * - dispatchGesture가 false를 반환하는 경우도 재시도
+     * - 콜백에서 onCancelled 시 재시도
+     * - 점진적 startDelay 증가로 타이밍 문제 해결
      */
     private fun performTouchWithRetry(x: Float, y: Float, retryCount: Int, sessionId: Long) {
         val delay = if (retryCount == 0) INITIAL_DELAY_MS else RETRY_DELAY_MS
@@ -183,6 +189,7 @@ class PenButtonABridgeActivity : Activity() {
                         return
                     }
 
+                    Log.w(TAG, "Gesture cancelled at ($x, $y) on attempt ${retryCount + 1}")
                     if (retryCount < MAX_RETRIES) {
                         performTouchWithRetry(x, y, retryCount + 1, sessionId)
                     } else {
@@ -191,7 +198,20 @@ class PenButtonABridgeActivity : Activity() {
                 }
             }
 
-            service.performTap(x, y, callback, 0L)
+            // 점진적 startDelay: 재시도마다 제스처 내부 시작 딜레이를 약간 늘려
+            // 시스템이 이전 이벤트를 처리할 시간을 확보
+            val gestureStartDelay = (retryCount * 20L).coerceAtMost(100L)
+            val dispatched = service.performTap(x, y, callback, gestureStartDelay)
+
+            // dispatchGesture 자체가 false를 반환하면 콜백이 호출되지 않으므로 직접 재시도
+            if (!dispatched) {
+                Log.w(TAG, "dispatchGesture returned false at ($x, $y) on attempt ${retryCount + 1}")
+                if (sessionId == currentSessionId && retryCount < MAX_RETRIES) {
+                    performTouchWithRetry(x, y, retryCount + 1, sessionId)
+                } else if (retryCount >= MAX_RETRIES) {
+                    Log.e(TAG, "Max retries ($MAX_RETRIES) reached after dispatch failure, giving up")
+                }
+            }
         }, delay)
     }
 }

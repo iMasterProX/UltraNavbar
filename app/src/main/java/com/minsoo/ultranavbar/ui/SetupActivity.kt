@@ -1,6 +1,8 @@
 package com.minsoo.ultranavbar.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -23,9 +25,9 @@ import com.minsoo.ultranavbar.settings.SettingsManager
 class SetupActivity : AppCompatActivity() {
 
     companion object {
-        /**
-         * API 레벨에 따라 적절한 저장소 권한 반환
-         */
+        // 0: 접근성, 1: 오버레이, 2: 시스템 설정 수정, 3: 저장소, 4: 배터리, 5: 블루투스, 6: ADB
+        private const val TOTAL_STEPS = 7
+
         private fun getStoragePermission(): String {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 Manifest.permission.READ_MEDIA_IMAGES
@@ -37,7 +39,6 @@ class SetupActivity : AppCompatActivity() {
 
     private lateinit var settings: SettingsManager
 
-    // UI 요소
     private lateinit var setupStepTitle: TextView
     private lateinit var setupStepDesc: TextView
     private lateinit var setupStepStatus: TextView
@@ -45,10 +46,8 @@ class SetupActivity : AppCompatActivity() {
     private lateinit var btnSkip: MaterialButton
     private lateinit var btnNext: MaterialButton
 
-    // 현재 단계 (0: 접근성, 1: 저장소, 2: 배터리, 3: 블루투스)
     private var currentStep = 0
 
-    // 저장소 권한 요청 런처
     private val storagePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -60,7 +59,6 @@ class SetupActivity : AppCompatActivity() {
         updateStepStatus()
     }
 
-    // 블루투스 권한 요청 런처
     private val bluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -111,27 +109,51 @@ class SetupActivity : AppCompatActivity() {
     private fun showStep(step: Int) {
         when (step) {
             0 -> {
-                // 접근성 서비스 단계
                 setupStepTitle.text = getString(R.string.setup_accessibility_title)
                 setupStepDesc.text = getString(R.string.setup_accessibility_desc)
+                btnGrantPermission.text = getString(R.string.setup_grant_permission)
                 btnNext.text = getString(R.string.setup_next)
             }
             1 -> {
-                // 저장소 접근 단계
-                setupStepTitle.text = getString(R.string.setup_storage_title)
-                setupStepDesc.text = getString(R.string.setup_storage_desc)
+                // 다른 앱 위에 표시
+                setupStepTitle.text = getString(R.string.setup_overlay_title)
+                setupStepDesc.text = getString(R.string.setup_overlay_desc)
+                btnGrantPermission.text = getString(R.string.setup_grant_permission)
                 btnNext.text = getString(R.string.setup_next)
             }
             2 -> {
-                // 배터리 최적화 단계
-                setupStepTitle.text = getString(R.string.setup_battery_title)
-                setupStepDesc.text = getString(R.string.setup_battery_desc)
+                // 시스템 설정 수정
+                setupStepTitle.text = getString(R.string.setup_write_settings_title)
+                setupStepDesc.text = getString(R.string.setup_write_settings_desc)
+                btnGrantPermission.text = getString(R.string.setup_grant_permission)
                 btnNext.text = getString(R.string.setup_next)
             }
             3 -> {
-                // 블루투스 권한 단계 (마지막)
+                setupStepTitle.text = getString(R.string.setup_storage_title)
+                setupStepDesc.text = getString(R.string.setup_storage_desc)
+                btnGrantPermission.text = getString(R.string.setup_grant_permission)
+                btnNext.text = getString(R.string.setup_next)
+            }
+            4 -> {
+                setupStepTitle.text = getString(R.string.setup_battery_title)
+                setupStepDesc.text = getString(R.string.setup_battery_desc)
+                btnGrantPermission.text = getString(R.string.setup_grant_permission)
+                btnNext.text = getString(R.string.setup_next)
+            }
+            5 -> {
                 setupStepTitle.text = getString(R.string.setup_bluetooth_title)
                 setupStepDesc.text = getString(R.string.setup_bluetooth_desc)
+                btnGrantPermission.text = getString(R.string.setup_grant_permission)
+                btnNext.text = getString(R.string.setup_next)
+            }
+            6 -> {
+                // ADB 권한 단계 (마지막, 선택사항)
+                setupStepTitle.text = getString(R.string.setup_adb_title)
+                val guideText = getString(R.string.setup_adb_guide) +
+                        "\n\n" + getString(R.string.setup_adb_command) +
+                        "\n\n" + getString(R.string.pen_settings_permission_note)
+                setupStepDesc.text = guideText
+                btnGrantPermission.text = getString(R.string.setup_check_permission)
                 btnNext.text = getString(R.string.setup_complete)
             }
         }
@@ -142,40 +164,92 @@ class SetupActivity : AppCompatActivity() {
     private fun updateStepStatus() {
         val isGranted = when (currentStep) {
             0 -> NavBarAccessibilityService.isRunning()
-            1 -> ContextCompat.checkSelfPermission(
+            1 -> Settings.canDrawOverlays(this)
+            2 -> Settings.System.canWrite(this)
+            3 -> ContextCompat.checkSelfPermission(
                 this,
                 getStoragePermission()
             ) == PackageManager.PERMISSION_GRANTED
-            2 -> {
+            4 -> {
                 val powerManager = getSystemService(PowerManager::class.java)
                 powerManager?.isIgnoringBatteryOptimizations(packageName) ?: false
             }
-            3 -> {
-                // 블루투스 권한 확인
+            5 -> {
                 ContextCompat.checkSelfPermission(
                     this,
                     Manifest.permission.BLUETOOTH_CONNECT
                 ) == PackageManager.PERMISSION_GRANTED
             }
+            6 -> {
+                checkWriteSecureSettingsPermission()
+            }
             else -> false
         }
 
-        setupStepStatus.text = if (isGranted) {
-            getString(R.string.permission_status_granted)
+        if (currentStep == 6) {
+            setupStepStatus.text = if (isGranted) {
+                getString(R.string.setup_adb_status_granted)
+            } else {
+                getString(R.string.setup_adb_status_not_granted)
+            }
         } else {
-            getString(R.string.permission_status_not_granted)
+            setupStepStatus.text = if (isGranted) {
+                getString(R.string.permission_status_granted)
+            } else {
+                getString(R.string.permission_status_not_granted)
+            }
+        }
+    }
+
+    private fun checkWriteSecureSettingsPermission(): Boolean {
+        return try {
+            val current = Settings.Global.getInt(
+                contentResolver,
+                "pen_pointer",
+                0
+            )
+            Settings.Global.putInt(
+                contentResolver,
+                "pen_pointer",
+                current
+            )
+            true
+        } catch (e: SecurityException) {
+            false
         }
     }
 
     private fun grantCurrentStepPermission() {
         when (currentStep) {
             0 -> {
-                // 접근성 서비스 설정 열기
                 val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                 startActivity(intent)
             }
             1 -> {
-                // 저장소 권한 요청
+                // 다른 앱 위에 표시 권한
+                if (!Settings.canDrawOverlays(this)) {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    startActivity(intent)
+                } else {
+                    Toast.makeText(this, R.string.setup_overlay_already_granted, Toast.LENGTH_SHORT).show()
+                }
+            }
+            2 -> {
+                // 시스템 설정 수정 권한
+                if (!Settings.System.canWrite(this)) {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                        Uri.parse("package:$packageName")
+                    )
+                    startActivity(intent)
+                } else {
+                    Toast.makeText(this, R.string.setup_write_settings_already_granted, Toast.LENGTH_SHORT).show()
+                }
+            }
+            3 -> {
                 if (ContextCompat.checkSelfPermission(
                         this,
                         getStoragePermission()
@@ -186,12 +260,10 @@ class SetupActivity : AppCompatActivity() {
                     Toast.makeText(this, R.string.storage_permission_already_granted, Toast.LENGTH_SHORT).show()
                 }
             }
-            2 -> {
-                // 배터리 최적화 제외 요청
+            4 -> {
                 requestIgnoreBatteryOptimizations()
             }
-            3 -> {
-                // 블루투스 권한 요청
+            5 -> {
                 if (ContextCompat.checkSelfPermission(
                         this,
                         Manifest.permission.BLUETOOTH_CONNECT
@@ -202,7 +274,23 @@ class SetupActivity : AppCompatActivity() {
                     Toast.makeText(this, R.string.bluetooth_permission_already_granted, Toast.LENGTH_SHORT).show()
                 }
             }
+            6 -> {
+                if (checkWriteSecureSettingsPermission()) {
+                    Toast.makeText(this, R.string.setup_adb_already_granted, Toast.LENGTH_SHORT).show()
+                } else {
+                    copyAdbCommandToClipboard()
+                    Toast.makeText(this, R.string.pen_permission_failed, Toast.LENGTH_LONG).show()
+                }
+                updateStepStatus()
+            }
         }
+    }
+
+    private fun copyAdbCommandToClipboard() {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("ADB Command", getString(R.string.setup_adb_command))
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(this, R.string.command_copied, Toast.LENGTH_SHORT).show()
     }
 
     private fun requestIgnoreBatteryOptimizations() {
@@ -226,11 +314,10 @@ class SetupActivity : AppCompatActivity() {
     }
 
     private fun nextStep() {
-        if (currentStep < 3) {
+        if (currentStep < TOTAL_STEPS - 1) {
             currentStep++
             showStep(currentStep)
         } else {
-            // 마지막 단계 완료
             completeSetup()
         }
     }

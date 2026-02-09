@@ -24,7 +24,7 @@
     <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (Notifications/Screenshot) to left side</string>
 
     <string name="recent_apps_taskbar_title">Recent Apps Taskbar</string>
-    <string name="recent_apps_taskbar_summary">Show recent app icons in the center of the navigation bar. Tap an icon to switch apps, or drag it upward to add the app to split screen (right side in landscape, bottom in portrait).</string>
+    <string name="recent_apps_taskbar_summary">Show recent app icons in the center of the navigation bar. Tap an icon to switch apps, or drag it upward to add the app to split screen (right side in landscape, bottom in portrait).\n\nApps must be used at least once before they appear in the list.</string>
     <string name="split_screen_not_supported">%1$s does not support split screen</string>
     <string name="split_screen_not_supported_generic">This app does not support split screen.</string>
     <string name="split_screen_failed_generic">Unable to start split screen.</string>
@@ -182,10 +182,39 @@
     <string name="setup_battery_desc">Exclude the app from battery optimization so the service runs reliably in the background.</string>
     <string name="setup_bluetooth_title">Bluetooth access permission</string>
     <string name="setup_bluetooth_desc">Bluetooth permission is required to detect connected keyboards and use keyboard shortcuts.</string>
+    <string name="setup_overlay_title">Draw over other apps</string>
+    <string name="setup_overlay_desc">Overlay permission is required to display the custom navigation bar on top of other apps.</string>
+    <string name="setup_overlay_already_granted">Overlay permission is already granted.</string>
+
+    <string name="setup_write_settings_title">Modify system settings</string>
+    <string name="setup_write_settings_desc">Permission to modify system settings is required for screen orientation lock and other system-level features.</string>
+    <string name="setup_write_settings_already_granted">System settings permission is already granted.</string>
+
+    <string name="setup_adb_title">Wacom Pen Settings (Optional)</string>
+    <string name="setup_adb_desc">ADB permission is required to customize Wacom pen button settings. You can set this up later if you prefer.</string>
+    <string name="setup_adb_guide">To grant this permission, connect your tablet to a Windows PC via USB and run an ADB command.\n\nStep-by-step instructions:\n\n1. Download \"SDK Platform-Tools\" from:\nhttps://developer.android.com/studio/releases/platform-tools\n\n2. Extract the downloaded ZIP file\n\n3. On your tablet, enable Developer Options:\nSettings → About tablet → Tap \"Build number\" 7 times\n\n4. Enable USB debugging:\nSettings → Developer options → USB debugging → ON\n\n5. Connect your tablet to the PC via USB cable\n\n6. Open PowerShell as Administrator on your PC, navigate to the platform-tools folder, then run:</string>
+    <string name="setup_adb_command">adb shell pm grant com.minsoo.ultranavbar android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="setup_adb_status_granted">ADB permission granted</string>
+    <string name="setup_adb_status_not_granted">ADB permission not granted (optional)</string>
+    <string name="setup_adb_already_granted">ADB permission is already granted.</string>
     <string name="setup_grant_permission">Grant permission</string>
     <string name="setup_complete">Done</string>
     <string name="setup_skip">Skip</string>
     <string name="setup_next">Next</string>
+    <string name="setup_check_permission">Check Permission</string>
+    <string name="copy_command">Copy</string>
+    <string name="command_copied">Command copied to clipboard</string>
+
+    <!-- Overlay and Write Settings permissions for app settings -->
+    <string name="permission_overlay">Draw over other apps</string>
+    <string name="permission_overlay_summary">Required to display the navigation bar overlay.</string>
+    <string name="permission_write_settings">Modify system settings</string>
+    <string name="permission_write_settings_summary">Required for screen orientation lock and system features.</string>
+
+    <!-- ADB permission for app settings -->
+    <string name="permission_adb">ADB permission (Wacom Pen)</string>
+    <string name="permission_adb_summary">Required to customize Wacom pen button settings.</string>
+    <string name="permission_adb_guide_title">ADB Permission Guide</string>
 
     <string name="about_github_url">https://github.com/iMasterProX/UltraNavbar</string>
     <string name="credits_text">Creator: iMasterProX with Vibe Coding (AI used)</string>
@@ -378,7 +407,7 @@
     <string name="touch_point_confirm">Activate Auto Touch at This Location</string>
 
     <!-- System Pen Settings Warning -->
-    <string name="pen_settings_system_warning">LG UltraTab Extension pen settings are currently active. To avoid conflicts, please disable pen settings in the app first before using system settings.</string>
+    <string name="pen_settings_system_warning">LG UltraTab Extension pen settings are currently active.</string>
 
     <!-- Node Selection (Recommended) -->
     <string name="pen_button_action_node_click">Auto Touch (UI Element)</string>

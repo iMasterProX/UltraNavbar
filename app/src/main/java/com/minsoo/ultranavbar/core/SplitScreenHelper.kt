@@ -1051,7 +1051,27 @@ object SplitScreenHelper {
     }
 
     private fun showSplitFailureToast(context: Context) {
-        // Intentionally no-op: UI messaging is handled by the caller.
+        // 비동기 분할화면 실패 시 (toggleThenLaunch 내부 등) 토스트 표시
+        // lastLaunchFailure에 따라 적절한 메시지 선택
+        val failure = lastLaunchFailure
+        when (failure) {
+            SplitLaunchFailure.TARGET_UNSUPPORTED,
+            SplitLaunchFailure.CURRENT_UNSUPPORTED -> {
+                showSplitNotSupportedToast(context)
+            }
+            SplitLaunchFailure.NONE -> {
+                // 실패 원인 없음 — 토스트 불필요
+            }
+            else -> {
+                handler.post {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.split_screen_failed_generic),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
     }
 
     /**
@@ -1161,6 +1181,7 @@ object SplitScreenHelper {
         val screenHeight = displayMetrics.heightPixels
         val screenWidth = displayMetrics.widthPixels
         val distinctPackages = mutableSetOf<String>()
+        var hasSmallResizableWindow = false
 
         for (window in windowList) {
             if (window.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) continue
@@ -1186,9 +1207,16 @@ object SplitScreenHelper {
             val widthRatio = bounds.width().toFloat() / screenWidth
             val heightRatio = bounds.height().toFloat() / screenHeight
             if (widthRatio < 0.9f || heightRatio < 0.9f) {
-                lastSplitDetectedAt = SystemClock.elapsedRealtime()
-                return true
+                // 리사이즈 불가 앱의 다이얼로그/팝업은 분할화면으로 판단하지 않음
+                if (pkg != null && isResizeableActivity(service, pkg)) {
+                    hasSmallResizableWindow = true
+                }
             }
+        }
+
+        if (hasSmallResizableWindow) {
+            lastSplitDetectedAt = SystemClock.elapsedRealtime()
+            return true
         }
 
         if (distinctPackages.size >= 2) {

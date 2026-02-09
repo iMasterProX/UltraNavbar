@@ -1,6 +1,9 @@
 package com.minsoo.ultranavbar.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -56,9 +59,12 @@ class AppSettingsFragment : Fragment() {
 
     // 권한 상태 UI
     private lateinit var txtPermAccessibility: TextView
+    private lateinit var txtPermOverlay: TextView
+    private lateinit var txtPermWriteSettings: TextView
     private lateinit var txtPermStorage: TextView
     private lateinit var txtPermBattery: TextView
     private lateinit var txtPermBluetooth: TextView
+    private lateinit var txtPermAdb: TextView
 
     // 버전 정보 UI
     private lateinit var txtVersion: TextView
@@ -125,6 +131,8 @@ class AppSettingsFragment : Fragment() {
 
         // 권한 상태 UI
         txtPermAccessibility = view.findViewById(R.id.txtPermAccessibility)
+        txtPermOverlay = view.findViewById(R.id.txtPermOverlay)
+        txtPermWriteSettings = view.findViewById(R.id.txtPermWriteSettings)
         txtPermStorage = view.findViewById(R.id.txtPermStorage)
         txtPermBattery = view.findViewById(R.id.txtPermBattery)
         txtPermBluetooth = view.findViewById(R.id.txtPermBluetooth)
@@ -132,6 +140,16 @@ class AppSettingsFragment : Fragment() {
         // 접근성 권한 버튼
         view.findViewById<MaterialButton>(R.id.btnPermAccessibility).setOnClickListener {
             openAccessibilitySettings()
+        }
+
+        // 다른 앱 위에 표시 권한 버튼
+        view.findViewById<MaterialButton>(R.id.btnPermOverlay).setOnClickListener {
+            requestOverlayPermission()
+        }
+
+        // 시스템 설정 수정 권한 버튼
+        view.findViewById<MaterialButton>(R.id.btnPermWriteSettings).setOnClickListener {
+            requestWriteSettingsPermission()
         }
 
         // 저장소 권한 버튼
@@ -147,6 +165,14 @@ class AppSettingsFragment : Fragment() {
         // 블루투스 권한 버튼
         view.findViewById<MaterialButton>(R.id.btnPermBluetooth).setOnClickListener {
             requestBluetoothPermission()
+        }
+
+        // ADB 권한 상태 UI
+        txtPermAdb = view.findViewById(R.id.txtPermAdb)
+
+        // ADB 권한 가이드 버튼
+        view.findViewById<MaterialButton>(R.id.btnPermAdb).setOnClickListener {
+            showAdbPermissionGuideDialog()
         }
 
         // 버전 정보 UI
@@ -187,6 +213,22 @@ class AppSettingsFragment : Fragment() {
             getString(R.string.permission_status_not_granted)
         }
 
+        // 다른 앱 위에 표시 권한 상태 확인
+        val isOverlayGranted = Settings.canDrawOverlays(requireContext())
+        txtPermOverlay.text = if (isOverlayGranted) {
+            getString(R.string.permission_status_granted)
+        } else {
+            getString(R.string.permission_status_not_granted)
+        }
+
+        // 시스템 설정 수정 권한 상태 확인
+        val isWriteSettingsGranted = Settings.System.canWrite(requireContext())
+        txtPermWriteSettings.text = if (isWriteSettingsGranted) {
+            getString(R.string.permission_status_granted)
+        } else {
+            getString(R.string.permission_status_not_granted)
+        }
+
         // 저장소 권한 상태 확인
         val isStorageGranted = ContextCompat.checkSelfPermission(
             requireContext(),
@@ -220,6 +262,73 @@ class AppSettingsFragment : Fragment() {
         } else {
             getString(R.string.permission_status_not_granted)
         }
+
+        // ADB 권한 (WRITE_SECURE_SETTINGS) 상태 확인
+        val isAdbGranted = checkWriteSecureSettingsPermission()
+        txtPermAdb.text = if (isAdbGranted) {
+            getString(R.string.permission_status_granted)
+        } else {
+            getString(R.string.permission_status_not_granted)
+        }
+    }
+
+    /**
+     * WRITE_SECURE_SETTINGS 권한 확인
+     */
+    private fun checkWriteSecureSettingsPermission(): Boolean {
+        return try {
+            val current = Settings.Global.getInt(
+                requireContext().contentResolver,
+                "pen_pointer",
+                0
+            )
+            Settings.Global.putInt(
+                requireContext().contentResolver,
+                "pen_pointer",
+                current
+            )
+            true
+        } catch (e: SecurityException) {
+            false
+        }
+    }
+
+    /**
+     * ADB 권한 설정 가이드 다이얼로그
+     */
+    private fun showAdbPermissionGuideDialog() {
+        val message = getString(R.string.setup_adb_guide) +
+                "\n\n" + getString(R.string.setup_adb_command) +
+                "\n\n" + getString(R.string.pen_settings_permission_note)
+
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.permission_adb_guide_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.pen_settings_check_permission) { _, _ ->
+                // 권한 재확인
+                if (checkWriteSecureSettingsPermission()) {
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.setup_adb_already_granted,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.pen_permission_failed,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                updatePermissionStatus()
+            }
+            .setNeutralButton(R.string.copy_command) { _, _ ->
+                val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("ADB Command", getString(R.string.setup_adb_command))
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(requireContext(), R.string.command_copied, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun loadVersionInfo() {
@@ -273,6 +382,30 @@ class AppSettingsFragment : Fragment() {
             if (isTriggeredByUser) {
                 Toast.makeText(requireContext(), R.string.battery_opt_open_failed, Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun requestOverlayPermission() {
+        if (!Settings.canDrawOverlays(requireContext())) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${requireContext().packageName}")
+            )
+            startActivity(intent)
+        } else {
+            Toast.makeText(requireContext(), R.string.setup_overlay_already_granted, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun requestWriteSettingsPermission() {
+        if (!Settings.System.canWrite(requireContext())) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                Uri.parse("package:${requireContext().packageName}")
+            )
+            startActivity(intent)
+        } else {
+            Toast.makeText(requireContext(), R.string.setup_write_settings_already_granted, Toast.LENGTH_SHORT).show()
         }
     }
 

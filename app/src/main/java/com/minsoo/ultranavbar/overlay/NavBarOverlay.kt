@@ -242,6 +242,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         val current = launchContext.currentPackage.takeIf { it.isNotEmpty() }
                         showSplitNotSupportedToast(current)
                     }
+                    SplitScreenHelper.SplitLaunchFailure.NO_PRIMARY -> {
+                        // 현재 앱이 분할화면을 지원하지 않아 primary가 없는 경우
+                        // (예: UltraNavbar 앱 자체에서 분할화면 시도)
+                        showSplitNotSupportedToast(null)
+                    }
                     else -> {
                         Log.w(TAG, "Split launch failed: $failure (target=$packageName)")
                     }

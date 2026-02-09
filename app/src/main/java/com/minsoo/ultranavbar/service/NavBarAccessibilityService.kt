@@ -897,6 +897,8 @@ class NavBarAccessibilityService : AccessibilityService() {
         val screenWidth = displayMetrics.widthPixels
         val distinctPackages = mutableSetOf<String>()
         var hasSmallWindow = false
+        // 작은 창이 리사이즈 불가능한 앱에서만 발생했는지 추적
+        var smallWindowFromResizableApp = false
 
         for (window in windowList) {
             if (window.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) continue
@@ -923,11 +925,18 @@ class NavBarAccessibilityService : AccessibilityService() {
             val heightRatio = bounds.height().toFloat() / screenHeight
             if (widthRatio < 0.9f || heightRatio < 0.9f) {
                 hasSmallWindow = true
+                // 작은 창이 리사이즈 가능한 앱에서 왔으면 실제 분할화면일 가능성이 높음
+                if (pkg != null && SplitScreenHelper.isResizeableActivity(this, pkg)) {
+                    smallWindowFromResizableApp = true
+                }
             }
         }
 
-        // 분할화면 상태 감지 (작은 창 또는 2개 이상 앱 창)
-        isSplitScreenMode = hasSmallWindow || distinctPackages.size >= 2
+        // 분할화면 상태 감지:
+        // - 작은 창이 있되, 리사이즈 가능한 앱에서 발생한 경우에만 분할화면으로 판단
+        //   (리사이즈 불가 앱의 다이얼로그/팝업은 분할화면이 아님)
+        // - 또는 2개 이상 서로 다른 앱 창이 보이는 경우
+        isSplitScreenMode = (hasSmallWindow && smallWindowFromResizableApp) || distinctPackages.size >= 2
 
         // SplitScreenHelper에 상태 동기화
         SplitScreenHelper.setSplitScreenActive(isSplitScreenMode)
@@ -1595,9 +1604,10 @@ class NavBarAccessibilityService : AccessibilityService() {
      * 지정된 좌표에 터치(탭) 제스처 수행
      *
      * 개선된 제스처 방식:
-     * 1. startTime에 딜레이를 주어 펜 버튼 이벤트 완료 후 실행
-     * 2. 약간의 움직임을 추가하여 정지 탭 무시 방지
-     * 3. 적절한 터치 지속 시간 사용
+     * 1. 단일 포인트 Path (Android CTS 권장 방식) — 불필요한 이동 제거
+     * 2. 충분한 터치 지속 시간 (50ms) — 너무 짧으면 무시, 너무 길면 long-press
+     * 3. startTime 조정 가능 — 펜 버튼 이벤트 완료 후 실행을 위해
+     * 4. 화면 경계 클램핑 — 잘못된 좌표로 인한 실패 방지
      *
      * @param x X 좌표
      * @param y Y 좌표
@@ -1617,14 +1627,24 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
 
         return try {
-            // 약간의 움직임이 있는 탭 (일부 앱에서 정지 탭을 무시할 수 있음)
+            // 화면 경계 내로 좌표 클램핑
+            val displayMetrics = resources.displayMetrics
+            val maxX = displayMetrics.widthPixels.toFloat() - 1f
+            val maxY = displayMetrics.heightPixels.toFloat() - 1f
+            val clampedX = x.coerceIn(0f, maxX)
+            val clampedY = y.coerceIn(0f, maxY)
+
+            // 탭 제스처: moveTo → lineTo 로 미세 이동 포함
+            // 일부 Android 디바이스/앱에서 zero-length path(moveTo만)를 무시하므로
+            // 1px 오프셋 이동을 추가하여 유효한 제스처로 인식시킴
+            val offsetX = (clampedX + 1f).coerceAtMost(maxX)
             val path = Path().apply {
-                moveTo(x, y)
-                lineTo(x + 1f, y)
-                lineTo(x, y)
+                moveTo(clampedX, clampedY)
+                lineTo(offsetX, clampedY)
             }
 
-            // 터치 지속 시간: 100ms
+            // 터치 지속 시간: 100ms (탭으로 인식되기 충분하며 long-press 미만)
+            // 50ms는 일부 앱/기기에서 너무 짧아 무시될 수 있음
             val strokeDescription = GestureDescription.StrokeDescription(
                 path,
                 startDelay,
@@ -1639,17 +1659,17 @@ class NavBarAccessibilityService : AccessibilityService() {
                 gestureBuilder,
                 callback ?: object : GestureResultCallback() {
                     override fun onCompleted(gestureDescription: GestureDescription?) {
-                        Log.d(TAG, "performTap: Gesture completed at ($x, $y)")
+                        Log.d(TAG, "performTap: Gesture completed at ($clampedX, $clampedY)")
                     }
 
                     override fun onCancelled(gestureDescription: GestureDescription?) {
-                        Log.w(TAG, "performTap: Gesture cancelled at ($x, $y)")
+                        Log.w(TAG, "performTap: Gesture cancelled at ($clampedX, $clampedY)")
                     }
                 },
                 handler
             )
 
-            Log.d(TAG, "performTap: dispatchGesture result=$result at ($x, $y)")
+            Log.d(TAG, "performTap: dispatchGesture result=$result at ($clampedX, $clampedY)")
             result
         } catch (e: Exception) {
             Log.e(TAG, "performTap: Failed to dispatch gesture", e)

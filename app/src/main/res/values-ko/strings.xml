@@ -186,10 +186,39 @@
     <string name="setup_battery_desc">서비스가 백그라운드에서 안정적으로 동작하도록 배터리 최적화에서 제외해 주세요.</string>
     <string name="setup_bluetooth_title">블루투스 접근 권한</string>
     <string name="setup_bluetooth_desc">연결된 키보드를 감지하고 키보드 단축키를 사용하기 위해 블루투스 권한이 필요합니다.</string>
+    <string name="setup_overlay_title">다른 앱 위에 표시</string>
+    <string name="setup_overlay_desc">다른 앱 위에 커스텀 네비게이션 바를 표시하기 위해 오버레이 권한이 필요합니다.</string>
+    <string name="setup_overlay_already_granted">오버레이 권한이 이미 승인되어 있습니다.</string>
+
+    <string name="setup_write_settings_title">시스템 설정 수정</string>
+    <string name="setup_write_settings_desc">화면 방향 고정 등 시스템 수준 기능을 위해 시스템 설정 수정 권한이 필요합니다.</string>
+    <string name="setup_write_settings_already_granted">시스템 설정 권한이 이미 승인되어 있습니다.</string>
+
+    <string name="setup_adb_title">와콤 펜 설정 (선택사항)</string>
+    <string name="setup_adb_desc">와콤 펜 버튼 설정을 커스터마이즈하려면 ADB 권한이 필요합니다. 나중에 설정할 수도 있습니다.</string>
+    <string name="setup_adb_guide">이 권한을 부여하려면 태블릿을 Windows PC에 USB로 연결한 후 ADB 명령어를 실행해야 합니다.\n\n단계별 안내:\n\n1. \"SDK Platform-Tools\"를 다운로드합니다:\nhttps://developer.android.com/studio/releases/platform-tools\n\n2. 다운로드한 ZIP 파일을 압축 해제합니다\n\n3. 태블릿에서 개발자 옵션을 활성화합니다:\n설정 → 태블릿 정보 → \"빌드 번호\"를 7번 탭\n\n4. USB 디버깅을 활성화합니다:\n설정 → 개발자 옵션 → USB 디버깅 → 켜기\n\n5. 태블릿을 USB 케이블로 PC에 연결합니다\n\n6. PC에서 관리자 권한으로 PowerShell을 열고, platform-tools 폴더로 이동한 후 다음 명령어를 실행합니다:</string>
+    <string name="setup_adb_command">adb shell pm grant com.minsoo.ultranavbar android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="setup_adb_status_granted">ADB 권한 승인됨</string>
+    <string name="setup_adb_status_not_granted">ADB 권한 미승인 (선택사항)</string>
+    <string name="setup_adb_already_granted">ADB 권한이 이미 승인되어 있습니다.</string>
     <string name="setup_grant_permission">권한 허용</string>
     <string name="setup_complete">설정 완료</string>
     <string name="setup_skip">건너뛰기</string>
     <string name="setup_next">다음</string>
+    <string name="setup_check_permission">권한 확인</string>
+    <string name="copy_command">복사</string>
+    <string name="command_copied">명령어가 클립보드에 복사되었습니다</string>
+
+    <!-- 오버레이 및 시스템 설정 권한 -->
+    <string name="permission_overlay">다른 앱 위에 표시</string>
+    <string name="permission_overlay_summary">네비게이션 바 오버레이 표시에 필요합니다.</string>
+    <string name="permission_write_settings">시스템 설정 수정</string>
+    <string name="permission_write_settings_summary">화면 방향 고정 등 시스템 기능에 필요합니다.</string>
+
+    <!-- 앱 설정의 ADB 권한 -->
+    <string name="permission_adb">ADB 권한 (와콤 펜)</string>
+    <string name="permission_adb_summary">와콤 펜 버튼 설정 커스터마이즈에 필요합니다.</string>
+    <string name="permission_adb_guide_title">ADB 권한 설정 안내</string>
 
     <string name="about_github_url">https://github.com/iMasterProX/UltraNavbar</string>
     <string name="credits_text">제작: iMasterProX with Vibe Coding (AI 활용)</string>
@@ -382,7 +411,7 @@
     <string name="touch_point_confirm">해당 위치로 자동 터치 활성화</string>
 
     <!-- 시스템 펜 설정 경고 -->
-    <string name="pen_settings_system_warning">지금은 LG UltraTab Extension의 와콤 펜 설정을 사용중입니다. 시스템에서의 설정과 겹치지 않게 하려면 먼저 LG UltraTab Extension 앱에서의 와콤 펜 설정을 꺼주세요.</string>
+    <string name="pen_settings_system_warning">LG UltraTab Extension의 와콤 펜 설정을 사용중입니다.</string>
 
     <!-- 노드 선택 (권장) -->
     <string name="pen_button_action_node_click">자동 터치 (UI 요소 기반)</string>

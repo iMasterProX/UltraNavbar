@@ -65,7 +65,12 @@
       "Bash(cmd /c \"gradlew.bat assembleDebug\")",
       "Bash(grep:*)",
       "Bash(Select-String -Pattern \"Split|NavBar\")",
-      "Bash(.\\\\gradlew assembleDebug:*)"
+      "Bash(.\\\\gradlew assembleDebug:*)",
+      "WebFetch(domain:xdaforums.com)",
+      "WebFetch(domain:issuetracker.google.com)",
+      "WebFetch(domain:android.googlesource.com)",
+      "Bash(cmd /c \"gradlew.bat assembleDebug 2>&1\")",
+      "Bash(powershell.exe -Command:*)"
     ]
   }
 }

@@ -30,14 +30,16 @@
     <!-- 현재 단계 카드 -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:layout_marginTop="32dp"
+        android:layout_marginBottom="16dp"
         app:cardElevation="4dp"
         app:cardCornerRadius="12dp">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:orientation="vertical"
             android:padding="16dp">
 
@@ -50,14 +52,22 @@
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
-            <!-- 단계 설명 -->
-            <TextView
-                android:id="@+id/setupStepDesc"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+            <!-- 단계 설명 (스크롤 가능) -->
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:layout_marginTop="8dp"
-                android:text="@string/setup_accessibility_desc"
-                android:textSize="14sp" />
+                android:fillViewport="true">
+
+                <TextView
+                    android:id="@+id/setupStepDesc"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/setup_accessibility_desc"
+                    android:textSize="14sp"
+                    android:textIsSelectable="true" />
+            </ScrollView>
 
             <!-- 상태 및 버튼 -->
             <LinearLayout
@@ -88,11 +98,6 @@
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
-
-    <View
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
 
     <!-- 하단 버튼 -->
     <LinearLayout
