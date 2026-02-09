@@ -3,6 +3,7 @@ package com.minsoo.ultranavbar.core
 import android.accessibilityservice.AccessibilityService
 import android.app.ActivityManager
 import android.app.ActivityOptions
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -15,6 +16,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
@@ -40,6 +42,7 @@ object SplitScreenHelper {
     private const val SPLIT_FALLBACK_STALE_MS = 5000L
     private const val LAUNCHER_CACHE_TTL_MS = 30000L
     private const val SPLIT_STICKY_MS = 5000L
+    private const val SPLIT_PANE_MIN_AREA_RATIO = 0.15f
     private val handler = Handler(Looper.getMainLooper())
     private val launchTokenCounter = AtomicInteger(0)
     @Volatile
@@ -197,28 +200,47 @@ object SplitScreenHelper {
     /**
      * 앱이 분할화면(멀티윈도우)을 지원하는지 확인
      */
-    fun isResizeableActivity(context: Context, packageName: String): Boolean {
+    fun isResizeableActivity(context: Context, packageName: String, className: String? = null): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
             return false
         }
 
         return try {
             val pm = context.packageManager
-            val intent = pm.getLaunchIntentForPackage(packageName) ?: return false
-            val activityInfo = intent.component?.let {
-                pm.getActivityInfo(it, 0)
-            } ?: return false
+            val activityInfo = resolveActivityInfoForSplit(pm, packageName, className) ?: return false
 
             val resizeModeField = ActivityInfo::class.java.getField("resizeMode")
             val resizeMode = resizeModeField.getInt(activityInfo)
             // RESIZE_MODE_UNRESIZEABLE = 0 일 때만 분할화면 불가
             val isResizeable = resizeMode != 0
-            Log.d(TAG, "isResizeableActivity: $packageName, resizeMode=$resizeMode, result=$isResizeable")
+            val classSuffix = if (!className.isNullOrBlank()) "/$className" else ""
+            Log.d(TAG, "isResizeableActivity: $packageName$classSuffix, resizeMode=$resizeMode, result=$isResizeable")
             isResizeable
         } catch (e: Exception) {
             Log.w(TAG, "isResizeableActivity check failed for $packageName", e)
             true // Treat as resizeable on errors to avoid false negatives.
         }
+    }
+
+    private fun resolveActivityInfoForSplit(
+        pm: PackageManager,
+        packageName: String,
+        className: String?
+    ): ActivityInfo? {
+        val normalizedClass = className?.takeIf { it.isNotBlank() }?.let {
+            if (it.startsWith(".")) packageName + it else it
+        }
+        if (!normalizedClass.isNullOrBlank()) {
+            try {
+                return pm.getActivityInfo(ComponentName(packageName, normalizedClass), 0)
+            } catch (_: Exception) {
+                // Fall back to launch intent resolution.
+            }
+        }
+
+        val intent = pm.getLaunchIntentForPackage(packageName) ?: return null
+        val component = intent.component ?: return null
+        return pm.getActivityInfo(component, 0)
     }
 
     /**
@@ -262,6 +284,14 @@ object SplitScreenHelper {
             val resolvedCurrent = when {
                 currentPackage.isNotEmpty() -> currentPackage
                 else -> navService?.resolveForegroundPackageForSplit() ?: ""
+            }
+            val resolvedCurrentClassName = when {
+                resolvedCurrent.isNotEmpty() && currentPackage == resolvedCurrent -> launchContext.currentClassName
+                resolvedCurrent.isNotEmpty() -> navService?.resolveForegroundClassForSplit(resolvedCurrent) ?: ""
+                else -> ""
+            }
+            if (resolvedCurrentClassName.isNotEmpty()) {
+                Log.d(TAG, "Resolved current class for split: $resolvedCurrentClassName")
             }
             val targetWarm = isAppProcessRunning(context, targetPackage)
             val focusDelayMs = resolveFocusDelayMs(targetWarm)
@@ -375,7 +405,7 @@ object SplitScreenHelper {
             if (resolvedCurrent.isNotEmpty() &&
                 !isLauncherPackage(context, resolvedCurrent) &&
                 resolvedCurrent != "com.android.systemui" &&
-                !isResizeableActivity(context, resolvedCurrent)
+                !isResizeableActivity(context, resolvedCurrent, resolvedCurrentClassName)
             ) {
                 Log.w(TAG, "Current app does not support split screen: $resolvedCurrent")
                 lastLaunchFailure = SplitLaunchFailure.CURRENT_UNSUPPORTED
@@ -698,8 +728,13 @@ object SplitScreenHelper {
 
         val options = optionsOverride ?: if (allowOptions) buildSecondaryLaunchOptions() else null
         if (options != null) {
-            val delayMs = if (isTargetWarm) 0L else focusDelayMs
-            Log.d(TAG, "Launching secondary with ActivityOptions (delay=${delayMs}ms)")
+            val focusResult = (service as? NavBarAccessibilityService)?.let {
+                focusSplitPane(it, SplitPane.PRIMARY, forceTap = true)
+            }
+            val didFocus = focusResult?.didFocus == true
+            val baseDelayMs = if (isTargetWarm) 0L else focusDelayMs
+            val delayMs = if (didFocus) maxOf(baseDelayMs, focusDelayMs) else baseDelayMs
+            Log.d(TAG, "Launching secondary with ActivityOptions (delay=${delayMs}ms, focusAdjusted=$didFocus)")
             handler.postDelayed({
                 if (!isLaunchTokenValid(launchToken)) {
                     return@postDelayed
@@ -721,6 +756,95 @@ object SplitScreenHelper {
         return launchAdjacent(context, targetPackage, preferSecondary = true)
     }
 
+    private fun focusSplitPane(
+        service: NavBarAccessibilityService,
+        targetPane: SplitPane,
+        forceTap: Boolean
+    ): FocusResult {
+        val paneInfo = resolveSplitPaneBounds(service)
+        if (paneInfo == null) {
+            if (!forceTap) return FocusResult(false, false)
+            val bounds = getScreenBounds(service)
+            if (bounds.width() <= 0 || bounds.height() <= 0) return FocusResult(false, false)
+            val isLandscape = bounds.width() >= bounds.height()
+            val x = when (targetPane) {
+                SplitPane.PRIMARY -> bounds.left + (bounds.width() * if (isLandscape) 0.15f else 0.5f)
+                SplitPane.SECONDARY -> bounds.left + (bounds.width() * if (isLandscape) 0.85f else 0.5f)
+            }
+            val y = when (targetPane) {
+                SplitPane.PRIMARY -> bounds.top + (bounds.height() * if (isLandscape) 0.5f else 0.15f)
+                SplitPane.SECONDARY -> bounds.top + (bounds.height() * if (isLandscape) 0.5f else 0.9f)
+            }
+            Log.d(TAG, "Focusing $targetPane pane at ($x, $y) [fallback]")
+            val tapped = service.performTap(x, y)
+            return FocusResult(tapped, tapped)
+        }
+
+        val targetBounds = if (targetPane == SplitPane.PRIMARY) paneInfo.primary else paneInfo.secondary
+        val targetPackage = if (targetPane == SplitPane.PRIMARY) paneInfo.primaryPackage else paneInfo.secondaryPackage
+        Log.d(
+            TAG,
+            "Split pane info: primary=${paneInfo.primaryPackage}, secondary=${paneInfo.secondaryPackage}, focused=${paneInfo.focusedPane}"
+        )
+
+        if (paneInfo.focusedPane == targetPane) {
+            Log.d(TAG, "Split pane already focused: $targetPane")
+            return FocusResult(true, false)
+        }
+        if (paneInfo.focusedPane == null && !forceTap) {
+            Log.d(TAG, "Split pane focus unknown; skipping focus request")
+            return FocusResult(true, false)
+        }
+
+        val focusedByAction = requestAccessibilityFocus(service, targetBounds, targetPackage)
+        if (focusedByAction) {
+            Log.d(TAG, "Focused $targetPane via accessibility focus")
+            return FocusResult(true, true)
+        }
+
+        val x = targetBounds.exactCenterX()
+        val y = targetBounds.exactCenterY()
+        Log.d(TAG, "Focusing $targetPane pane at ($x, $y)")
+        val tapped = service.performTap(x, y)
+        return FocusResult(tapped, tapped)
+    }
+
+    private fun requestAccessibilityFocus(
+        service: NavBarAccessibilityService,
+        targetBounds: Rect,
+        targetPackage: String
+    ): Boolean {
+        if (targetPackage.isEmpty()) return false
+        val centerX = targetBounds.exactCenterX().toInt()
+        val centerY = targetBounds.exactCenterY().toInt()
+        val windowList = try { service.windows.toList() } catch (e: Exception) { return false }
+        for (window in windowList) {
+            if (window.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val bounds = Rect()
+            try {
+                window.getBoundsInScreen(bounds)
+            } catch (e: Exception) {
+                continue
+            }
+            if (!bounds.contains(centerX, centerY)) continue
+            val root = try { window.root } catch (e: Exception) { null } ?: continue
+            val pkg = root.packageName?.toString()
+            if (pkg.isNullOrEmpty() || pkg != targetPackage) {
+                root.recycle()
+                continue
+            }
+            val focused = try {
+                root.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS) ||
+                    root.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            } catch (_: Exception) {
+                false
+            }
+            root.recycle()
+            if (focused) return true
+        }
+        return false
+    }
+
     private fun focusPrimaryAndLaunch(
         context: Context,
         service: AccessibilityService,
@@ -730,16 +854,8 @@ object SplitScreenHelper {
     ): Boolean {
         if (!isLaunchTokenValid(launchToken)) return false
         val navService = service as? NavBarAccessibilityService ?: return false
-        val bounds = getScreenBounds(navService)
-        if (bounds.width() <= 0 || bounds.height() <= 0) return false
-
-        val isLandscape = bounds.width() >= bounds.height()
-        val x = bounds.left + (bounds.width() * if (isLandscape) 0.15f else 0.5f)
-        val y = bounds.top + (bounds.height() * if (isLandscape) 0.5f else 0.15f)
-
-        Log.d(TAG, "Focusing primary pane at ($x, $y)")
-        val tapped = navService.performTap(x, y)
-        if (!tapped) return false
+        val focusResult = focusSplitPane(navService, SplitPane.PRIMARY, forceTap = true)
+        if (!focusResult.success) return false
 
         handler.postDelayed({
             if (!isLaunchTokenValid(launchToken)) {
@@ -761,16 +877,8 @@ object SplitScreenHelper {
     ): Boolean {
         if (!isLaunchTokenValid(launchToken)) return false
         val navService = service as? NavBarAccessibilityService ?: return false
-        val bounds = getScreenBounds(navService)
-        if (bounds.width() <= 0 || bounds.height() <= 0) return false
-
-        val isLandscape = bounds.width() >= bounds.height()
-        val x = bounds.left + (bounds.width() * if (isLandscape) 0.85f else 0.5f)
-        val y = bounds.top + (bounds.height() * if (isLandscape) 0.5f else 0.9f)
-
-        Log.d(TAG, "Focusing secondary pane at ($x, $y)")
-        val tapped = navService.performTap(x, y)
-        if (!tapped) return false
+        val focusResult = focusSplitPane(navService, SplitPane.SECONDARY, forceTap = true)
+        if (!focusResult.success) return false
 
         handler.postDelayed({
             if (!isLaunchTokenValid(launchToken)) {
@@ -794,6 +902,99 @@ object SplitScreenHelper {
             wm.defaultDisplay.getRealSize(size)
             Rect(0, 0, size.x, size.y)
         }
+    }
+
+    private enum class SplitPane {
+        PRIMARY,
+        SECONDARY
+    }
+
+    private data class SplitPaneInfo(
+        val primary: Rect,
+        val secondary: Rect,
+        val primaryPackage: String,
+        val secondaryPackage: String,
+        val focusedPane: SplitPane?
+    )
+
+    private data class FocusResult(
+        val success: Boolean,
+        val didFocus: Boolean
+    )
+
+    private fun resolveSplitPaneBounds(service: AccessibilityService): SplitPaneInfo? {
+        val windowList = try { service.windows.toList() } catch (e: Exception) { return null }
+        if (windowList.isEmpty()) return null
+
+        val screen = getScreenBounds(service)
+        if (screen.width() <= 0 || screen.height() <= 0) return null
+        val isLandscape = screen.width() >= screen.height()
+
+        data class Candidate(
+            val bounds: Rect,
+            val packageName: String,
+            val focused: Boolean,
+            val active: Boolean,
+            val areaRatio: Float
+        )
+
+        val candidates = mutableListOf<Candidate>()
+        for (window in windowList) {
+            if (window.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val bounds = Rect()
+            try {
+                window.getBoundsInScreen(bounds)
+            } catch (e: Exception) {
+                continue
+            }
+            if (bounds.width() <= 0 || bounds.height() <= 0) continue
+            val widthRatio = bounds.width().toFloat() / screen.width()
+            val heightRatio = bounds.height().toFloat() / screen.height()
+            val areaRatio = widthRatio * heightRatio
+            if (areaRatio < SPLIT_PANE_MIN_AREA_RATIO) continue
+            val root = try { window.root } catch (e: Exception) { null }
+            val pkg = root?.packageName?.toString()
+            root?.recycle()
+            if (pkg.isNullOrEmpty()) continue
+            if (pkg == service.packageName || pkg == "com.android.systemui") continue
+            if (isLauncherPackage(service, pkg)) continue
+            candidates.add(
+                Candidate(
+                    bounds = Rect(bounds),
+                    packageName = pkg,
+                    focused = window.isFocused,
+                    active = window.isActive,
+                    areaRatio = areaRatio
+                )
+            )
+        }
+
+        if (candidates.size < 2) return null
+        val topCandidates = candidates
+            .sortedByDescending { it.areaRatio }
+            .take(2)
+        if (topCandidates.size < 2) return null
+        val sorted = if (isLandscape) {
+            topCandidates.sortedBy { it.bounds.exactCenterX() }
+        } else {
+            topCandidates.sortedBy { it.bounds.exactCenterY() }
+        }
+        val primary = sorted.first()
+        val secondary = sorted.last()
+        val focusedPane = when {
+            primary.focused -> SplitPane.PRIMARY
+            secondary.focused -> SplitPane.SECONDARY
+            primary.active && !secondary.active -> SplitPane.PRIMARY
+            secondary.active && !primary.active -> SplitPane.SECONDARY
+            else -> null
+        }
+        return SplitPaneInfo(
+            primary = primary.bounds,
+            secondary = secondary.bounds,
+            primaryPackage = primary.packageName,
+            secondaryPackage = secondary.packageName,
+            focusedPane = focusedPane
+        )
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -865,7 +1066,10 @@ object SplitScreenHelper {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
         intent.addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT
+                Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
         )
 
         try {

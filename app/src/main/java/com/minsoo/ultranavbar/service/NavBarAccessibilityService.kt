@@ -66,6 +66,8 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     // === 상태 ===
     private var currentPackage: String = ""
+    private var currentClassName: String = ""
+    private var currentClassNameAt: Long = 0
     private var currentOrientation: Int = Configuration.ORIENTATION_UNDEFINED
     private var isFullscreen: Boolean = false
     private var isOnHomeScreen: Boolean = false
@@ -85,6 +87,8 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var lastSplitRecoveryAt: Long = 0
     private var lastNonLauncherPackage: String = ""
     private var lastNonLauncherPackageAt: Long = 0
+    private var lastNonLauncherClassName: String = ""
+    private var lastNonLauncherClassAt: Long = 0
     private var emptySplitSince: Long = 0
 
     // === 디바운스/폴링 ===
@@ -513,9 +517,9 @@ class NavBarAccessibilityService : AccessibilityService() {
             return
         }
 
-        markNonLauncherEvent(packageName)
+        markNonLauncherEvent(packageName, className)
 
-        val packageChanged = updateForegroundPackage(packageName, "event")
+        val packageChanged = updateForegroundPackage(packageName, "event", className)
 
         val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
             windows.toList(),
@@ -588,6 +592,8 @@ class NavBarAccessibilityService : AccessibilityService() {
     private fun cleanSplitScreenStacks() {
         Log.d(TAG, "Split screen cleanup: resetting all state flags")
         SplitScreenHelper.forceResetSplitScreenState()
+        emptySplitSince = 0L
+        lastSplitRecoveryAt = 0L
     }
 
     // 복구 체크는 더 이상 사용하지 않음 - 분할화면 종료 시 즉시 복구
@@ -630,12 +636,22 @@ class NavBarAccessibilityService : AccessibilityService() {
         overlay?.setHomeScreenState(isOnHomeScreen)
     }
 
-    private fun markNonLauncherEvent(packageName: String) {
+    private fun markNonLauncherEvent(packageName: String, className: String? = null) {
         if (packageName.isEmpty()) return
         if (packageName == this.packageName) return
         if (packageName == "com.android.systemui") return
         if (windowAnalyzer.isLauncherPackage(packageName)) return
-        lastNonLauncherEventAt = SystemClock.elapsedRealtime()
+        val now = SystemClock.elapsedRealtime()
+        lastNonLauncherEventAt = now
+        lastNonLauncherPackage = packageName
+        lastNonLauncherPackageAt = now
+        val normalizedClass = className?.takeIf { it.isNotBlank() }?.let {
+            if (it.startsWith(".")) packageName + it else it
+        }?.takeIf { it.startsWith(packageName) }
+        if (!normalizedClass.isNullOrEmpty()) {
+            lastNonLauncherClassName = normalizedClass
+            lastNonLauncherClassAt = now
+        }
     }
 
     private fun shouldSuppressHomeForRecentApp(): Boolean {
@@ -645,12 +661,31 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     private fun updateForegroundPackage(
         packageName: String,
-        source: String
+        source: String,
+        className: String? = null
     ): Boolean {
-        if (currentPackage == packageName) return false
+        val now = SystemClock.elapsedRealtime()
+        val normalizedClass = className?.takeIf { it.isNotBlank() }?.let {
+            if (it.startsWith(".")) packageName + it else it
+        }?.takeIf { it.startsWith(packageName) }
+
+        if (currentPackage == packageName) {
+            if (!normalizedClass.isNullOrEmpty()) {
+                currentClassName = normalizedClass
+                currentClassNameAt = now
+            }
+            return false
+        }
 
         val previousPackage = currentPackage
         currentPackage = packageName
+        if (!normalizedClass.isNullOrEmpty()) {
+            currentClassName = normalizedClass
+            currentClassNameAt = now
+        } else {
+            currentClassName = ""
+            currentClassNameAt = 0
+        }
         Log.d(TAG, "Foreground app ($source): $packageName")
 
         // 앱 전환 시 키보드 수정자 키 상태 초기화 (stuck modifier 방지)
@@ -711,8 +746,27 @@ class NavBarAccessibilityService : AccessibilityService() {
         return candidate
     }
 
+    fun resolveForegroundClassForSplit(packageName: String): String {
+        if (packageName.isEmpty()) return ""
+        val now = SystemClock.elapsedRealtime()
+        if (packageName == lastNonLauncherPackage &&
+            lastNonLauncherClassName.isNotEmpty() &&
+            now - lastNonLauncherClassAt < SPLIT_FOREGROUND_STALE_MS
+        ) {
+            return lastNonLauncherClassName
+        }
+        if (packageName == currentPackage &&
+            currentClassName.isNotEmpty() &&
+            now - currentClassNameAt < SPLIT_FOREGROUND_STALE_MS
+        ) {
+            return currentClassName
+        }
+        return ""
+    }
+
     data class SplitLaunchContext(
         val currentPackage: String,
+        val currentClassName: String,
         val isOnHomeScreen: Boolean,
         val isRecentsVisible: Boolean,
         val hasVisibleNonLauncherApp: Boolean,
@@ -723,8 +777,10 @@ class NavBarAccessibilityService : AccessibilityService() {
         val windowList = windows.toList()
         val hasVisibleNonLauncher = windowAnalyzer.hasVisibleNonLauncherAppWindow(windowList, packageName)
         val current = resolveForegroundPackageForSplit(windowList)
+        val currentClassName = resolveForegroundClassForSplit(current)
         return SplitLaunchContext(
             currentPackage = current,
+            currentClassName = currentClassName,
             isOnHomeScreen = isOnHomeScreen,
             isRecentsVisible = isRecentsVisible,
             hasVisibleNonLauncherApp = hasVisibleNonLauncher,
@@ -912,7 +968,9 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         // 분할화면이 종료되었는지 확인 (로그만 남김, 복구는 최근 앱 종료 시 수행)
         if (wasInSplitScreen && !isSplitScreenMode) {
-            Log.d(TAG, "Split screen ended")
+            Log.d(TAG, "Split screen ended, cleaning split state")
+            cleanSplitScreenStacks()
+            wasSplitScreenUsed = false
         }
 
         if (wasInSplitScreen != isSplitScreenMode) {
