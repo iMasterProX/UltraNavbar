@@ -3,27 +3,58 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>개인정보처리방침 | LG UltraTab Extension</title>
+  <title>Privacy Policy | LG UltraTab Extension</title>
   <style>
     :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; line-height: 1.65; margin: 24px; max-width: 980px; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      line-height: 1.65;
+      margin: 24px;
+      max-width: 980px;
+    }
     h1, h2, h3 { line-height: 1.25; }
     hr { margin: 24px 0; }
     code { background: rgba(127,127,127,.15); padding: 2px 6px; border-radius: 6px; }
+    a { color: inherit; }
     .meta { color: #444; }
-    .box { border: 1px solid rgba(127,127,127,.35); border-radius: 10px; padding: 12px 14px; background: rgba(127,127,127,.07); }
+    .box {
+      border: 1px solid rgba(127,127,127,.35);
+      border-radius: 10px;
+      padding: 12px 14px;
+      background: rgba(127,127,127,.07);
+    }
+    .toc a { text-decoration: underline; }
     ul { padding-left: 20px; }
     li { margin: 4px 0; }
+    .toplinks { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border: 1px solid rgba(127,127,127,.35);
+      border-radius: 999px;
+      background: rgba(127,127,127,.07);
+      text-decoration: none;
+    }
+    .pill:hover { background: rgba(127,127,127,.12); }
+    .section-top { margin-top: 28px; }
+    .backtotop { margin-top: 18px; }
+    .backtotop a { text-decoration: none; }
   </style>
 </head>
 
-<body>
-  <h1 id="ko">개인정보처리방침 (Privacy Policy)</h1>
-  <nav class="box" aria-label="Language shortcuts">
-  <strong>바로 이동:</strong>
-  <a href="#ko">한국어</a> ·
-  <a href="#en">English</a>
-</nav>
+<body id="top">
+  <nav class="box toc" aria-label="Language shortcuts">
+    <div class="toplinks">
+      <strong>바로 이동:</strong>
+      <a class="pill" href="#ko">한국어</a>
+      <a class="pill" href="#en">English</a>
+      <a class="pill" href="#contact">문의/Contact</a>
+    </div>
+  </nav>
+
+  <!-- Korean -->
+  <h1 id="ko" class="section-top">개인정보처리방침 (Privacy Policy)</h1>
   <p class="meta">
     최종 업데이트: 2026-02-09<br/>
     앱 이름: LG UltraTab Extension<br/>
@@ -161,9 +192,7 @@
     <li>데이터 처리: 이미지는 기기 내에서만 처리되며 외부로 업로드/전송하지 않습니다.</li>
   </ul>
 
-  <hr/>
-
-  <h2>6) 아동/청소년 관련</h2>
+  <h2 id="contact">6) 아동/청소년 관련</h2>
   <p>본 앱은 아동을 대상으로 개인정보를 수집하지 않으며, 개인정보를 수집하지 않습니다.</p>
 
   <h2>7) 정책 변경</h2>
@@ -172,9 +201,12 @@
   <h2>8) 문의</h2>
   <p>개인정보 관련 문의: <a href="mailto:imasterprox@gmail.com">imasterprox@gmail.com</a></p>
 
+  <p class="backtotop"><a class="pill" href="#top">위로</a></p>
+
   <hr/>
 
-  <h1 id="en">Privacy Policy (English)</h1>
+  <!-- English -->
+  <h1 id="en" class="section-top">Privacy Policy (English)</h1>
   <p class="meta">
     Last updated: 2026-02-09<br/>
     App name: LG UltraTab Extension<br/>
@@ -241,5 +273,7 @@
 
   <h2>7) Contact</h2>
   <p>For privacy questions, contact: <a href="mailto:imasterprox@gmail.com">imasterprox@gmail.com</a></p>
+
+  <p class="backtotop"><a class="pill" href="#top">Back to top</a></p>
 </body>
 </html>
