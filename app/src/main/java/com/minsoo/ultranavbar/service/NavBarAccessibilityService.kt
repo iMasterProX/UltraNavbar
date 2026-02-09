@@ -769,6 +769,34 @@ class NavBarAccessibilityService : AccessibilityService() {
         return null
     }
 
+    fun getVisibleLauncherPackagesForSplit(): List<String> {
+        val windowList = windows.toList()
+        val candidates = mutableMapOf<String, Int>()
+        for (window in windowList) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val root = try { window.root } catch (e: Exception) { null } ?: continue
+            val pkg = root.packageName?.toString()
+            val className = root.className?.toString()
+            root.recycle()
+            if (pkg.isNullOrEmpty()) continue
+
+            val title = try { window.title?.toString() } catch (e: Exception) { null }
+            val isLauncherLike = windowAnalyzer.isLauncherPackage(pkg) ||
+                windowAnalyzer.isRecentsClassName(className ?: "") ||
+                (!title.isNullOrEmpty() && windowAnalyzer.isRecentsClassName(title))
+            if (!isLauncherLike) continue
+
+            val layer = window.layer
+            val prevLayer = candidates[pkg]
+            if (prevLayer == null || layer > prevLayer) {
+                candidates[pkg] = layer
+            }
+        }
+        return candidates.entries
+            .sortedByDescending { it.value }
+            .map { it.key }
+    }
+
     fun isSplitSelectionVisibleForSplit(): Boolean {
         return windowAnalyzer.analyzeSplitSelectionState(windows.toList(), packageName)
     }
@@ -1627,22 +1655,19 @@ class NavBarAccessibilityService : AccessibilityService() {
             // 노드 찾기 (여러 방법 시도)
             var targetNode: AccessibilityNodeInfo? = null
 
-            // 1. Resource ID로 찾기 (가장 신뢰할 수 있음)
+            // 1. Resource ID
             if (!nodeId.isNullOrEmpty()) {
                 val nodes = activeRoot.findAccessibilityNodeInfosByViewId(nodeId)
                 if (nodes.isNotEmpty()) {
-                    // 클릭 가능한 노드 우선 선택
                     for (node in nodes) {
                         if (node.isClickable || node.isCheckable) {
                             targetNode = node
                             break
                         }
                     }
-                    // 클릭 가능한 노드가 없으면 첫 번째 노드 사용
                     if (targetNode == null) {
                         targetNode = nodes[0]
                     }
-                    // 나머지 노드 recycle
                     for (node in nodes) {
                         if (node != targetNode) {
                             node.recycle()
@@ -1652,18 +1677,10 @@ class NavBarAccessibilityService : AccessibilityService() {
                 }
             }
 
-            // 2. contentDescription으로 찾기
-            if (!nodeDesc.isNullOrEmpty() && targetNode == null) {
-                targetNode = findNodeByContentDescription(activeRoot, nodeDesc)
-                if (targetNode != null) {
-                    Log.d(TAG, "performNodeClick: Found node by description: $nodeDesc")
-                }
-            }
-
-            // 3. 텍스트로 찾기 (부분 일치 포함)
+            // 2. Find by text (partial match)
             if (!nodeText.isNullOrEmpty() && targetNode == null) {
                 val nodes = activeRoot.findAccessibilityNodeInfosByText(nodeText)
-                // 정확한 일치 우선
+                // Exact match first
                 for (node in nodes) {
                     val text = node.text?.toString()
                     if (text == nodeText) {
@@ -1672,7 +1689,7 @@ class NavBarAccessibilityService : AccessibilityService() {
                         break
                     }
                 }
-                // 정확한 일치가 없으면 부분 일치 중 클릭 가능한 것
+                // Fallback to clickable partial match
                 if (targetNode == null) {
                     for (node in nodes) {
                         if (node.isClickable || node.isCheckable) {
@@ -1682,11 +1699,19 @@ class NavBarAccessibilityService : AccessibilityService() {
                         }
                     }
                 }
-                // 나머지 노드 recycle
+                // Recycle unused nodes
                 for (node in nodes) {
                     if (node != targetNode) {
                         node.recycle()
                     }
+                }
+            }
+
+            // 3. Find by contentDescription
+            if (!nodeDesc.isNullOrEmpty() && targetNode == null) {
+                targetNode = findNodeByContentDescription(activeRoot, nodeDesc)
+                if (targetNode != null) {
+                    Log.d(TAG, "performNodeClick: Found node by description: $nodeDesc")
                 }
             }
 
@@ -1700,21 +1725,129 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
 
             // 클릭 수행 - 노드가 클릭 불가능하면 클릭 가능한 부모 찾기
+            val displayMetrics = resources.displayMetrics
+            val screenBounds = android.graphics.Rect(
+                0,
+                0,
+                displayMetrics.widthPixels,
+                displayMetrics.heightPixels
+            )
+            val minSizePx = (displayMetrics.density * 24f).toInt()
+            val isLauncherContext = !nodePackage.isNullOrEmpty() && windowAnalyzer.isLauncherPackage(nodePackage)
+            fun isEditableLike(node: AccessibilityNodeInfo): Boolean {
+                if (node.isEditable) return true
+                val className = node.className?.toString() ?: ""
+                if (className.contains("EditText", ignoreCase = true) ||
+                    className.contains("Search", ignoreCase = true)
+                ) return true
+                val viewId = try { node.viewIdResourceName } catch (_: Exception) { null }
+                if (!viewId.isNullOrEmpty()) {
+                    val lower = viewId.lowercase()
+                    if (lower.contains("search") || lower.contains("edit")) return true
+                }
+                return false
+            }
+            fun computeTapBounds(node: AccessibilityNodeInfo): android.graphics.Rect? {
+                val screenWidth = screenBounds.width()
+                val screenHeight = screenBounds.height()
+                if (screenWidth <= 0 || screenHeight <= 0) return null
+
+                var best: android.graphics.Rect? = null
+                var bestScore = Float.MAX_VALUE
+                val parentsToRecycle = ArrayList<AccessibilityNodeInfo>(8)
+                var current: AccessibilityNodeInfo? = node
+                var depth = 0
+                while (current != null && depth < 10) {
+                    val bounds = android.graphics.Rect()
+                    try {
+                        current.getBoundsInScreen(bounds)
+                    } catch (_: Exception) {
+                        // ignore
+                    }
+                    if (bounds.width() > 0 && bounds.height() > 0) {
+                        val widthRatio = bounds.width().toFloat() / screenWidth
+                        val heightRatio = bounds.height().toFloat() / screenHeight
+                        val areaRatio = widthRatio * heightRatio
+                        val centerYRatio = bounds.exactCenterY() / screenHeight
+                        val tooSmall = bounds.width() < minSizePx || bounds.height() < minSizePx
+                        val tooLarge = widthRatio > 0.98f || heightRatio > 0.98f
+                        val topBar = isLauncherContext && centerYRatio < 0.18f && heightRatio < 0.25f
+                        val editableLike = isLauncherContext && isEditableLike(current)
+                        if (!tooSmall && !tooLarge && !topBar && !editableLike) {
+                            if (areaRatio < bestScore) {
+                                bestScore = areaRatio
+                                best = android.graphics.Rect(bounds)
+                            }
+                        }
+                    }
+                    val parent = current.parent
+                    if (parent != null) {
+                        parentsToRecycle.add(parent)
+                    }
+                    current = parent
+                    depth++
+                }
+                for (parent in parentsToRecycle) {
+                    try {
+                        parent.recycle()
+                    } catch (_: Exception) {}
+                }
+                return if (bestScore != Float.MAX_VALUE) best else null
+            }
+            val tapBounds = computeTapBounds(targetNode)
+
+            fun canPerformClick(node: AccessibilityNodeInfo): Boolean {
+                if (node.isClickable || node.isCheckable) return true
+                return try {
+                    node.actionList?.any { it.id == AccessibilityNodeInfo.ACTION_CLICK } == true ||
+                        (node.actions and AccessibilityNodeInfo.ACTION_CLICK) != 0
+                } catch (_: Exception) {
+                    false
+                }
+            }
+
             var result = false
-            if (targetNode.isClickable || targetNode.isCheckable) {
-                result = targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                Log.d(TAG, "performNodeClick: Direct click result=$result")
-            } else {
-                // 클릭 가능한 부모 노드 찾기
+            val directClickable = canPerformClick(targetNode)
+            result = try {
+                targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            } catch (_: Exception) {
+                false
+            }
+            Log.d(TAG, "performNodeClick: Direct click result=$result (clickable=$directClickable)")
+
+            if (!result) {
+                val focused = try {
+                    targetNode.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS) ||
+                        targetNode.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                } catch (_: Exception) {
+                    false
+                }
+                if (focused) {
+                    val focusedResult = try {
+                        targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    } catch (_: Exception) {
+                        false
+                    }
+                    Log.d(TAG, "performNodeClick: Focused click result=$focusedResult")
+                    result = focusedResult
+                }
+            }
+
+            if (!result) {
                 var parent = targetNode.parent
                 var depth = 0
-                while (parent != null && depth < 10) {
-                    if (parent.isClickable) {
-                        result = parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        Log.d(TAG, "performNodeClick: Parent click result=$result (depth=$depth)")
-                        parent.recycle()
-                        break
+                while (parent != null && depth < 10 && !result) {
+                    val parentClickable = canPerformClick(parent)
+                    val parentResult = try {
+                        parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    } catch (_: Exception) {
+                        false
                     }
+                    Log.d(
+                        TAG,
+                        "performNodeClick: Parent click result=$parentResult (depth=$depth, clickable=$parentClickable)"
+                    )
+                    result = parentResult
                     val grandParent = parent.parent
                     parent.recycle()
                     parent = grandParent
@@ -1723,6 +1856,33 @@ class NavBarAccessibilityService : AccessibilityService() {
                 parent?.recycle()
             }
 
+            if (!result) {
+                val bounds = tapBounds ?: android.graphics.Rect().also {
+                    try {
+                        targetNode.getBoundsInScreen(it)
+                    } catch (_: Exception) {
+                        // ignore
+                    }
+                }
+                if (bounds.width() > 0 && bounds.height() > 0) {
+                    val screenHeight = screenBounds.height().toFloat()
+                    val centerYRatio = if (screenHeight > 0f) bounds.exactCenterY() / screenHeight else 0f
+                    val heightRatio = if (screenHeight > 0f) bounds.height().toFloat() / screenHeight else 0f
+                    val topBar = isLauncherContext && centerYRatio < 0.18f && heightRatio < 0.25f
+                    val editableLike = isLauncherContext && isEditableLike(targetNode)
+                    if (topBar || editableLike) {
+                        Log.d(
+                            TAG,
+                            "performNodeClick: Skipping fallback tap (topBar=$topBar, editable=$editableLike, centerYRatio=$centerYRatio, heightRatio=$heightRatio)"
+                        )
+                    } else {
+                        val x = bounds.exactCenterX()
+                        val y = bounds.exactCenterY()
+                        result = performTap(x, y)
+                        Log.d(TAG, "performNodeClick: Fallback tap result=$result at ($x, $y)")
+                    }
+                }
+            }
             targetNode.recycle()
             activeRoot.recycle()
             if (activeRoot != rootNode) {
@@ -1750,16 +1910,41 @@ class NavBarAccessibilityService : AccessibilityService() {
      * 클릭 가능 여부와 관계없이 찾음 (나중에 부모에서 클릭 시도)
      */
     private fun findNodeByContentDescription(node: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
+        return findNodeByContentDescriptionExact(node, desc)
+            ?: findNodeByContentDescriptionContains(node, desc)
+    }
+
+    private fun findNodeByContentDescriptionExact(node: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
         val nodeDesc = node.contentDescription?.toString()
         if (!nodeDesc.isNullOrEmpty()) {
-            if (nodeDesc.equals(desc, ignoreCase = true) || nodeDesc.contains(desc, ignoreCase = true)) {
+            if (nodeDesc.equals(desc, ignoreCase = true)) {
                 return AccessibilityNodeInfo.obtain(node)
             }
         }
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val result = findNodeByContentDescription(child, desc)
+            val result = findNodeByContentDescriptionExact(child, desc)
+            child.recycle()
+            if (result != null) {
+                return result
+            }
+        }
+
+        return null
+    }
+
+    private fun findNodeByContentDescriptionContains(node: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
+        val nodeDesc = node.contentDescription?.toString()
+        if (!nodeDesc.isNullOrEmpty()) {
+            if (nodeDesc.contains(desc, ignoreCase = true)) {
+                return AccessibilityNodeInfo.obtain(node)
+            }
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findNodeByContentDescriptionContains(child, desc)
             child.recycle()
             if (result != null) {
                 return result

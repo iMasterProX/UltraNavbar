@@ -18,6 +18,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 분할화면 실행 헬퍼 (단순화 버전)
@@ -40,6 +41,9 @@ object SplitScreenHelper {
     private const val LAUNCHER_CACHE_TTL_MS = 30000L
     private const val SPLIT_STICKY_MS = 5000L
     private val handler = Handler(Looper.getMainLooper())
+    private val launchTokenCounter = AtomicInteger(0)
+    @Volatile
+    private var activeLaunchToken: Int = 0
 
     // 접근성 서비스 참조 (NavBarAccessibilityService에서 설정)
     private var accessibilityService: AccessibilityService? = null
@@ -88,6 +92,16 @@ object SplitScreenHelper {
 
     fun setAccessibilityService(service: AccessibilityService?) {
         accessibilityService = service
+    }
+
+    private fun nextLaunchToken(): Int {
+        val token = launchTokenCounter.incrementAndGet()
+        activeLaunchToken = token
+        return token
+    }
+
+    private fun isLaunchTokenValid(token: Int): Boolean {
+        return activeLaunchToken == token
     }
 
     /**
@@ -140,6 +154,7 @@ object SplitScreenHelper {
         Log.d(TAG, "Force reset split screen state")
         isSplitScreenActive = false
         splitUsedFlag = false
+        activeLaunchToken = launchTokenCounter.incrementAndGet()
         lastSplitRequestAt = 0L
         lastSplitFallbackPackage = ""
         lastSplitFallbackAt = 0L
@@ -219,6 +234,7 @@ object SplitScreenHelper {
     ): Boolean {
         val currentPackage = launchContext.currentPackage
         lastLaunchFailure = SplitLaunchFailure.NONE
+        val launchToken = nextLaunchToken()
         Log.d(
             TAG,
             "Launch split screen: target=$targetPackage, current=$currentPackage, " +
@@ -259,28 +275,44 @@ object SplitScreenHelper {
             }
 
             val splitSelectionVisible = navService?.isSplitSelectionVisibleForSplit() == true
-            val launcherTopReady = navService?.isLauncherTopForSplit() == true
-            val selectionLike = launchContext.isRecentsVisible || splitSelectionVisible || launcherTopReady
+            val selectionEligible = splitSelectionVisible || launchContext.isRecentsVisible
             val splitActiveNow = isSplitActiveNow()
             val recentlyActive = wasSplitActiveRecently()
             val isSplitActive = launchContext.isSplitScreenMode ||
                 splitActiveNow ||
                 splitSelectionVisible ||
-                (recentlyActive && selectionLike)
+                (recentlyActive && (launchContext.isRecentsVisible || splitSelectionVisible))
             if (isSplitActive) {
                 markSplitScreenUsed()
                 if (lastSplitFallbackPackage.isEmpty() && resolvedCurrent.isNotEmpty()) {
                     recordSplitFallbackPackage(context, resolvedCurrent)
                 }
-                val launched = when {
-                    selectionLike -> {
-                        launchFromSelection(context, service, targetPackage) ||
-                            launchToSecondary(context, service, targetPackage, focusDelayMs)
+                val options = if (secondaryLaunchOptionsAvailable != false) {
+                    buildSecondaryLaunchOptions()
+                } else {
+                    null
+                }
+                val replaceDelayMs = if (!selectionEligible) 0L else focusDelayMs
+                if (selectionEligible) {
+                    val selected = launchFromSelection(context, service, targetPackage)
+                    if (selected) {
+                        return true
                     }
-                    else -> {
-                        launchToSecondary(context, service, targetPackage, focusDelayMs)
+                    if (options == null) {
+                        lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
+                        return false
                     }
                 }
+                val launched = launchToSecondary(
+                    context,
+                    service,
+                    targetPackage,
+                    replaceDelayMs,
+                    launchToken,
+                    targetWarm,
+                    optionsOverride = options,
+                    allowOptions = false
+                )
                 if (!launched) {
                     lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
                 }
@@ -321,12 +353,14 @@ object SplitScreenHelper {
                 waitForPackageVisible(
                     primaryCandidate,
                     primaryWaitMs,
+                    launchToken,
                     onReady = {
                         toggleThenLaunch(
                             context,
                             service,
                             targetPackage,
-                            splitReadyTimeoutMs
+                            splitReadyTimeoutMs,
+                            launchToken
                         )
                     },
                     onTimeout = {
@@ -354,7 +388,7 @@ object SplitScreenHelper {
             val primaryWarm = resolvedCurrent.isNotEmpty() && isAppProcessRunning(context, resolvedCurrent)
             val delayMs = resolveSplitReadyTimeoutMs(targetWarm, primaryWarm)
             markSplitScreenUsed()
-            toggleThenLaunch(context, service, targetPackage, delayMs)
+            toggleThenLaunch(context, service, targetPackage, delayMs, launchToken)
             true
         } catch (e: Exception) {
             Log.e(TAG, "Split screen failed", e)
@@ -380,9 +414,13 @@ object SplitScreenHelper {
     private fun waitForPackageVisible(
         packageName: String,
         timeoutMs: Long,
+        launchToken: Int,
         onReady: () -> Unit,
         onTimeout: () -> Unit
     ) {
+        if (!isLaunchTokenValid(launchToken)) {
+            return
+        }
         val service = accessibilityService
         if (service == null) {
             onTimeout()
@@ -392,6 +430,9 @@ object SplitScreenHelper {
         val startAt = SystemClock.elapsedRealtime()
         val poll = object : Runnable {
             override fun run() {
+                if (!isLaunchTokenValid(launchToken)) {
+                    return
+                }
                 if (isPackageVisible(service, packageName)) {
                     val elapsed = SystemClock.elapsedRealtime() - startAt
                     Log.d(TAG, "Primary visible after ${elapsed}ms: $packageName")
@@ -441,36 +482,42 @@ object SplitScreenHelper {
     ): Boolean {
         val navService = service as? NavBarAccessibilityService ?: return false
         val label = getAppLabel(context, targetPackage)
-        val shortPkg = targetPackage.substringAfterLast('.')
         val candidates = linkedSetOf<String>()
         if (!label.isNullOrEmpty()) {
             candidates.add(label)
             candidates.add(label.replace(" ", ""))
         }
         candidates.add(targetPackage)
-        candidates.add(shortPkg)
 
         val selectionPackage = navService.getLauncherWindowPackageForSplit()
-        if (selectionPackage.isNullOrEmpty()) {
+        val selectionPackages = linkedSetOf<String>()
+        if (!selectionPackage.isNullOrEmpty()) {
+            selectionPackages.add(selectionPackage)
+        }
+        selectionPackages.addAll(navService.getVisibleLauncherPackagesForSplit())
+        if (selectionPackages.isEmpty()) {
             Log.w(TAG, "Selection UI package not found for split selection")
             return false
         }
+        Log.d(TAG, "Selection packages for split: $selectionPackages")
 
-        for (candidate in candidates) {
-            if (candidate.isBlank()) continue
-            val clicked = navService.performNodeClick(
-                nodeId = null,
-                nodeText = candidate,
-                nodeDesc = candidate,
-                nodePackage = selectionPackage
-            )
-            if (clicked) {
-                Log.d(TAG, "Selected target from launcher/recents: $candidate ($targetPackage) in $selectionPackage")
-                return true
+        for (pkg in selectionPackages) {
+            for (candidate in candidates) {
+                if (candidate.isBlank()) continue
+                val clicked = navService.performNodeClick(
+                    nodeId = null,
+                    nodeText = candidate,
+                    nodeDesc = candidate,
+                    nodePackage = pkg
+                )
+                if (clicked) {
+                    Log.d(TAG, "Selected target from launcher/recents: $candidate ($targetPackage) in $pkg")
+                    return true
+                }
             }
         }
 
-        Log.w(TAG, "Failed to select target from launcher/recents: $targetPackage (pkg=$selectionPackage)")
+        Log.w(TAG, "Failed to select target from launcher/recents: $targetPackage (pkgs=$selectionPackages)")
         return false
     }
 
@@ -502,8 +549,12 @@ object SplitScreenHelper {
         service: AccessibilityService,
         targetPackage: String,
         maxWaitMs: Long,
+        launchToken: Int,
         attempt: Int = 1
     ) {
+        if (!isLaunchTokenValid(launchToken)) {
+            return
+        }
         val toggled = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
         if (!toggled) {
             Log.w(TAG, "Toggle split screen request rejected")
@@ -526,11 +577,13 @@ object SplitScreenHelper {
         val poll = object : Runnable {
             override fun run() {
                 if (launched[0]) return
+                if (!isLaunchTokenValid(launchToken)) {
+                    return
+                }
                 val elapsed = SystemClock.elapsedRealtime() - startAt
                 val splitActive = isSplitActiveNow()
                 val recentsReady = navService?.isRecentsVisibleForSplit() == true
                 val selectionReady = navService?.isSplitSelectionVisibleForSplit() == true
-                val launcherTopReady = navService?.isLauncherTopForSplit() == true
                 val resolvedPrimary = navService?.resolveForegroundPackageForSplit()
                 if (!resolvedPrimary.isNullOrEmpty() && lastSplitFallbackPackage.isEmpty()) {
                     recordSplitFallbackPackage(context, resolvedPrimary)
@@ -542,36 +595,37 @@ object SplitScreenHelper {
                 // 실제 분할 UI가 보일 때만 진행: 활성/선택/최근 준비 상태가 하나라도 true 여야 한다.
                 // 분할 UI가 실제로 나타났는지 판단. 활성/선택/최근 또는 런처가 전면에 있고
                 // 포그라운드 앱이 해석된 경우를 신호로 본다.
-                val selectionLike = selectionReady || recentsReady || (launcherTopReady && !resolvedPrimary.isNullOrEmpty())
-                val splitReady = !homeReady && (
-                    splitActive ||
-                    selectionLike
-                )
-                if (splitReady) {
-                    if (selectionLike) {
-                        val now = SystemClock.elapsedRealtime()
-                        if (now - lastSelectionAttemptAt[0] >= 250L) {
-                            lastSelectionAttemptAt[0] = now
-                            val launchedOk = launchFromSelection(context, service, targetPackage) ||
-                                (splitActive && launchToSecondary(context, service, targetPackage, focusDelayMs))
-                            if (launchedOk) {
-                                launched[0] = true
-                                Log.d(
-                                    TAG,
-                                    "Split ready after ${elapsed}ms (active=${splitActive}, recents=${recentsReady}, selection=${selectionReady}, home=${homeReady}, launcherTop=${launcherTopReady}), launched via selection"
-                                )
-                                setSplitScreenActive(true)
-                                lastSplitDetectedAt = SystemClock.elapsedRealtime()
-                                markSplitScreenUsed()
-                                scheduleSplitRetryIfNeeded(context, service, targetPackage, maxWaitMs, attempt)
-                                return
-                            }
+                val selectionEligible = selectionReady || recentsReady
+                val options = if (secondaryLaunchOptionsAvailable != false) {
+                    buildSecondaryLaunchOptions()
+                } else {
+                    null
+                }
+
+                if (selectionEligible) {
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastSelectionAttemptAt[0] >= 250L) {
+                        lastSelectionAttemptAt[0] = now
+                        val selected = launchFromSelection(context, service, targetPackage)
+                        if (selected) {
+                            launched[0] = true
+                            Log.d(
+                                TAG,
+                                "Split ready after ${elapsed}ms (active=${splitActive}, recents=${recentsReady}, selection=${selectionReady}, home=${homeReady}), launched via selection"
+                            )
+                            setSplitScreenActive(true)
+                            lastSplitDetectedAt = SystemClock.elapsedRealtime()
+                            markSplitScreenUsed()
+                            scheduleSplitRetryIfNeeded(context, service, targetPackage, maxWaitMs, launchToken, attempt)
+                            return
                         }
+                    }
+                    if (options == null) {
                         if (elapsed >= maxWaitMs) {
                             launched[0] = true
                             Log.w(
                                 TAG,
-                                "Split not ready after ${elapsed}ms (active=${splitActive}, recents=${recentsReady}, selection=${selectionReady}, home=${homeReady}, launcherTop=${launcherTopReady})"
+                                "Split not ready after ${elapsed}ms (active=${splitActive}, recents=${recentsReady}, selection=${selectionReady}, home=${homeReady})"
                             )
                             lastLaunchFailure = SplitLaunchFailure.SPLIT_NOT_READY
                             restorePrimaryIfPossible(context, targetPackage)
@@ -581,12 +635,25 @@ object SplitScreenHelper {
                         handler.postDelayed(this, 100L)
                         return
                     }
+                }
+
+                if (!homeReady && splitActive) {
                     launched[0] = true
                     Log.d(
                         TAG,
-                        "Split ready after ${elapsed}ms (active=${splitActive}, recents=${recentsReady}, selection=${selectionReady}, home=${homeReady}, launcherTop=${launcherTopReady}), launching adjacent"
+                        "Split ready after ${elapsed}ms (active=${splitActive}, recents=${recentsReady}, selection=${selectionReady}, home=${homeReady}), launching adjacent"
                     )
-                    val launchedOk = launchToSecondary(context, service, targetPackage, focusDelayMs)
+                    val adjacentDelayMs = if (!selectionEligible) 0L else focusDelayMs
+                    val launchedOk = launchToSecondary(
+                        context,
+                        service,
+                        targetPackage,
+                        adjacentDelayMs,
+                        launchToken,
+                        targetWarm,
+                        optionsOverride = options,
+                        allowOptions = false
+                    )
                     if (!launchedOk) {
                         lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
                         Log.w(TAG, "Failed to launch adjacent while split ready")
@@ -597,14 +664,14 @@ object SplitScreenHelper {
                     setSplitScreenActive(true)
                     lastSplitDetectedAt = SystemClock.elapsedRealtime()
                     markSplitScreenUsed()
-                    scheduleSplitRetryIfNeeded(context, service, targetPackage, maxWaitMs, attempt)
+                    scheduleSplitRetryIfNeeded(context, service, targetPackage, maxWaitMs, launchToken, attempt)
                     return
                 }
                 if (elapsed >= maxWaitMs) {
                     launched[0] = true
                     Log.w(
                         TAG,
-                        "Split not ready after ${elapsed}ms (active=$splitActive, recents=$recentsReady, selection=$selectionReady, home=$homeReady, launcherTop=$launcherTopReady)"
+                        "Split not ready after ${elapsed}ms (active=$splitActive, recents=$recentsReady, selection=$selectionReady, home=$homeReady)"
                     )
                     lastLaunchFailure = SplitLaunchFailure.SPLIT_NOT_READY
                     restorePrimaryIfPossible(context, targetPackage)
@@ -621,25 +688,36 @@ object SplitScreenHelper {
         context: Context,
         service: AccessibilityService,
         targetPackage: String,
-        focusDelayMs: Long
+        focusDelayMs: Long,
+        launchToken: Int,
+        isTargetWarm: Boolean,
+        optionsOverride: android.os.Bundle? = null,
+        allowOptions: Boolean = true
     ): Boolean {
-        val options = buildSecondaryLaunchOptions()
+        if (!isLaunchTokenValid(launchToken)) return false
+
+        val options = optionsOverride ?: if (allowOptions) buildSecondaryLaunchOptions() else null
         if (options != null) {
-            Log.d(TAG, "Launching secondary with ActivityOptions (delay=${focusDelayMs}ms)")
+            val delayMs = if (isTargetWarm) 0L else focusDelayMs
+            Log.d(TAG, "Launching secondary with ActivityOptions (delay=${delayMs}ms)")
             handler.postDelayed({
+                if (!isLaunchTokenValid(launchToken)) {
+                    return@postDelayed
+                }
                 if (!launchAdjacent(context, targetPackage, preferSecondary = true, optionsOverride = options)) {
                     lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
                     Log.w(TAG, "Failed to launch adjacent with secondary options")
                 }
-            }, maxOf(0L, focusDelayMs))
+            }, maxOf(0L, delayMs))
             return true
         }
 
-        if (focusPrimaryAndLaunch(context, service, targetPackage, focusDelayMs)) {
+        if (focusPrimaryAndLaunch(context, service, targetPackage, focusDelayMs, launchToken)) {
             Log.d(TAG, "Secondary options unavailable; focused primary for adjacent launch")
             return true
         }
 
+        if (!isLaunchTokenValid(launchToken)) return false
         return launchAdjacent(context, targetPackage, preferSecondary = true)
     }
 
@@ -647,8 +725,10 @@ object SplitScreenHelper {
         context: Context,
         service: AccessibilityService,
         targetPackage: String,
-        delayMs: Long
+        delayMs: Long,
+        launchToken: Int
     ): Boolean {
+        if (!isLaunchTokenValid(launchToken)) return false
         val navService = service as? NavBarAccessibilityService ?: return false
         val bounds = getScreenBounds(navService)
         if (bounds.width() <= 0 || bounds.height() <= 0) return false
@@ -662,6 +742,9 @@ object SplitScreenHelper {
         if (!tapped) return false
 
         handler.postDelayed({
+            if (!isLaunchTokenValid(launchToken)) {
+                return@postDelayed
+            }
             if (!launchAdjacent(context, targetPackage, preferSecondary = true)) {
                 lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
                 Log.w(TAG, "Failed to launch adjacent after focusing primary pane")
@@ -673,8 +756,10 @@ object SplitScreenHelper {
     private fun focusSecondaryAndLaunch(
         context: Context,
         service: AccessibilityService,
-        targetPackage: String
+        targetPackage: String,
+        launchToken: Int
     ): Boolean {
+        if (!isLaunchTokenValid(launchToken)) return false
         val navService = service as? NavBarAccessibilityService ?: return false
         val bounds = getScreenBounds(navService)
         if (bounds.width() <= 0 || bounds.height() <= 0) return false
@@ -688,6 +773,9 @@ object SplitScreenHelper {
         if (!tapped) return false
 
         handler.postDelayed({
+            if (!isLaunchTokenValid(launchToken)) {
+                return@postDelayed
+            }
             if (!launchAdjacent(context, targetPackage, preferSecondary = true)) {
                 lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
                 Log.w(TAG, "Failed to launch adjacent after focusing secondary pane")
@@ -714,10 +802,14 @@ object SplitScreenHelper {
         service: AccessibilityService,
         targetPackage: String,
         maxWaitMs: Long,
+        launchToken: Int,
         attempt: Int
     ) {
         val delayMs = maxOf(SPLIT_RETRY_DELAY_MS * 2, maxWaitMs)
         handler.postDelayed({
+            if (!isLaunchTokenValid(launchToken)) {
+                return@postDelayed
+            }
             val recentlyActive = wasSplitActiveRecently(4000)
             if (!isSplitActiveNow() && !isSplitScreenActive() && !recentlyActive) {
                 Log.w(TAG, "Split still not active after launch")
@@ -771,8 +863,10 @@ object SplitScreenHelper {
         optionsOverride: android.os.Bundle? = null
     ): Boolean {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-            Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT
+        intent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT
+        )
 
         try {
             val options = optionsOverride ?: if (preferSecondary) buildSecondaryLaunchOptions() else null
