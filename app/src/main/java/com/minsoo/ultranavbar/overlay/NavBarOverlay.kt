@@ -27,6 +27,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import com.minsoo.ultranavbar.R
@@ -78,6 +79,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var gestureOverlayView: View? = null
     private var hotspotView: View? = null
     private var splitScreenOverlayView: View? = null  // 드래그 시 분할화면 피드백 오버레이
+    private var dragOverlayView: FrameLayout? = null  // 드래그 중 아이콘 표시용 별도 오버레이 윈도우
+    private var dragIconView: ImageView? = null  // 드래그 오버레이 안의 아이콘 복사본
+    private var dragIconCenterOffsetX: Float = 0f  // 아이콘 중심 오프셋
+    private var dragIconCenterOffsetY: Float = 0f
     private var centerGroupView: View? = null  // 최근 앱 작업 표시줄 뷰 (홈화면에서 숨기기용)
 
     // === 상태 ===
@@ -230,6 +235,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 Log.d(TAG, "Split request ignored on home screen")
                 return
             }
+            // UltraNavbar 자체가 전체화면이면 분할화면 미지원 토스트 표시
+            if (launchContext.currentPackage.isEmpty() &&
+                !launchContext.hasVisibleNonLauncherApp &&
+                service.isSelfAppVisibleForSplit()
+            ) {
+                Log.d(TAG, "Self app in foreground, split screen not supported")
+                showSplitNotSupportedToast(null)
+                return
+            }
             val fallbackPrimary = getFallbackPrimaryPackage(packageName)
             val launched = SplitScreenHelper.launchSplitScreen(context, packageName, launchContext, fallbackPrimary)
             if (!launched) {
@@ -267,6 +281,18 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         override fun onDragStateChanged(isDragging: Boolean, progress: Float) {
             updateSplitScreenOverlay(isDragging, progress)
+        }
+
+        override fun onDragStart(iconView: ImageView, screenX: Float, screenY: Float) {
+            showDragOverlay(iconView, screenX, screenY)
+        }
+
+        override fun onDragIconUpdate(screenX: Float, screenY: Float, scale: Float) {
+            updateDragOverlayPosition(screenX, screenY, scale)
+        }
+
+        override fun onDragEnd() {
+            hideDragOverlay()
         }
 
         override fun shouldIgnoreTouch(toolType: Int): Boolean {
@@ -316,13 +342,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.WRAP_CONTENT
                 )
-                // 클리핑 비활성화 - 아이콘이 네비바 밖으로 나갈 수 있게
                 clipChildren = false
                 clipToPadding = false
             }
 
             createNavBar()
             createHotspot()
+
+            // 분할화면 반투명 오버레이를 네비바보다 먼저 추가 (z-order: 뒤)
+            createSplitScreenOverlay()
 
             val params = createLayoutParams()
             windowManager.addView(rootView, params)
@@ -371,8 +399,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             buttonManager.clear()
             recentAppsTaskbar?.clear()
             recentAppsManager?.clear()
-            hideSplitScreenOverlay()
-            restoreWindowFromDrag()
+            destroySplitScreenOverlay()
+            hideDragOverlay()
 
             windowManager.removeView(rootView)
             rootView = null
@@ -654,9 +682,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         currentOrientation = actualOrientation
         backgroundManager.forceOrientationSync(actualOrientation)
 
+        // 분할화면 오버레이 + 네비바 재생성 (z-order 유지: 오버레이 뒤, 네비바 앞)
+        destroySplitScreenOverlay()
         rootView?.let { root ->
+            windowManager.removeView(root)
+            createSplitScreenOverlay()
             val params = createLayoutParams()
-            windowManager.updateViewLayout(root, params)
+            windowManager.addView(root, params)
             currentWindowHeight = params.height
         }
 
@@ -1796,76 +1828,21 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     // ===== 분할화면 드래그 오버레이 =====
 
-    // 드래그 중 윈도우 확장 상태 추적
-    private var isDragWindowExpanded = false
-    private var originalWindowHeight = -1
-
     /**
-     * 드래그 상태에 따라 분할화면 오버레이 업데이트
+     * 드래그 상태에 따라 분할화면 반투명 오버레이 업데이트
      * progress 0.0~1.0: 드래그 진행률
      */
     private fun updateSplitScreenOverlay(isDragging: Boolean, progress: Float) {
         if (isDragging) {
-            expandWindowForDrag()
             showSplitScreenOverlay(progress)
         } else {
             hideSplitScreenOverlay()
-            restoreWindowFromDrag()
         }
     }
 
     /**
-     * 드래그 중 윈도우 높이 확장 (아이콘이 네비바 밖으로 나갈 수 있도록)
-     */
-    private fun expandWindowForDrag() {
-        if (isDragWindowExpanded) return
-
-        try {
-            val params = rootView?.layoutParams as? WindowManager.LayoutParams ?: return
-            originalWindowHeight = params.height
-
-            // 화면 높이의 절반만큼 확장 (아이콘이 충분히 위로 갈 수 있도록)
-            val bounds = windowManager.currentWindowMetrics.bounds
-            val expandedHeight = bounds.height() / 2 + getSystemNavigationBarHeightPx()
-
-            params.height = expandedHeight
-            // Gravity.BOTTOM이므로 y=0 유지 (하단 기준으로 위로 확장됨)
-
-            windowManager.updateViewLayout(rootView, params)
-            isDragWindowExpanded = true
-
-            Log.d(TAG, "Window expanded for drag: $originalWindowHeight -> $expandedHeight")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to expand window for drag", e)
-        }
-    }
-
-    /**
-     * 드래그 종료 후 윈도우 높이 복원
-     */
-    private fun restoreWindowFromDrag() {
-        if (!isDragWindowExpanded) return
-
-        try {
-            val params = rootView?.layoutParams as? WindowManager.LayoutParams ?: return
-            val targetHeight = if (originalWindowHeight > 0) originalWindowHeight else getSystemNavigationBarHeightPx()
-
-            params.height = targetHeight
-            params.y = 0
-
-            windowManager.updateViewLayout(rootView, params)
-            currentWindowHeight = targetHeight
-            isDragWindowExpanded = false
-            originalWindowHeight = -1
-
-            Log.d(TAG, "Window restored from drag: height=$targetHeight")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to restore window from drag", e)
-        }
-    }
-
-    /**
-     * 분할화면 오버레이 표시 (화면 오른쪽/아래쪽 절반)
+     * 분할화면 반투명 오버레이 표시 (화면 오른쪽/아래쪽 절반)
+     * 네비바 뒤에 표시되도록 rootView의 첫 번째 자식으로 추가
      */
     private fun showSplitScreenOverlay(progress: Float) {
         if (splitScreenOverlayView == null) {
@@ -1873,7 +1850,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         splitScreenOverlayView?.let { overlay ->
-            // 진행률에 따라 알파값 조정 (0.0 ~ 0.3)
             val alpha = (progress.coerceIn(0f, 1f) * 0.3f)
             overlay.alpha = alpha
             if (overlay.visibility != View.VISIBLE) {
@@ -1883,37 +1859,42 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 분할화면 오버레이 숨기기
+     * 분할화면 반투명 오버레이 숨기기 (window는 유지, 숨기기만)
      */
     private fun hideSplitScreenOverlay() {
         val overlay = splitScreenOverlayView ?: return
-        splitScreenOverlayView = null  // 먼저 null로 설정하여 중복 호출 방지
 
-        overlay.animate().cancel()  // 진행 중인 애니메이션 취소
+        overlay.animate().cancel()
 
         if (overlay.visibility == View.VISIBLE && overlay.alpha > 0f) {
             overlay.animate()
                 .alpha(0f)
                 .setDuration(100)
                 .withEndAction {
-                    try {
-                        windowManager.removeView(overlay)
-                    } catch (e: Exception) {
-                        // 이미 제거됨
-                    }
+                    overlay.visibility = View.INVISIBLE
                 }
                 .start()
         } else {
-            try {
-                windowManager.removeView(overlay)
-            } catch (e: Exception) {
-                // 이미 제거됨
-            }
+            overlay.alpha = 0f
+            overlay.visibility = View.INVISIBLE
         }
     }
 
     /**
-     * 분할화면 오버레이 윈도우 생성
+     * 분할화면 반투명 오버레이 윈도우 완전 제거 (오버레이 destroy 시)
+     */
+    private fun destroySplitScreenOverlay() {
+        val overlay = splitScreenOverlayView ?: return
+        splitScreenOverlayView = null
+        try {
+            windowManager.removeView(overlay)
+        } catch (e: Exception) {
+            // 이미 제거됨
+        }
+    }
+
+    /**
+     * 분할화면 반투명 오버레이 윈도우 생성 (별도 window, 네비바 뒤에 표시)
      */
     private fun createSplitScreenOverlay() {
         val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
@@ -1928,7 +1909,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val screenWidth = bounds.width()
         val screenHeight = bounds.height()
 
-        // 오른쪽 절반 (가로) 또는 아래쪽 절반 (세로)
         val overlayWidth: Int
         val overlayHeight: Int
         val overlayX: Int
@@ -1943,12 +1923,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             overlayWidth = screenWidth
             overlayHeight = screenHeight / 2
             overlayX = 0
-            overlayY = screenHeight / 2
+            overlayY = 0  // 상단부터 (아래쪽 절반 = 화면 상반부에 위치하면 안 되니까)
         }
 
         splitScreenOverlayView = View(context).apply {
             setBackgroundColor(Color.WHITE)
             alpha = 0f
+            visibility = View.INVISIBLE
         }
 
         val params = WindowManager.LayoutParams().apply {
@@ -1960,9 +1941,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
             width = overlayWidth
             height = overlayHeight
-            gravity = Gravity.TOP or Gravity.START
-            x = overlayX
-            y = overlayY
+            gravity = if (isLandscape) Gravity.TOP or Gravity.END else Gravity.BOTTOM
+            x = 0
+            y = 0
         }
 
         try {
@@ -1970,6 +1951,111 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to add split screen overlay", e)
             splitScreenOverlayView = null
+        }
+    }
+
+    // ===== 드래그 아이콘 오버레이 =====
+
+    /**
+     * 드래그 시작: 별도 오버레이 윈도우에 아이콘 복사본 표시
+     * 메인 네비바 윈도우를 건드리지 않으므로 깜빡임 없음
+     */
+    private fun showDragOverlay(iconView: ImageView, screenX: Float, screenY: Float) {
+        hideDragOverlay()  // 이전 것 정리
+
+        val iconSize = iconView.width
+        if (iconSize <= 0) return
+
+        // 아이콘 drawable 복사 + 원형 클리핑 적용
+        val drawable = iconView.drawable?.constantState?.newDrawable()?.mutate() ?: return
+
+        val icon = ImageView(context).apply {
+            setImageDrawable(drawable)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            // 원형 클리핑 (원본 아이콘과 동일)
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setOval(0, 0, view.width, view.height)
+                }
+            }
+            clipToOutline = true
+        }
+        dragIconView = icon
+
+        val container = FrameLayout(context).apply {
+            clipChildren = false
+            clipToPadding = false
+            addView(icon, FrameLayout.LayoutParams(iconSize, iconSize))
+        }
+        dragOverlayView = container
+
+        // 아이콘 중심 X를 원본 아이콘 위치에 고정 (수직 이동만 허용)
+        val iconLoc = IntArray(2)
+        iconView.getLocationOnScreen(iconLoc)
+        dragIconCenterOffsetX = (iconLoc[0] + iconSize / 2f)  // 고정 X 좌표
+        dragIconCenterOffsetY = iconSize / 2f
+
+        val params = WindowManager.LayoutParams().apply {
+            type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+            format = PixelFormat.TRANSLUCENT
+            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            width = iconSize
+            height = iconSize
+            gravity = Gravity.TOP or Gravity.START
+            x = (dragIconCenterOffsetX - iconSize / 2f).toInt()  // 고정 X
+            y = (screenY - dragIconCenterOffsetY).toInt()
+        }
+
+        try {
+            windowManager.addView(container, params)
+            Log.d(TAG, "Drag overlay created at fixedX=${dragIconCenterOffsetX}, y=$screenY, iconSize=$iconSize")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create drag overlay", e)
+            dragOverlayView = null
+            dragIconView = null
+        }
+    }
+
+    /**
+     * 드래그 중 아이콘 Y 위치/스케일 업데이트 (X는 고정)
+     */
+    private fun updateDragOverlayPosition(screenX: Float, screenY: Float, scale: Float) {
+        val container = dragOverlayView ?: return
+
+        try {
+            val params = container.layoutParams as? WindowManager.LayoutParams ?: return
+            val baseSize = dragIconCenterOffsetY.toInt() * 2  // 원본 아이콘 크기
+            val scaledSize = (baseSize * scale).toInt()
+            // window 크기를 스케일에 맞춰 변경
+            params.width = scaledSize
+            params.height = scaledSize
+            // 중심 유지하면서 X 고정, Y만 업데이트
+            params.x = (dragIconCenterOffsetX - scaledSize / 2f).toInt()
+            params.y = (screenY - scaledSize / 2f).toInt()
+            windowManager.updateViewLayout(container, params)
+
+            // 아이콘 뷰 크기도 맞춤
+            dragIconView?.layoutParams = FrameLayout.LayoutParams(scaledSize, scaledSize)
+        } catch (e: Exception) {
+            // 레이아웃 업데이트 실패 무시
+        }
+    }
+
+    /**
+     * 드래그 종료: 오버레이 제거
+     */
+    private fun hideDragOverlay() {
+        val container = dragOverlayView ?: return
+        dragOverlayView = null
+        dragIconView = null
+
+        try {
+            windowManager.removeView(container)
+        } catch (e: Exception) {
+            // 이미 제거됨
         }
     }
 

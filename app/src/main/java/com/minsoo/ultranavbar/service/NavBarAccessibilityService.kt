@@ -875,6 +875,18 @@ class NavBarAccessibilityService : AccessibilityService() {
         return windowAnalyzer.hasVisibleNonLauncherAppWindow(windows.toList(), packageName)
     }
 
+    fun isSelfAppVisibleForSplit(): Boolean {
+        val windowList = try { windows.toList() } catch (e: Exception) { return false }
+        for (window in windowList) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val root = try { window.root } catch (e: Exception) { null }
+            val pkg = root?.packageName?.toString()
+            root?.recycle()
+            if (pkg == packageName) return true
+        }
+        return false
+    }
+
     private fun handleSystemUiState(isSystemUi: Boolean, isRecents: Boolean, source: String): Boolean {
         if (!isSystemUi) return false
         if (isRecents && isOnHomeScreen) {

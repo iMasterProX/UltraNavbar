@@ -371,7 +371,6 @@ object SplitScreenHelper {
 
                 Log.d(TAG, "Launching fallback primary for split: $primaryCandidate")
                 recordSplitFallbackPackage(context, primaryCandidate)
-                launchAppNormally(context, primaryCandidate)
 
                 val primaryWarm = isAppProcessRunning(context, primaryCandidate)
                 val primaryWaitMs = if (primaryWarm) {
@@ -380,17 +379,16 @@ object SplitScreenHelper {
                     Constants.Timing.SPLIT_SCREEN_LAUNCH_DELAY_MS * 2
                 }
                 val splitReadyTimeoutMs = resolveSplitReadyTimeoutMs(targetWarm, primaryWarm)
+
+                launchAppNormally(context, primaryCandidate)
                 waitForPackageVisible(
                     primaryCandidate,
                     primaryWaitMs,
                     launchToken,
                     onReady = {
                         toggleThenLaunch(
-                            context,
-                            service,
-                            targetPackage,
-                            splitReadyTimeoutMs,
-                            launchToken
+                            context, service, targetPackage,
+                            splitReadyTimeoutMs, launchToken
                         )
                     },
                     onTimeout = {

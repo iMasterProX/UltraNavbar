@@ -42,6 +42,9 @@ class RecentAppsTaskbar(
         fun onAppTapped(packageName: String)
         fun onAppDraggedToSplit(packageName: String)
         fun onDragStateChanged(isDragging: Boolean, progress: Float)  // 드래그 상태 콜백
+        fun onDragIconUpdate(screenX: Float, screenY: Float, scale: Float)  // 드래그 아이콘 좌표 업데이트
+        fun onDragStart(iconView: ImageView, screenX: Float, screenY: Float)  // 드래그 시작 (아이콘 정보 전달)
+        fun onDragEnd()  // 드래그 종료
         fun shouldIgnoreTouch(toolType: Int): Boolean
     }
 
@@ -203,21 +206,24 @@ class RecentAppsTaskbar(
                     // 위로 드래그 시작 감지
                     if (!isDraggingUp && deltaY > dragStartThresholdPx) {
                         isDraggingUp = true
+                        // 분할화면 반투명 오버레이를 먼저 생성 (z-order가 아래)
+                        listener.onDragStateChanged(true, 0f)
+                        // 그 다음 드래그 아이콘 오버레이 생성 (z-order가 위)
+                        view.alpha = 0f
+                        listener.onDragStart(view as ImageView, event.rawX, event.rawY)
                     }
 
                     if (isDraggingUp) {
                         // 드래그 진행률 계산 (0.0 ~ 1.0+)
                         val progress = (deltaY / splitTriggerPx).coerceAtLeast(0f)
 
-                        // 아이콘 위로 이동 (제한 없이)
-                        view.translationY = -deltaY
-
                         // 스케일 효과
                         val scale = 1f + (progress.coerceAtMost(1f) * 0.3f)
-                        view.scaleX = scale
-                        view.scaleY = scale
 
-                        // 드래그 상태 콜백 (오버레이 표시용)
+                        // 드래그 오버레이 아이콘 좌표 업데이트
+                        listener.onDragIconUpdate(event.rawX, event.rawY, scale)
+
+                        // 분할화면 오버레이 진행률 업데이트
                         listener.onDragStateChanged(true, progress)
                     }
                     true
@@ -229,15 +235,14 @@ class RecentAppsTaskbar(
                     // 드래그 상태 종료 콜백
                     if (isDraggingUp) {
                         listener.onDragStateChanged(false, 0f)
+                        listener.onDragEnd()
+                        view.alpha = 1f
                     }
 
-                    // 애니메이션으로 원위치 복귀
-                    view.animate()
-                        .translationY(0f)
-                        .scaleX(1f)
-                        .scaleY(1f)
-                        .setDuration(150)
-                        .start()
+                    // 원위치 복귀 (translationY는 더 이상 사용하지 않지만 안전장치)
+                    view.translationY = 0f
+                    view.scaleX = 1f
+                    view.scaleY = 1f
 
                     when {
                         // 위로 충분히 드래그 → 분할화면
@@ -260,6 +265,8 @@ class RecentAppsTaskbar(
                 MotionEvent.ACTION_CANCEL -> {
                     if (isDraggingUp) {
                         listener.onDragStateChanged(false, 0f)
+                        listener.onDragEnd()
+                        view.alpha = 1f
                     }
                     view.translationY = 0f
                     view.scaleX = 1f

@@ -11,13 +11,14 @@ android {
         applicationId "com.minsoo.ultranavbar"
         minSdk 31  // Android 12
         targetSdk 35
-        versionCode 13
-        versionName "0.2.6"
+        versionCode 14
+        versionName "0.2.7"
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {

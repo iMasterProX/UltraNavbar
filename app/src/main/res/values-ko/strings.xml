@@ -64,6 +64,7 @@
     <string name="home_bg_not_set">설정 안 됨</string>
     <string name="home_bg_set">설정됨</string>
     <string name="select_image">이미지 선택</string>
+    <string name="home_bg_why">이 네비게이션 바는 오버레이 방식이라 홈 화면 배경이 자동으로 비쳐 보이지 않습니다. 배경화면 스크린샷을 찍어 적용하면 투명한 것처럼 보이게 할 수 있습니다.</string>
     <string name="home_bg_note">1. Guide 버튼으로 배경화면 불투명도 조절\n2. 닫기를 눌러 컨트롤 숨긴 후 스크린샷 촬영\n3. 화면 터치로 종료 후 이미지 선택으로 적용</string>
 
     <!-- 다크 모드 배경 설정 -->
