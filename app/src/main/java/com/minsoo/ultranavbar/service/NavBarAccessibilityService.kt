@@ -167,6 +167,19 @@ class NavBarAccessibilityService : AccessibilityService() {
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
+                android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                    val state = intent.getIntExtra(
+                        android.bluetooth.BluetoothAdapter.EXTRA_STATE,
+                        android.bluetooth.BluetoothAdapter.ERROR
+                    )
+                    if (state == android.bluetooth.BluetoothAdapter.STATE_OFF ||
+                        state == android.bluetooth.BluetoothAdapter.STATE_TURNING_OFF) {
+                        Log.d(TAG, "Bluetooth turned off, removing orientation lock")
+                        if (orientationLockView != null) {
+                            removeOrientationLock()
+                        }
+                    }
+                }
                 android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED -> {
                     val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         intent.getParcelableExtra(android.bluetooth.BluetoothDevice.EXTRA_DEVICE, android.bluetooth.BluetoothDevice::class.java)
@@ -312,6 +325,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         registerReceiver(screenStateReceiver, screenStateFilter)
 
         val bluetoothFilter = IntentFilter().apply {
+            addAction(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED)
             addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED)
         }

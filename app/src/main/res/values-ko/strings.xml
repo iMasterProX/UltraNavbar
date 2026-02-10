@@ -141,6 +141,8 @@
     <string name="permission_storage_summary">자동 배경 생성을 위한 배경화면 접근에 필요합니다.</string>
     <string name="permission_battery">배터리 최적화 제외</string>
     <string name="permission_battery_summary">서비스가 백그라운드에서 중단되지 않도록 합니다.</string>
+    <string name="permission_wallpaper">배경화면 접근</string>
+    <string name="permission_wallpaper_summary">시스템 배경화면을 커스텀 네비바 배경으로 미리보기하는 데 필요합니다.</string>
     <string name="permission_bluetooth">블루투스 접근</string>
     <string name="permission_bluetooth_summary">키보드 단축키 및 기기 감지에 필요합니다.</string>
     <string name="permission_status_granted">승인됨</string>
@@ -184,6 +186,9 @@
     <string name="setup_storage_desc">홈 화면 배경을 자동으로 생성하기 위해 배경화면 접근 권한이 필요합니다.</string>
     <string name="setup_battery_title">배터리 최적화 제외</string>
     <string name="setup_battery_desc">서비스가 백그라운드에서 안정적으로 동작하도록 배터리 최적화에서 제외해 주세요.</string>
+    <string name="setup_wallpaper_title">배경화면 접근 권한</string>
+    <string name="setup_wallpaper_desc">현재 시스템 배경화면을 커스텀 네비게이션 바의 홈 화면 배경으로 미리보기 및 적용하기 위해 이미지 읽기 권한이 필요합니다.</string>
+    <string name="setup_wallpaper_already_granted">배경화면 접근 권한이 이미 승인되어 있습니다.</string>
     <string name="setup_bluetooth_title">블루투스 접근 권한</string>
     <string name="setup_bluetooth_desc">연결된 키보드를 감지하고 키보드 단축키를 사용하기 위해 블루투스 권한이 필요합니다.</string>
     <string name="setup_overlay_title">다른 앱 위에 표시</string>
@@ -336,7 +341,7 @@
     <string name="pen_settings_permission_guide">이 메뉴를 사용하려면 ADB로 \'한 번만\' 권한을 부여해야 합니다.\n\n1. PC에 ADB를 설치합니다\n2. USB 디버깅을 활성화합니다\n3. 다음 명령어를 실행합니다:</string>
     <string name="pen_settings_adb_command">adb shell pm grant com.minsoo.ultranavbar android.permission.WRITE_SECURE_SETTINGS</string>
     <string name="pen_settings_check_permission">권한 확인 후 진행</string>
-    <string name="pen_settings_permission_note">참고: 이 권한은 한 번만 필요하며 앱 재설치 후에도 유지됩니다.</string>
+    <string name="pen_settings_permission_note">참고: 이 권한은 앱 업데이트 시에는 유지되지만, 앱을 삭제 후 재설치하면 다시 부여해야 합니다.</string>
 
     <string name="pen_pointer_title">펜 포인터 표시</string>
     <string name="pen_pointer_summary">화면에 펜 위치를 표시합니다</string>

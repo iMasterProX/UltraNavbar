@@ -137,6 +137,8 @@
     <string name="permission_storage_summary">Required for wallpaper access to generate auto backgrounds.</string>
     <string name="permission_battery">Battery optimization exemption</string>
     <string name="permission_battery_summary">Prevents the service from being stopped in the background.</string>
+    <string name="permission_wallpaper">Wallpaper access</string>
+    <string name="permission_wallpaper_summary">Required to preview the system wallpaper as a custom navigation bar background.</string>
     <string name="permission_bluetooth">Bluetooth access</string>
     <string name="permission_bluetooth_summary">Required for keyboard shortcuts and device detection.</string>
     <string name="permission_status_granted">Granted</string>
@@ -180,6 +182,9 @@
     <string name="setup_storage_desc">Wallpaper access is required to auto-generate home screen backgrounds.</string>
     <string name="setup_battery_title">Battery optimization exemption</string>
     <string name="setup_battery_desc">Exclude the app from battery optimization so the service runs reliably in the background.</string>
+    <string name="setup_wallpaper_title">Wallpaper access permission</string>
+    <string name="setup_wallpaper_desc">Permission to read images is required to preview and apply the current system wallpaper as a custom navigation bar background.</string>
+    <string name="setup_wallpaper_already_granted">Wallpaper access permission is already granted.</string>
     <string name="setup_bluetooth_title">Bluetooth access permission</string>
     <string name="setup_bluetooth_desc">Bluetooth permission is required to detect connected keyboards and use keyboard shortcuts.</string>
     <string name="setup_overlay_title">Draw over other apps</string>
@@ -332,7 +337,7 @@
     <string name="pen_settings_permission_guide">This feature requires ADB permission to be granted once.\n\n1. Install ADB on your PC\n2. Enable USB debugging\n3. Run the following command:</string>
     <string name="pen_settings_adb_command">adb shell pm grant com.minsoo.ultranavbar android.permission.WRITE_SECURE_SETTINGS</string>
     <string name="pen_settings_check_permission">Check Permission and Continue</string>
-    <string name="pen_settings_permission_note">Note: This permission is required only once and will persist across app reinstalls.</string>
+    <string name="pen_settings_permission_note">Note: This permission persists across app updates, but must be re-granted if the app is uninstalled and reinstalled.</string>
 
     <string name="pen_pointer_title">Show Pen Pointer</string>
     <string name="pen_pointer_summary">Display pen position on screen</string>

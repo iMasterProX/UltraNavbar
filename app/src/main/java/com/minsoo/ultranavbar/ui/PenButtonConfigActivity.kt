@@ -101,8 +101,8 @@ class PenButtonConfigActivity : AppCompatActivity() {
             getString(R.string.pen_button_action_none),
             getString(R.string.pen_button_action_app),
             getString(R.string.pen_button_action_shortcut),
-            getString(R.string.pen_button_action_touch_point),
-            getString(R.string.pen_button_action_node_click)
+            getString(R.string.pen_button_action_node_click),
+            getString(R.string.pen_button_action_touch_point)
         )
 
         AlertDialog.Builder(this)
@@ -112,8 +112,8 @@ class PenButtonConfigActivity : AppCompatActivity() {
                     0 -> setActionNone()
                     1 -> selectApp()
                     2 -> selectShortcut()
-                    3 -> selectTouchPoint()
-                    4 -> selectNodeClick()
+                    3 -> selectNodeClick()
+                    4 -> selectTouchPoint()
                 }
             }
             .setOnCancelListener {

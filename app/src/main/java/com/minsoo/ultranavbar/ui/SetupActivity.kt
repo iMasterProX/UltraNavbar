@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
@@ -23,8 +24,8 @@ import com.minsoo.ultranavbar.settings.SettingsManager
 class SetupActivity : AppCompatActivity() {
 
     companion object {
-        // 0: 접근성, 1: 오버레이, 2: 시스템 설정 수정, 3: 배터리, 4: 블루투스, 5: ADB
-        private const val TOTAL_STEPS = 6
+        // 0: 접근성, 1: 오버레이, 2: 시스템 설정 수정, 3: 배터리, 4: 배경화면 읽기, 5: 블루투스, 6: ADB
+        private const val TOTAL_STEPS = 7
     }
 
     private lateinit var settings: SettingsManager
@@ -45,6 +46,15 @@ class SetupActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.permission_granted_bluetooth, Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, R.string.permission_denied_bluetooth, Toast.LENGTH_SHORT).show()
+        }
+        updateStepStatus()
+    }
+
+    private val wallpaperPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Toast.makeText(this, R.string.setup_wallpaper_already_granted, Toast.LENGTH_SHORT).show()
         }
         updateStepStatus()
     }
@@ -114,12 +124,19 @@ class SetupActivity : AppCompatActivity() {
                 btnNext.text = getString(R.string.setup_next)
             }
             4 -> {
+                // 배경화면 읽기 권한
+                setupStepTitle.text = getString(R.string.setup_wallpaper_title)
+                setupStepDesc.text = getString(R.string.setup_wallpaper_desc)
+                btnGrantPermission.text = getString(R.string.setup_grant_permission)
+                btnNext.text = getString(R.string.setup_next)
+            }
+            5 -> {
                 setupStepTitle.text = getString(R.string.setup_bluetooth_title)
                 setupStepDesc.text = getString(R.string.setup_bluetooth_desc)
                 btnGrantPermission.text = getString(R.string.setup_grant_permission)
                 btnNext.text = getString(R.string.setup_next)
             }
-            5 -> {
+            6 -> {
                 // ADB 권한 단계 (마지막, 선택사항)
                 setupStepTitle.text = getString(R.string.setup_adb_title)
                 val guideText = getString(R.string.setup_adb_guide) +
@@ -146,16 +163,22 @@ class SetupActivity : AppCompatActivity() {
             4 -> {
                 ContextCompat.checkSelfPermission(
                     this,
-                    Manifest.permission.BLUETOOTH_CONNECT
+                    getWallpaperPermission()
                 ) == PackageManager.PERMISSION_GRANTED
             }
             5 -> {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+            6 -> {
                 checkWriteSecureSettingsPermission()
             }
             else -> false
         }
 
-        if (currentStep == 5) {
+        if (currentStep == 6) {
             setupStepStatus.text = if (isGranted) {
                 getString(R.string.setup_adb_status_granted)
             } else {
@@ -222,6 +245,15 @@ class SetupActivity : AppCompatActivity() {
                 requestIgnoreBatteryOptimizations()
             }
             4 -> {
+                // 배경화면 읽기 권한
+                val perm = getWallpaperPermission()
+                if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                    wallpaperPermissionLauncher.launch(perm)
+                } else {
+                    Toast.makeText(this, R.string.setup_wallpaper_already_granted, Toast.LENGTH_SHORT).show()
+                }
+            }
+            5 -> {
                 if (ContextCompat.checkSelfPermission(
                         this,
                         Manifest.permission.BLUETOOTH_CONNECT
@@ -232,7 +264,7 @@ class SetupActivity : AppCompatActivity() {
                     Toast.makeText(this, R.string.bluetooth_permission_already_granted, Toast.LENGTH_SHORT).show()
                 }
             }
-            5 -> {
+            6 -> {
                 if (checkWriteSecureSettingsPermission()) {
                     Toast.makeText(this, R.string.setup_adb_already_granted, Toast.LENGTH_SHORT).show()
                 } else {
@@ -249,6 +281,14 @@ class SetupActivity : AppCompatActivity() {
         val clip = ClipData.newPlainText("ADB Command", getString(R.string.setup_adb_command))
         clipboard.setPrimaryClip(clip)
         Toast.makeText(this, R.string.command_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun getWallpaperPermission(): String {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
     }
 
     private fun requestIgnoreBatteryOptimizations() {

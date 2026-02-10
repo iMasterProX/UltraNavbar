@@ -225,9 +225,11 @@ class BackgroundManager(
         return false
     }
 
+    @Suppress("DEPRECATION")
     private fun getActualOrientation(): Int {
-        // API 30+ display rotation 사용 (minSdk 31이므로 항상 가능)
-        val display = context.display
+        // AccessibilityService는 비시각 컨텍스트이므로 context.display 사용 불가
+        // windowManager.defaultDisplay를 사용해야 함
+        val display = windowManager.defaultDisplay
             ?: return context.resources.configuration.orientation
 
         val rotation = display.rotation

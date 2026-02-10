@@ -37,7 +37,7 @@ object ReservedShortcuts {
         // Search (Meta) 조합
         Reserved(
             setOf(KeyEvent.KEYCODE_META_LEFT),
-            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_ENTER,
             "홈",
             "Home"
         ),

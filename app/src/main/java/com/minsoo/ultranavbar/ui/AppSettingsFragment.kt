@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
@@ -48,11 +49,19 @@ class AppSettingsFragment : Fragment() {
     private lateinit var txtPermOverlay: TextView
     private lateinit var txtPermWriteSettings: TextView
     private lateinit var txtPermBattery: TextView
+    private lateinit var txtPermWallpaper: TextView
     private lateinit var txtPermBluetooth: TextView
     private lateinit var txtPermAdb: TextView
 
     // 버전 정보 UI
     private lateinit var txtVersion: TextView
+
+    // 배경화면 권한 요청 런처
+    private val wallpaperPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _: Boolean ->
+        updatePermissionStatus()
+    }
 
     // 블루투스 권한 요청 런처
     private val bluetoothPermissionLauncher = registerForActivityResult(
@@ -107,6 +116,7 @@ class AppSettingsFragment : Fragment() {
         txtPermOverlay = view.findViewById(R.id.txtPermOverlay)
         txtPermWriteSettings = view.findViewById(R.id.txtPermWriteSettings)
         txtPermBattery = view.findViewById(R.id.txtPermBattery)
+        txtPermWallpaper = view.findViewById(R.id.txtPermWallpaper)
         txtPermBluetooth = view.findViewById(R.id.txtPermBluetooth)
 
         // 접근성 권한 버튼
@@ -127,6 +137,11 @@ class AppSettingsFragment : Fragment() {
         // 배터리 최적화 버튼
         view.findViewById<MaterialButton>(R.id.btnPermBattery).setOnClickListener {
             requestIgnoreBatteryOptimizations(isTriggeredByUser = true)
+        }
+
+        // 배경화면 권한 버튼
+        view.findViewById<MaterialButton>(R.id.btnPermWallpaper).setOnClickListener {
+            requestWallpaperPermission()
         }
 
         // 블루투스 권한 버튼
@@ -206,6 +221,19 @@ class AppSettingsFragment : Fragment() {
         val isBatteryOptimizationGranted = powerManager?.isIgnoringBatteryOptimizations(requireContext().packageName) ?: false
 
         txtPermBattery.text = if (isBatteryOptimizationGranted) {
+            getString(R.string.permission_status_granted)
+        } else {
+            getString(R.string.permission_status_not_granted)
+        }
+
+        // 배경화면 접근 권한 상태 확인
+        val wallpaperPerm = getWallpaperPermission()
+        val isWallpaperGranted = ContextCompat.checkSelfPermission(
+            requireContext(),
+            wallpaperPerm
+        ) == PackageManager.PERMISSION_GRANTED
+
+        txtPermWallpaper.text = if (isWallpaperGranted) {
             getString(R.string.permission_status_granted)
         } else {
             getString(R.string.permission_status_not_granted)
@@ -354,6 +382,23 @@ class AppSettingsFragment : Fragment() {
             startActivity(intent)
         } else {
             Toast.makeText(requireContext(), R.string.setup_write_settings_already_granted, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun getWallpaperPermission(): String {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+    }
+
+    private fun requestWallpaperPermission() {
+        val perm = getWallpaperPermission()
+        if (ContextCompat.checkSelfPermission(requireContext(), perm) != PackageManager.PERMISSION_GRANTED) {
+            wallpaperPermissionLauncher.launch(perm)
+        } else {
+            Toast.makeText(requireContext(), R.string.setup_wallpaper_already_granted, Toast.LENGTH_SHORT).show()
         }
     }
 

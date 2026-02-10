@@ -67,23 +67,30 @@ class WindowAnalyzer(
      * 런처 패키지 목록 로드
      */
     fun loadLauncherPackages() {
+        val detected = mutableSetOf<String>()
         try {
             val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
+
+            // 1. 현재 기본 런처
             val resolveInfo = context.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            if (resolveInfo?.activityInfo?.packageName != null) {
-                launcherPackages = setOf(resolveInfo.activityInfo.packageName)
-                Log.d(TAG, "Detected default launcher: ${resolveInfo.activityInfo.packageName}")
-            } else {
-                val resolveInfos = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-                launcherPackages = resolveInfos.map { it.activityInfo.packageName }
-                    .filter { it != "com.android.settings" }
-                    .toSet()
-                Log.d(TAG, "Detected launcher packages: $launcherPackages")
+            resolveInfo?.activityInfo?.packageName?.let {
+                detected.add(it)
+                Log.d(TAG, "Detected default launcher: $it")
             }
+
+            // 2. HOME 카테고리에 응답하는 모든 앱 (서드파티 런처 포함)
+            val allHomeApps = context.packageManager.queryIntentActivities(intent, 0)
+            for (info in allHomeApps) {
+                val pkg = info.activityInfo.packageName
+                if (pkg != "com.android.settings") {
+                    detected.add(pkg)
+                }
+            }
+            Log.d(TAG, "Detected launcher packages: $detected")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load launcher packages, using fallback", e)
-            // QuickStep 및 Nova Launcher 폴백
-            launcherPackages = setOf("com.android.launcher3", "com.teslacoilsw.launcher")
+            detected.add("com.android.launcher3")
+            detected.add("com.teslacoilsw.launcher")
         }
 
         val extraLaunchers = setOf(
@@ -96,7 +103,7 @@ class WindowAnalyzer(
             "com.miui.home",
             "com.oneplus.launcher"
         )
-        launcherPackages = (launcherPackages + extraLaunchers).toSet()
+        launcherPackages = (detected + extraLaunchers).toSet()
         Log.d(TAG, "Launcher packages (extended): $launcherPackages")
     }
 

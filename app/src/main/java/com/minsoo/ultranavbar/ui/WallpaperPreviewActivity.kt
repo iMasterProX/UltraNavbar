@@ -1,7 +1,9 @@
 package com.minsoo.ultranavbar.ui
 
+import android.Manifest
 import android.app.Activity
 import android.app.WallpaperManager
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -9,12 +11,14 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.LayerDrawable
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
@@ -47,6 +51,17 @@ class WallpaperPreviewActivity : AppCompatActivity() {
     private var isDarkMode: Boolean = false
 
     private data class PreviewLayer(val layer: LayerDrawable, val filterDrawable: BitmapDrawable?)
+
+    private val wallpaperPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            loadWallpaperPreview()
+        } else {
+            Toast.makeText(this, R.string.wallpaper_preview_failed, Toast.LENGTH_SHORT).show()
+            finish()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,7 +115,29 @@ class WallpaperPreviewActivity : AppCompatActivity() {
             Toast.LENGTH_LONG
         ).show()
 
-        loadWallpaperPreview()
+        // 배경화면 접근 권한 확인 후 프리뷰 로드
+        if (hasWallpaperPermission()) {
+            loadWallpaperPreview()
+        } else {
+            requestWallpaperPermission()
+        }
+    }
+
+    private fun getWallpaperPermission(): String {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+    }
+
+    private fun hasWallpaperPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(this, getWallpaperPermission()) ==
+                PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestWallpaperPermission() {
+        wallpaperPermissionLauncher.launch(getWallpaperPermission())
     }
 
     /**
