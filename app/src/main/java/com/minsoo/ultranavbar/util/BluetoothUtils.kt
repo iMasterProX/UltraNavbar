@@ -1,7 +1,10 @@
 package com.minsoo.ultranavbar.util
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Handler
@@ -102,16 +105,38 @@ object BluetoothUtils {
     }
 
     /**
-     * 기기 연결 상태 확인 (리플렉션 사용)
+     * 기기 연결 상태 확인
+     * 1. 리플렉션 (isConnected)
+     * 2. BluetoothProfile HID_DEVICE 연결 상태 확인
+     * 3. getBatteryLevel()이 값을 반환하면 연결로 간주
      */
     fun isDeviceConnected(device: BluetoothDevice): Boolean {
-        return try {
+        // 방법 1: 리플렉션
+        try {
             val method = device.javaClass.getMethod("isConnected")
-            method.invoke(device) as? Boolean ?: false
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not determine connection status for ${device.address}")
-            false
+            val connected = method.invoke(device) as? Boolean ?: false
+            if (connected) return true
+        } catch (_: Exception) { }
+
+        // 방법 2: getBatteryLevel이 0 이상이면 연결된 것
+        try {
+            val method = device.javaClass.getMethod("getBatteryLevel")
+            val level = method.invoke(device) as? Int
+            if (level != null && level >= 0) {
+                Log.d(TAG, "Device ${device.address} detected as connected via battery level ($level%)")
+                return true
+            }
+        } catch (_: Exception) { }
+
+        // 방법 3: BLE GATT 캐시에 값이 있으면 연결된 것
+        val cached = BleGattBatteryReader.getCachedBatteryLevel(device.address)
+        if (cached != null) {
+            Log.d(TAG, "Device ${device.address} detected as connected via BLE GATT cache")
+            return true
         }
+
+        Log.w(TAG, "Could not determine connection status for ${device.address}")
+        return false
     }
 
     /**

@@ -14,7 +14,7 @@ import android.graphics.drawable.TransitionDrawable
 import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
-import android.view.Surface
+
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.PathInterpolator
@@ -225,25 +225,24 @@ class BackgroundManager(
         return false
     }
 
-    @Suppress("DEPRECATION")
     private fun getActualOrientation(): Int {
-        // AccessibilityService는 비시각 컨텍스트이므로 context.display 사용 불가
-        // windowManager.defaultDisplay를 사용해야 함
+        @Suppress("DEPRECATION")
         val display = windowManager.defaultDisplay
             ?: return context.resources.configuration.orientation
 
         val rotation = display.rotation
         val bounds = windowManager.currentWindowMetrics.bounds
-        val width = bounds.width()
-        val height = bounds.height()
+        val w = bounds.width()
+        val h = bounds.height()
 
-        val naturalPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
-            width < height
+        // 기기의 자연 방향을 감지하여 회전에 따른 실제 방향을 결정
+        val naturalPortrait = if (rotation == android.view.Surface.ROTATION_0 || rotation == android.view.Surface.ROTATION_180) {
+            w < h
         } else {
-            width > height
+            w > h
         }
 
-        val isPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+        val isPortrait = if (rotation == android.view.Surface.ROTATION_0 || rotation == android.view.Surface.ROTATION_180) {
             naturalPortrait
         } else {
             !naturalPortrait
@@ -648,6 +647,7 @@ class BackgroundManager(
      */
     fun cancelBackgroundTransition() {
         buttonColorAnimator?.cancel()
+        buttonColorAnimator = null
         cancelPendingTransitionCallback()
         transitionId++ // 기존 콜백 무효화
         transitionEndAt = 0L
@@ -661,6 +661,7 @@ class BackgroundManager(
     fun cleanup() {
         recycleBitmaps()
         buttonColorAnimator?.cancel()
+        buttonColorAnimator = null
         cancelPendingTransitionCallback()
         transitionTargetView = null
     }

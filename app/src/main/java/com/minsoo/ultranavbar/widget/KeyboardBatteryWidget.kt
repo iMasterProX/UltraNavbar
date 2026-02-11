@@ -11,7 +11,10 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.ActivityCompat
 import com.minsoo.ultranavbar.MainActivity
@@ -30,6 +33,7 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
 
     companion object {
         private const val TAG = "KeyboardBatteryWidget"
+        private const val ACTION_REFRESH = "com.minsoo.ultranavbar.widget.ACTION_REFRESH"
 
         /**
          * 모든 위젯 인스턴스를 수동으로 업데이트
@@ -43,6 +47,39 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
                 val widget = KeyboardBatteryWidget()
                 widget.onUpdate(context, appWidgetManager, appWidgetIds)
             }
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == ACTION_REFRESH) {
+            Log.d(TAG, "Manual refresh requested")
+            animateRefreshIcon(context)
+            updateAllWidgets(context)
+            return
+        }
+        super.onReceive(context, intent)
+    }
+
+    private fun animateRefreshIcon(context: Context) {
+        val appWidgetManager = AppWidgetManager.getInstance(context)
+        val componentName = ComponentName(context, KeyboardBatteryWidget::class.java)
+        val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
+        if (appWidgetIds.isEmpty()) return
+
+        val handler = Handler(Looper.getMainLooper())
+        val steps = 8
+        val totalDuration = 400L
+        val stepDelay = totalDuration / steps
+
+        for (i in 1..steps) {
+            handler.postDelayed({
+                val angle = (360f / steps) * i
+                for (id in appWidgetIds) {
+                    val views = RemoteViews(context.packageName, R.layout.widget_keyboard_battery)
+                    views.setFloat(R.id.btnRefresh, "setRotation", angle % 360f)
+                    appWidgetManager.partiallyUpdateAppWidget(id, views)
+                }
+            }, stepDelay * i)
         }
     }
 
@@ -81,16 +118,24 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
             views.setTextViewText(R.id.txtKeyboardName, keyboardInfo.name)
 
             if (keyboardInfo.batteryLevel >= 0) {
-                views.setTextViewText(R.id.txtBatteryLevel, "${keyboardInfo.batteryLevel}%")
+                val level = keyboardInfo.batteryLevel
+                views.setTextViewText(R.id.txtBatteryLevel, "${level}%")
+
+                // 색상 결정 (텍스트 + 배터리 아이콘)
                 val batteryColor = when {
-                    keyboardInfo.batteryLevel <= 20 -> android.R.color.holo_red_dark
-                    keyboardInfo.batteryLevel <= 50 -> android.R.color.holo_orange_dark
-                    else -> android.R.color.holo_green_dark
+                    level <= 20 -> 0xFFF44336.toInt()
+                    level <= 50 -> 0xFFFF9800.toInt()
+                    else -> 0xFF4CAF50.toInt()
                 }
-                views.setTextColor(R.id.txtBatteryLevel, context.getColor(batteryColor))
+                views.setTextColor(R.id.txtBatteryLevel, batteryColor)
+                views.setInt(R.id.imgBattery, "setColorFilter", batteryColor)
+                views.setViewVisibility(R.id.batteryBar, View.VISIBLE)
+                views.setProgressBar(R.id.batteryBar, 100, level, false)
             } else {
-                views.setTextViewText(R.id.txtBatteryLevel, "--")
-                views.setTextColor(R.id.txtBatteryLevel, context.getColor(android.R.color.darker_gray))
+                views.setTextViewText(R.id.txtBatteryLevel, "--%")
+                views.setTextColor(R.id.txtBatteryLevel, 0xFF999999.toInt())
+                views.setInt(R.id.imgBattery, "setColorFilter", 0xFF999999.toInt())
+                views.setViewVisibility(R.id.batteryBar, View.INVISIBLE)
             }
 
             // 마지막 업데이트 시간
@@ -99,20 +144,34 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
             views.setTextViewText(R.id.txtLastUpdated, "${context.getString(R.string.widget_updated)}: $currentTime")
         } else {
             views.setTextViewText(R.id.txtKeyboardName, context.getString(R.string.widget_no_keyboard))
-            views.setTextViewText(R.id.txtBatteryLevel, "--")
-            views.setTextColor(R.id.txtBatteryLevel, context.getColor(android.R.color.darker_gray))
+            views.setTextViewText(R.id.txtBatteryLevel, "--%")
+            views.setTextColor(R.id.txtBatteryLevel, 0xFF999999.toInt())
+            views.setInt(R.id.imgBattery, "setColorFilter", 0xFF999999.toInt())
+            views.setViewVisibility(R.id.batteryBar, View.INVISIBLE)
             views.setTextViewText(R.id.txtLastUpdated, "")
         }
 
-        // 위젯 클릭 시 앱 열기
-        val intent = Intent(context, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
+        // 위젯 전체 클릭 시 앱 열기
+        val appIntent = Intent(context, MainActivity::class.java)
+        val appPendingIntent = PendingIntent.getActivity(
             context,
             0,
-            intent,
+            appIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        views.setOnClickPendingIntent(R.id.txtKeyboardName, pendingIntent)
+        views.setOnClickPendingIntent(R.id.widgetRoot, appPendingIntent)
+
+        // 새로고침 버튼 클릭
+        val refreshIntent = Intent(context, KeyboardBatteryWidget::class.java).apply {
+            action = ACTION_REFRESH
+        }
+        val refreshPendingIntent = PendingIntent.getBroadcast(
+            context,
+            1,
+            refreshIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        views.setOnClickPendingIntent(R.id.btnRefresh, refreshPendingIntent)
 
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }

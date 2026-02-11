@@ -74,8 +74,11 @@ object SplitScreenHelper {
     private var cachedLauncherPackages: Set<String> = emptySet()
     @Volatile
     private var cachedLauncherPackagesAt: Long = 0L
-    @Volatile
-    private var appLabelCache: MutableMap<String, String> = mutableMapOf()
+    private val appLabelCache = object : LinkedHashMap<String, String>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
+            return size > 50  // 최대 50개 앱 라벨 캐시
+        }
+    }
     @Volatile
     private var hiddenApiUnblocked: Boolean = false
 

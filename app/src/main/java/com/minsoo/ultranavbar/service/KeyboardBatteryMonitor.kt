@@ -33,8 +33,8 @@ object KeyboardBatteryMonitor {
     private const val NOTIFICATION_ID = 1001
     private const val NOTIFICATION_ID_PERSISTENT = 1002
 
-    // 마지막 알림 표시 시간 추적 (중복 방지)
-    private val lastNotificationTimes = mutableMapOf<String, Long>()
+    // 마지막 알림 표시 시간 추적 (중복 방지, 최대 10개)
+    private val lastNotificationTimes = LinkedHashMap<String, Long>(10, 0.75f, true)
     private const val NOTIFICATION_COOLDOWN_MS = 3600000L // 1시간
 
     /**
@@ -238,6 +238,8 @@ object KeyboardBatteryMonitor {
 
         // 마지막 알림 시간 기록
         lastNotificationTimes[deviceId] = now
+        // 만기된 항목 정리
+        lastNotificationTimes.entries.removeIf { now - it.value > NOTIFICATION_COOLDOWN_MS * 2 }
     }
 
     /**

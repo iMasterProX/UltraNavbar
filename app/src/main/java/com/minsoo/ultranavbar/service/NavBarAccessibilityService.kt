@@ -97,6 +97,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var unlockFadeRunnable: Runnable? = null
     private var batteryMonitorRunnable: Runnable? = null
     private var windowRecoveryRunnable: Runnable? = null  // 윈도우 복구용
+    private var disabledAppRecoveryRunnable: Runnable? = null  // 비활성화 앱 복구용
 
     // === 브로드캐스트 리시버 ===
     private val settingsReceiver = object : BroadcastReceiver() {
@@ -359,6 +360,8 @@ class NavBarAccessibilityService : AccessibilityService() {
         windowRecoveryRunnable?.let { handler.removeCallbacks(it) }
         windowRecoveryRunnable = null
 
+        cancelDisabledAppRecoveryCheck()
+
         stopFullscreenPolling()
     }
 
@@ -376,13 +379,17 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        val orientationChanged = currentOrientation != newConfig.orientation
-        currentOrientation = newConfig.orientation
 
-        Log.d(TAG, "Configuration changed: orientation=${newConfig.orientation}, changed=$orientationChanged")
+        // configuration.orientation은 이 태블릿에서 신뢰할 수 없으므로
+        // 실제 디스플레이 회전 기반으로 방향을 결정
+        val actualOrientation = windowAnalyzer.getOrientationFromDisplay()
+        val orientationChanged = currentOrientation != actualOrientation
+        currentOrientation = actualOrientation
+
+        Log.d(TAG, "Configuration changed: config.orientation=${newConfig.orientation}, actual=$actualOrientation, changed=$orientationChanged")
 
         // 방향 + 다크 모드를 통합 처리 (비트맵 리로드 1회, 올바른 순서 보장)
-        overlay?.handleConfigurationChange(newConfig.orientation)
+        overlay?.handleConfigurationChange(actualOrientation)
 
         if (orientationChanged) {
             // 화면 회전 시간 기록 (안정화 기간 동안 auto-hide 차단)
@@ -1001,11 +1008,20 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Split screen entered, setting recovery flag")
         }
 
-        // 분할화면이 종료되었는지 확인 (로그만 남김, 복구는 최근 앱 종료 시 수행)
+        // 분할화면이 종료되었는지 확인
         if (wasInSplitScreen && !isSplitScreenMode) {
             Log.d(TAG, "Split screen ended, cleaning split state")
             cleanSplitScreenStacks()
             wasSplitScreenUsed = false
+
+            // 분할화면 종료 후 currentPackage가 비활성화된 앱에 남아있을 수 있음
+            // 윈도우 기반으로 포그라운드 패키지를 갱신하고 오버레이 가시성 재확인
+            handler.postDelayed({
+                if (instance == null) return@postDelayed
+                Log.d(TAG, "Post-split: refreshing foreground package and visibility")
+                updateHomeAndRecentsFromWindows()
+                updateOverlayVisibility()
+            }, 300)
         }
 
         if (wasInSplitScreen != isSplitScreenMode) {
@@ -1212,8 +1228,12 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (currentPackage.isNotEmpty() && settings.isAppDisabled(currentPackage)) {
             Log.d(TAG, "App disabled: $currentPackage - hiding overlay completely")
             overlay?.hide(animate = false, showHotspot = false)
+            // 비활성화 앱 상태에서 이벤트 누락 시 복구를 위해 지연 재확인 예약
+            scheduleDisabledAppRecoveryCheck()
             return
         }
+        // 비활성화 앱을 벗어났으면 복구 체크 취소
+        cancelDisabledAppRecoveryCheck()
 
         // 1.5. 화면 회전 안정화 기간 동안 숨김 방지
         val orientationChangeElapsed = SystemClock.elapsedRealtime() - lastOrientationChangeAt
@@ -1241,6 +1261,37 @@ class NavBarAccessibilityService : AccessibilityService() {
             overlay?.hide(animate = !lockScreenActive, showHotspot = !lockScreenActive)
         } else {
             overlay?.show(fade = forceFade)
+        }
+    }
+
+    /**
+     * 비활성화 앱 상태에서 이벤트 누락으로 currentPackage가 갱신되지 않는 경우를 대비한 복구 체크.
+     * 주기적으로 윈도우를 확인하여 실제 포그라운드 패키지를 갱신하고 오버레이 가시성을 재평가.
+     */
+    private fun scheduleDisabledAppRecoveryCheck() {
+        // 이미 예약된 경우 중복 예약 방지
+        if (disabledAppRecoveryRunnable != null) return
+
+        disabledAppRecoveryRunnable = Runnable {
+            disabledAppRecoveryRunnable = null
+            if (instance == null) return@Runnable
+
+            val savedPackage = currentPackage
+            // 실제 윈도우에서 포그라운드 패키지 갱신
+            updateHomeAndRecentsFromWindows()
+
+            if (currentPackage != savedPackage) {
+                Log.d(TAG, "Disabled app recovery: package changed $savedPackage -> $currentPackage")
+            }
+            updateOverlayVisibility()
+        }
+        handler.postDelayed(disabledAppRecoveryRunnable!!, 500)
+    }
+
+    private fun cancelDisabledAppRecoveryCheck() {
+        disabledAppRecoveryRunnable?.let {
+            handler.removeCallbacks(it)
+            disabledAppRecoveryRunnable = null
         }
     }
 

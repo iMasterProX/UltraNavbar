@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Widget preview shown in the widget picker -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widgetRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
@@ -21,18 +21,16 @@
             android:gravity="center_vertical">
 
             <ImageView
-                android:id="@+id/imgKeyboard"
                 android:layout_width="18dp"
                 android:layout_height="18dp"
                 android:src="@drawable/ic_widget_keyboard"
                 android:contentDescription="Keyboard" />
 
             <TextView
-                android:id="@+id/txtKeyboardName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
-                android:text="Keyboard"
+                android:text="@string/widget_preview_name"
                 android:textSize="13sp"
                 android:textColor="#666666"
                 android:ellipsize="end"
@@ -48,14 +46,13 @@
             android:layout_marginTop="6dp">
 
             <ImageView
-                android:id="@+id/imgBattery"
                 android:layout_width="28dp"
                 android:layout_height="28dp"
                 android:src="@drawable/ic_widget_battery"
+                android:tint="#4CAF50"
                 android:contentDescription="Battery" />
 
             <TextView
-                android:id="@+id/txtBatteryLevel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
@@ -67,7 +64,6 @@
 
         <!-- Battery progress bar -->
         <ProgressBar
-            android:id="@+id/batteryBar"
             style="@android:style/Widget.ProgressBar.Horizontal"
             android:layout_width="match_parent"
             android:layout_height="8dp"
@@ -81,7 +77,6 @@
 
         <!-- Last updated -->
         <TextView
-            android:id="@+id/txtLastUpdated"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
@@ -92,7 +87,6 @@
 
     <!-- Refresh button (bottom-right corner) -->
     <ImageView
-        android:id="@+id/btnRefresh"
         android:layout_width="28dp"
         android:layout_height="28dp"
         android:layout_gravity="bottom|end"

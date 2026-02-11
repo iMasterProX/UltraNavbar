@@ -138,6 +138,12 @@ class WindowAnalyzer(
         }
     }
 
+    /**
+     * 디스플레이 회전 기반 실제 방향 감지
+     * configuration.orientation이 신뢰할 수 없는 기기에서 사용
+     */
+    fun getOrientationFromDisplay(): Int = getActualOrientation()
+
     private fun getActualOrientation(): Int {
         @Suppress("DEPRECATION")
         val display = windowManager.defaultDisplay

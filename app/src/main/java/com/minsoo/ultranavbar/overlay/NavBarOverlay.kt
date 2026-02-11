@@ -8,7 +8,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
-import android.graphics.Point
+
 import android.graphics.Rect
 import android.graphics.PixelFormat
 import android.graphics.drawable.BitmapDrawable
@@ -21,7 +21,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
-import android.view.Surface
+
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -241,7 +241,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 service.isSelfAppVisibleForSplit()
             ) {
                 Log.d(TAG, "Self app in foreground, split screen not supported")
-                showSplitNotSupportedToast(null)
+                showSplitNotSupportedToast(context.packageName)
                 return
             }
             val fallbackPrimary = getFallbackPrimaryPackage(packageName)
@@ -648,24 +648,18 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             ?: return context.resources.configuration.orientation
 
         val rotation = display.rotation
-        val size = Point()
-        val bounds = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            windowManager.maximumWindowMetrics.bounds
-        } else {
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.getRealSize(size)
-            Rect(0, 0, size.x, size.y)
-        }
-        size.x = bounds.width()
-        size.y = bounds.height()
+        val bounds = windowManager.currentWindowMetrics.bounds
+        val w = bounds.width()
+        val h = bounds.height()
 
-        val naturalPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
-            size.x < size.y
+        // 기기의 자연 방향을 감지하여 회전에 따른 실제 방향을 결정
+        val naturalPortrait = if (rotation == android.view.Surface.ROTATION_0 || rotation == android.view.Surface.ROTATION_180) {
+            w < h
         } else {
-            size.x > size.y
+            w > h
         }
 
-        val isPortrait = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+        val isPortrait = if (rotation == android.view.Surface.ROTATION_0 || rotation == android.view.Surface.ROTATION_180) {
             naturalPortrait
         } else {
             !naturalPortrait
@@ -682,15 +676,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         currentOrientation = actualOrientation
         backgroundManager.forceOrientationSync(actualOrientation)
 
-        // 분할화면 오버레이 + 네비바 재생성 (z-order 유지: 오버레이 뒤, 네비바 앞)
-        destroySplitScreenOverlay()
         rootView?.let { root ->
-            windowManager.removeView(root)
-            createSplitScreenOverlay()
             val params = createLayoutParams()
-            windowManager.addView(root, params)
+            windowManager.updateViewLayout(root, params)
             currentWindowHeight = params.height
         }
+
+        // 분할화면 오버레이 크기 재생성
+        recreateSplitScreenOverlay()
 
         backgroundManager.loadBackgroundBitmaps(forceReload = false)
         return true
@@ -1638,6 +1631,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 windowManager.updateViewLayout(root, params)
                 currentWindowHeight = params.height
             }
+
+            // 분할화면 오버레이 크기 재생성 (방향에 맞게)
+            recreateSplitScreenOverlay()
         }
 
         if (orientationChanged || darkModeChanged) {
@@ -1894,45 +1890,28 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 분할화면 반투명 오버레이 윈도우 생성 (별도 window, 네비바 뒤에 표시)
+     * 분할화면 반투명 오버레이의 LayoutParams 생성
+     * 가로: 오른쪽 절반 / 세로: 아래쪽 절반
      */
-    private fun createSplitScreenOverlay() {
-        val isLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
-        val bounds = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            windowManager.maximumWindowMetrics.bounds
-        } else {
-            val size = Point()
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.getRealSize(size)
-            Rect(0, 0, size.x, size.y)
-        }
+    private fun createSplitScreenOverlayParams(): WindowManager.LayoutParams {
+        val bounds = windowManager.maximumWindowMetrics.bounds
         val screenWidth = bounds.width()
         val screenHeight = bounds.height()
+        // 실제 화면 비율로 가로/세로 판단 (configuration.orientation이 부정확한 기기 대응)
+        val isLandscape = screenWidth > screenHeight
 
         val overlayWidth: Int
         val overlayHeight: Int
-        val overlayX: Int
-        val overlayY: Int
 
         if (isLandscape) {
             overlayWidth = screenWidth / 2
             overlayHeight = screenHeight
-            overlayX = screenWidth / 2
-            overlayY = 0
         } else {
             overlayWidth = screenWidth
             overlayHeight = screenHeight / 2
-            overlayX = 0
-            overlayY = 0  // 상단부터 (아래쪽 절반 = 화면 상반부에 위치하면 안 되니까)
         }
 
-        splitScreenOverlayView = View(context).apply {
-            setBackgroundColor(Color.WHITE)
-            alpha = 0f
-            visibility = View.INVISIBLE
-        }
-
-        val params = WindowManager.LayoutParams().apply {
+        return WindowManager.LayoutParams().apply {
             type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
             format = PixelFormat.TRANSLUCENT
             flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -1941,16 +1920,42 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
             width = overlayWidth
             height = overlayHeight
+            // 가로: 오른쪽, 세로: 아래쪽
             gravity = if (isLandscape) Gravity.TOP or Gravity.END else Gravity.BOTTOM
             x = 0
             y = 0
         }
+    }
+
+    /**
+     * 분할화면 반투명 오버레이 윈도우 생성 (별도 window, 네비바 뒤에 표시)
+     */
+    private fun createSplitScreenOverlay() {
+        if (splitScreenOverlayView != null) return
+
+        splitScreenOverlayView = View(context).apply {
+            setBackgroundColor(Color.WHITE)
+            alpha = 0f
+            visibility = View.INVISIBLE
+        }
 
         try {
-            windowManager.addView(splitScreenOverlayView, params)
+            windowManager.addView(splitScreenOverlayView, createSplitScreenOverlayParams())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to add split screen overlay", e)
             splitScreenOverlayView = null
+        }
+    }
+
+    /**
+     * 분할화면 오버레이 크기 재생성 (방향 변경 시, z-order 유지)
+     */
+    private fun recreateSplitScreenOverlay() {
+        val overlay = splitScreenOverlayView ?: return
+        try {
+            windowManager.updateViewLayout(overlay, createSplitScreenOverlayParams())
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update split screen overlay layout", e)
         }
     }
 
