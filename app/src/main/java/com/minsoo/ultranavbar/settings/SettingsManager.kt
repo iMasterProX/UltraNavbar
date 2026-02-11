@@ -59,6 +59,12 @@ class SettingsManager private constructor(context: Context) {
         // Recent Apps Taskbar
         private const val KEY_RECENT_APPS_TASKBAR_ENABLED = "recent_apps_taskbar_enabled"
 
+        // Experimental: Split Screen via Taskbar
+        private const val KEY_SPLIT_SCREEN_TASKBAR_ENABLED = "split_screen_taskbar_enabled"
+
+        // Experimental: Coordinate Auto Touch
+        private const val KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED = "touch_point_experimental_enabled"
+
         // Wacom Pen Settings
         private const val KEY_PEN_POINTER_ENABLED = "pen_pointer_enabled"
         private const val KEY_PEN_IGNORE_NAV_GESTURES = "pen_ignore_nav_gestures"
@@ -226,8 +232,18 @@ class SettingsManager private constructor(context: Context) {
 
     // 최근 앱 작업 표시줄
     var recentAppsTaskbarEnabled: Boolean
-        get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, false)
+        get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, value).apply()
+
+    // 분할 화면 via 작업 표시줄 (실험적)
+    var splitScreenTaskbarEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SPLIT_SCREEN_TASKBAR_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_SPLIT_SCREEN_TASKBAR_ENABLED, value).apply()
+
+    // 좌표 기반 자동 터치 (실험적)
+    var touchPointExperimentalEnabled: Boolean
+        get() = prefs.getBoolean(KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED, value).apply()
 
     // Wacom 펜 포인터 표시
     var penPointerEnabled: Boolean

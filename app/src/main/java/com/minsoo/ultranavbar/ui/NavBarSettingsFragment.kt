@@ -36,6 +36,9 @@ class NavBarSettingsFragment : Fragment() {
     // 네비게이션 바 활성화
     private lateinit var switchNavbarEnabled: SwitchMaterial
 
+    // 최근 앱 작업 표시줄
+    private lateinit var switchRecentAppsTaskbar: SwitchMaterial
+
     // 버튼 배치 반전 (Android 12L 스타일)
     private lateinit var switchNavButtonsSwap: SwitchMaterial
 
@@ -150,6 +153,9 @@ class NavBarSettingsFragment : Fragment() {
         // 네비게이션 바 활성화 스위치
         switchNavbarEnabled = view.findViewById(R.id.switchNavbarEnabled)
 
+        // 최근 앱 작업 표시줄 스위치
+        switchRecentAppsTaskbar = view.findViewById(R.id.switchRecentAppsTaskbar)
+
         // 버튼 배치 반전 스위치
         switchNavButtonsSwap = view.findViewById(R.id.switchNavButtonsSwap)
 
@@ -242,6 +248,9 @@ class NavBarSettingsFragment : Fragment() {
         // 네비게이션 바 활성화 상태 로드
         switchNavbarEnabled.isChecked = settings.navbarEnabled
 
+        // 최근 앱 작업 표시줄 상태 로드
+        switchRecentAppsTaskbar.isChecked = settings.recentAppsTaskbarEnabled
+
         // 버튼 배치 반전 상태 로드
         switchNavButtonsSwap.isChecked = settings.navButtonsSwapped
 
@@ -290,6 +299,12 @@ class NavBarSettingsFragment : Fragment() {
         // 네비게이션 바 활성화/비활성화
         switchNavbarEnabled.setOnCheckedChangeListener { _, isChecked ->
             settings.navbarEnabled = isChecked
+            notifySettingsChanged()
+        }
+
+        // 최근 앱 작업 표시줄
+        switchRecentAppsTaskbar.setOnCheckedChangeListener { _, isChecked ->
+            settings.recentAppsTaskbarEnabled = isChecked
             notifySettingsChanged()
         }
 

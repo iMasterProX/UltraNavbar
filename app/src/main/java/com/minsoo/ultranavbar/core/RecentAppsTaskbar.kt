@@ -48,6 +48,9 @@ class RecentAppsTaskbar(
         fun shouldIgnoreTouch(toolType: Int): Boolean
     }
 
+    /** 분할화면 드래그 활성화 여부 (false면 탭만 가능) */
+    var splitScreenEnabled: Boolean = false
+
     private var centerGroup: LinearLayout? = null
     private val iconViews = mutableListOf<ImageView>()
     private var currentApps = listOf<RecentAppsManager.RecentAppInfo>()
@@ -203,8 +206,8 @@ class RecentAppsTaskbar(
                         hasMoved = true
                     }
 
-                    // 위로 드래그 시작 감지
-                    if (!isDraggingUp && deltaY > dragStartThresholdPx) {
+                    // 위로 드래그 시작 감지 (분할화면 활성화 시에만)
+                    if (splitScreenEnabled && !isDraggingUp && deltaY > dragStartThresholdPx) {
                         isDraggingUp = true
                         // 분할화면 반투명 오버레이를 먼저 생성 (z-order가 아래)
                         listener.onDragStateChanged(true, 0f)

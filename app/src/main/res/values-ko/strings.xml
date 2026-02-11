@@ -24,7 +24,7 @@
     <string name="nav_buttons_swap_summary">네비게이션 버튼(뒤로/홈/최근앱)을 오른쪽으로, 추가 버튼(알림/캡처)을 왼쪽으로 이동</string>
 
     <string name="recent_apps_taskbar_title">최근 앱 작업 표시줄</string>
-    <string name="recent_apps_taskbar_summary">네비게이션 바 중앙에 최근 앱 아이콘을 표시합니다. 아이콘을 탭하면 앱 전환, 위로 끌어올리면 분할 화면으로 추가됩니다 (가로는 오른쪽, 세로는 아래).</string>
+    <string name="recent_apps_taskbar_summary">네비게이션 바 중앙에 최근 앱 아이콘을 표시합니다. 아이콘을 탭하면 앱을 전환할 수 있습니다.\n\n앱이 한 번 이상 사용되어야 목록에 표시됩니다.</string>
     <string name="split_screen_not_supported">%1$s은(는) 분할 화면을 지원하지 않습니다</string>
     <string name="split_screen_not_supported_generic">분할 화면을 지원하지 않는 앱입니다.</string>
     <string name="split_screen_failed_generic">분할 화면을 시작할 수 없습니다.</string>
@@ -131,6 +131,10 @@
     <!-- Experimental Features -->
     <string name="experimental_features_title">⚠️ 실험적 기능</string>
     <string name="experimental_features_warning">이 기능들은 실험적이며 정상적으로 동작하지 않을 수 있습니다. 예기치 않은 동작, 충돌 등의 문제가 발생할 수 있으니 주의해서 사용하세요.</string>
+    <string name="split_screen_taskbar_title">작업 표시줄 분할 화면</string>
+    <string name="split_screen_taskbar_summary">작업 표시줄에서 최근 앱 아이콘을 위로 드래그하여 분할 화면으로 추가합니다 (가로는 오른쪽, 세로는 아래).</string>
+    <string name="touch_point_experimental_title">자동 터치 (좌표 기반)</string>
+    <string name="touch_point_experimental_summary">이 기능은 사용자가 지정한 좌표를 자동 터치하려 하나, 와콤 펜 커스텀의 한계로 사용 방식이 UI 요소 자동 터치와 다릅니다. 기능을 사용하려면 화면 가까이에서 기능이 할당된 펜 버튼을 누르고, 그 상태에서 즉시 펜을 화면에서 잠시 떨어뜨려야 기능이 작동합니다.</string>
     <string name="hardware_info_desc">기기 CPU, 디스플레이, 센서 및 입력 장치 정보를 확인합니다.</string>
 
     <!-- 앱 설정 화면 -->

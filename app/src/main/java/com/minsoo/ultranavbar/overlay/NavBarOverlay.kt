@@ -380,7 +380,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         if (settings.recentAppsTaskbarEnabled) {
             recentAppsManager = RecentAppsManager(context, recentAppsListener)
-            recentAppsTaskbar = RecentAppsTaskbar(context, taskbarListener)
+            recentAppsTaskbar = RecentAppsTaskbar(context, taskbarListener).apply {
+                splitScreenEnabled = settings.splitScreenTaskbarEnabled
+            }
         }
     }
 
@@ -2077,9 +2079,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (settings.recentAppsTaskbarEnabled) {
             if (recentAppsManager == null) {
                 recentAppsManager = RecentAppsManager(context, recentAppsListener)
-                recentAppsTaskbar = RecentAppsTaskbar(context, taskbarListener)
+                recentAppsTaskbar = RecentAppsTaskbar(context, taskbarListener).apply {
+                    splitScreenEnabled = settings.splitScreenTaskbarEnabled
+                }
                 recentAppsManager?.setLauncherPackages(cachedLauncherPackages)
                 recentAppsManager?.loadInitialRecentApps()
+            } else {
+                // 설정 변경 시 분할화면 플래그 업데이트
+                recentAppsTaskbar?.splitScreenEnabled = settings.splitScreenTaskbarEnabled
             }
         } else {
             recentAppsManager?.clear()

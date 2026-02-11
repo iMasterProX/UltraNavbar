@@ -97,24 +97,33 @@ class PenButtonConfigActivity : AppCompatActivity() {
      * 동작 타입 선택 다이얼로그
      */
     private fun showActionTypeDialog() {
-        val actionTypes = arrayOf(
+        val settings = SettingsManager.getInstance(this)
+        val touchPointEnabled = settings.touchPointExperimentalEnabled
+
+        // 기본 액션 목록
+        val actionLabels = mutableListOf(
             getString(R.string.pen_button_action_none),
             getString(R.string.pen_button_action_app),
             getString(R.string.pen_button_action_shortcut),
-            getString(R.string.pen_button_action_node_click),
-            getString(R.string.pen_button_action_touch_point)
+            getString(R.string.pen_button_action_node_click)
         )
+        val actionHandlers = mutableListOf<() -> Unit>(
+            ::setActionNone,
+            ::selectApp,
+            ::selectShortcut,
+            ::selectNodeClick
+        )
+
+        // 실험적 기능 토글이 켜져있을 때만 좌표 기반 자동 터치 표시
+        if (touchPointEnabled) {
+            actionLabels.add(getString(R.string.pen_button_action_touch_point))
+            actionHandlers.add(::selectTouchPoint)
+        }
 
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.pen_button_select_action))
-            .setItems(actionTypes) { _, which ->
-                when (which) {
-                    0 -> setActionNone()
-                    1 -> selectApp()
-                    2 -> selectShortcut()
-                    3 -> selectNodeClick()
-                    4 -> selectTouchPoint()
-                }
+            .setItems(actionLabels.toTypedArray()) { _, which ->
+                actionHandlers[which]()
             }
             .setOnCancelListener {
                 finish()

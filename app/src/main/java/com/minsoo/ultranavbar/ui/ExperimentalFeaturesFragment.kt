@@ -17,7 +17,8 @@ import com.minsoo.ultranavbar.settings.SettingsManager
 class ExperimentalFeaturesFragment : Fragment() {
 
     private lateinit var settings: SettingsManager
-    private lateinit var switchRecentAppsTaskbar: SwitchMaterial
+    private lateinit var switchSplitScreenTaskbar: SwitchMaterial
+    private lateinit var switchTouchPointExperimental: SwitchMaterial
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -37,16 +38,23 @@ class ExperimentalFeaturesFragment : Fragment() {
     }
 
     private fun initViews(view: View) {
-        switchRecentAppsTaskbar = view.findViewById(R.id.switchRecentAppsTaskbar)
+        switchSplitScreenTaskbar = view.findViewById(R.id.switchSplitScreenTaskbar)
+        switchTouchPointExperimental = view.findViewById(R.id.switchTouchPointExperimental)
     }
 
     private fun loadSettings() {
-        switchRecentAppsTaskbar.isChecked = settings.recentAppsTaskbarEnabled
+        switchSplitScreenTaskbar.isChecked = settings.splitScreenTaskbarEnabled
+        switchTouchPointExperimental.isChecked = settings.touchPointExperimentalEnabled
     }
 
     private fun setupListeners() {
-        switchRecentAppsTaskbar.setOnCheckedChangeListener { _, isChecked ->
-            settings.recentAppsTaskbarEnabled = isChecked
+        switchSplitScreenTaskbar.setOnCheckedChangeListener { _, isChecked ->
+            settings.splitScreenTaskbarEnabled = isChecked
+            notifySettingsChanged()
+        }
+
+        switchTouchPointExperimental.setOnCheckedChangeListener { _, isChecked ->
+            settings.touchPointExperimentalEnabled = isChecked
             notifySettingsChanged()
         }
     }
