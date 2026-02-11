@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LG UltraTab Extension - 비공개 테스트 참여 안내</title>
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --primary-dark: #1557b0;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #202124;
+            --text-secondary: #5f6368;
+            --border: #dadce0;
+            --step-bg: #e8f0fe;
+            --warning-bg: #fef7e0;
+            --warning-border: #f9ab00;
+            --success-bg: #e6f4ea;
+            --success-border: #34a853;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Noto Sans KR', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 24px 16px 48px;
+        }
+
+        .header {
+            text-align: center;
+            padding: 32px 0 24px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+
+        .lang-switch {
+            text-align: center;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+
+        .lang-switch a {
+            color: var(--primary);
+            text-decoration: none;
+            padding: 4px 12px;
+        }
+
+        .lang-switch a:hover {
+            text-decoration: underline;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .step {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-number {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            background: var(--primary);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-content h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .step-content p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .step-content a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .step-content a:hover {
+            text-decoration: underline;
+        }
+
+        .btn-link {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 8px 20px;
+            background: var(--primary);
+            color: #fff;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .btn-link:hover {
+            background: var(--primary-dark);
+            text-decoration: none;
+            color: #fff;
+        }
+
+        .notice {
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        .notice-warning {
+            background: var(--warning-bg);
+            border-left: 4px solid var(--warning-border);
+        }
+
+        .notice-success {
+            background: var(--success-bg);
+            border-left: 4px solid var(--success-border);
+        }
+
+        .notice strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .screenshot-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .screenshot-grid img {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .play-badge {
+            text-align: center;
+            margin: 24px 0;
+        }
+
+        .play-badge img {
+            height: 60px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 24px 0;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 32px 0;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 16px 12px 32px;
+            }
+            .header h1 {
+                font-size: 20px;
+            }
+            .card {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <div class="lang-switch">
+        <a href="#ko">한국어</a> | <a href="#en">English</a>
+    </div>
+
+    <!-- 한국어 섹션 -->
+    <section id="ko">
+        <div class="header">
+            <h1>LG UltraTab Extension</h1>
+            <p>비공개 테스트 참여 안내</p>
+        </div>
+
+        <div class="card">
+            <h2>비공개 테스트란?</h2>
+            <p style="font-size:14px; color:var(--text-secondary);">
+                이 앱은 현재 Google Play에서 <strong>비공개 테스트(Closed Testing)</strong> 단계에 있습니다.
+                일반 검색으로는 찾을 수 없으며, 아래 절차를 통해 테스터로 등록한 후 다운로드할 수 있습니다.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>참여 방법</h2>
+
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3>Google 그룹 가입</h3>
+                    <p>아래 링크에서 <strong>ultranavbar</strong> Google 그룹에 가입합니다. "그룹 참여" 버튼을 클릭하고, 이메일 수신 설정은 "이메일 수신 안함"으로 설정해도 됩니다.</p>
+                    <a href="https://groups.google.com/g/ultranavbar" target="_blank" class="btn-link">Google 그룹 가입하기</a>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3>테스터 등록</h3>
+                    <p>그룹 가입 후, 아래 테스트 초대 링크를 방문하여 <strong>"테스터가 되어 보세요"</strong> 버튼을 클릭합니다.</p>
+                    <a href="https://play.google.com/apps/testing/com.minsoo.ultranavbar" target="_blank" class="btn-link">테스트 참여 승인하기</a>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3>Play Store에서 다운로드</h3>
+                    <p>테스터 등록이 완료되면 Google Play에서 앱을 다운로드할 수 있습니다. 이미 설치되어 있다면 업데이트가 표시됩니다.</p>
+                    <a href="https://play.google.com/store/apps/details?id=com.minsoo.ultranavbar" target="_blank" class="btn-link">Google Play에서 다운로드</a>
+                </div>
+            </div>
+
+            <div class="notice notice-warning">
+                <strong>참고</strong>
+                테스트 버전은 불안정할 수 있으며, 미출시 버전도 포함될 수 있습니다. 앱 사용과 관련된 데이터가 수집되어 앱 개선을 위해 개발자와 공유됩니다.
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>테스트 종료 방법</h2>
+            <p style="font-size:14px; color:var(--text-secondary);">
+                테스트 프로그램은 언제든지 종료할 수 있습니다.
+                <a href="https://play.google.com/apps/testing/com.minsoo.ultranavbar" target="_blank">테스트 참여 페이지</a>에서
+                "프로그램을 종료하세요" 버튼을 클릭하면 됩니다.
+                정식 버전이 출시되면 정식 버전으로 전환할 수 있습니다.
+            </p>
+        </div>
+
+        <div class="play-badge">
+            <a href="https://play.google.com/store/apps/details?id=com.minsoo.ultranavbar" target="_blank">
+                <img src="https://play.google.com/intl/en_us/badges/static/images/badges/ko_badge_web_generic.png" alt="Google Play에서 다운로드">
+            </a>
+        </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- English Section -->
+    <section id="en">
+        <div class="header">
+            <h1>LG UltraTab Extension</h1>
+            <p>Closed Testing Participation Guide</p>
+        </div>
+
+        <div class="card">
+            <h2>What is Closed Testing?</h2>
+            <p style="font-size:14px; color:var(--text-secondary);">
+                This app is currently in <strong>Closed Testing</strong> on Google Play.
+                It cannot be found through regular search. Follow the steps below to register as a tester and download the app.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>How to Join</h2>
+
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3>Join the Google Group</h3>
+                    <p>Visit the link below and join the <strong>ultranavbar</strong> Google Group. Click "Join group" button. You can set email preference to "Don't send email updates".</p>
+                    <a href="https://groups.google.com/g/ultranavbar" target="_blank" class="btn-link">Join Google Group</a>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3>Become a Tester</h3>
+                    <p>After joining the group, visit the testing invitation link below and click the <strong>"Become a tester"</strong> button.</p>
+                    <a href="https://play.google.com/apps/testing/com.minsoo.ultranavbar" target="_blank" class="btn-link">Accept Test Invitation</a>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3>Download from Play Store</h3>
+                    <p>Once registered as a tester, you can download the app from Google Play. If already installed, an update will appear.</p>
+                    <a href="https://play.google.com/store/apps/details?id=com.minsoo.ultranavbar" target="_blank" class="btn-link">Download on Google Play</a>
+                </div>
+            </div>
+
+            <div class="notice notice-warning">
+                <strong>Note</strong>
+                Test versions may be unstable and may include unreleased features. App usage data is collected and shared with the developer for improvement purposes.
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>How to Leave the Test</h2>
+            <p style="font-size:14px; color:var(--text-secondary);">
+                You can leave the testing program at any time.
+                Visit the <a href="https://play.google.com/apps/testing/com.minsoo.ultranavbar" target="_blank">test participation page</a>
+                and click "Leave the program". When the stable version is released, you can switch to it.
+            </p>
+        </div>
+
+        <div class="play-badge">
+            <a href="https://play.google.com/store/apps/details?id=com.minsoo.ultranavbar" target="_blank">
+                <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play">
+            </a>
+        </div>
+    </section>
+
+    <div class="footer">
+        <p>
+            <a href="https://github.com/iMasterProX/UltraNavbar" target="_blank">GitHub</a>
+        </p>
+        <p style="margin-top:8px;">
+            Google Play and the Google Play logo are trademarks of Google LLC.
+        </p>
+    </div>
+
+</div>
+
+</body>
+</html>

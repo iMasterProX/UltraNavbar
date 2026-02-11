@@ -75,7 +75,11 @@
       "Bash(\"$JAVA_HOME/bin/java\" -version)",
       "Bash(python3:*)",
       "Bash(python -c:*)",
-      "WebFetch(domain:support.google.com)"
+      "WebFetch(domain:support.google.com)",
+      "WebFetch(domain:partnermarketinghub.withgoogle.com)",
+      "WebFetch(domain:play.google.com)",
+      "Bash(pip install:*)",
+      "Bash(copy:*)"
     ]
   }
 }

@@ -6,6 +6,12 @@
 
 ---
 
+<p align="center">
+  <a href="https://imasterprox.github.io/UltraNavbar/beta-test.html">
+    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/ko_badge_web_generic.png" alt="Google Play에서 다운로드" height="80">
+  </a>
+</p>
+
 ## 한국어
 
 ### 개요

@@ -957,6 +957,10 @@ class NavBarAccessibilityService : AccessibilityService() {
             val widthRatio = bounds.width().toFloat() / screenWidth
             val heightRatio = bounds.height().toFloat() / screenHeight
             if (widthRatio < 0.9f || heightRatio < 0.9f) {
+                // 자기 앱의 다이얼로그/팝업 창은 분할화면 판단에서 제외
+                // (AlertDialog 등이 전체화면보다 작아서 오탐 발생 방지)
+                if (pkg == packageName) continue
+
                 hasSmallWindow = true
                 // 작은 창이 리사이즈 가능한 앱에서 왔으면 실제 분할화면일 가능성이 높음
                 if (pkg != null && SplitScreenHelper.isResizeableActivity(this, pkg)) {
