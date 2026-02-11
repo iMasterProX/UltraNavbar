@@ -99,6 +99,12 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 앱입니다
 
 ---
 
+<p align="center">
+  <a href="https://imasterprox.github.io/UltraNavbar/beta-test.html#en">
+    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80">
+  </a>
+</p>
+
 ## English
 
 ### Overview
