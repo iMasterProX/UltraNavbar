@@ -22,7 +22,7 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 앱입니다
 #### 커스텀 네비게이션 바
 - 기본 네비게이션 버튼: 뒤로, 홈, 최근 앱
 - 추가 버튼: 스크린샷 캡처, 알림 패널
-- 최근 앱 목록(커스텀 태스크바)를 네비바 중앙에 표시
+- 최근 앱 목록(커스텀 테스크바)를 네비바 중앙에 표시
 - 버튼 배치 변경: 추가 버튼(알림/스크린샷)을 좌/우 배치
 - 홈 버튼 커스텀: 길게 눌렀을 때 동작 설정(구글 어시스턴트/앱 실행/바로가기)
 - 핫스팟 호출: 네비게이션 바 숨김 상태에서 하단 핫스팟으로 다시 표시
@@ -53,7 +53,6 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 앱입니다
 #### 네비바앱스 (NavbarApps)
 - 네비게이션 바에 즐겨찾기 앱 패널 추가 (최대 10개, 3열 그리드)
 - 앱 아이콘을 위로 드래그하여 분할화면 실행
-- 다크 모드 지원
 
 #### 분할화면 실행 (실험적)
 - 최근 앱 목록(커스텀 태스크바)에서 앱을 위로 슬라이드하여 분할화면 실행
@@ -158,7 +157,6 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 #### NavbarApps
 - Favorite apps panel on the navigation bar (up to 10 apps, 3-column grid)
 - Drag app icons upward to launch split-screen
-- Dark mode support
 
 #### Split-Screen Launcher (Experimental)
 - Slide up an app in the custom recents taskbar to launch split‑screen
