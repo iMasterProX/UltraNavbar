@@ -79,7 +79,8 @@
       "WebFetch(domain:partnermarketinghub.withgoogle.com)",
       "WebFetch(domain:play.google.com)",
       "Bash(pip install:*)",
-      "Bash(copy:*)"
+      "Bash(copy:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

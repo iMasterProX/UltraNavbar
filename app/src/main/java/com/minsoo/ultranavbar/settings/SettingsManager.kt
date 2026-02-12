@@ -87,6 +87,9 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_PEN_B_TOUCH_X = "pen_b_touch_x"
         private const val KEY_PEN_B_TOUCH_Y = "pen_b_touch_y"
 
+        // NavbarApps
+        private const val KEY_NAVBAR_APPS_ITEMS = "navbar_apps_items"
+
         // 노드 선택 설정 (접근성 노드 기반 - 권장)
         private const val KEY_PEN_A_NODE_ID = "pen_a_node_id"
         private const val KEY_PEN_A_NODE_TEXT = "pen_a_node_text"
@@ -418,4 +421,12 @@ class SettingsManager private constructor(context: Context) {
     fun isPenCustomFunctionEnabled(): Boolean {
         return penAActionType != "NONE" || penBActionType != "NONE"
     }
+
+    // 네비바앱스 항목 목록 (순서 보존)
+    var navbarAppsItems: List<String>
+        get() {
+            val joined = prefs.getString(KEY_NAVBAR_APPS_ITEMS, null) ?: return emptyList()
+            return if (joined.isEmpty()) emptyList() else joined.split("|||")
+        }
+        set(value) = prefs.edit().putString(KEY_NAVBAR_APPS_ITEMS, value.joinToString("|||")).apply()
 }

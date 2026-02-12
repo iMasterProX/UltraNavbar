@@ -29,6 +29,7 @@ enum class NavAction(
     TAKE_SCREENSHOT("Screenshot", AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT),
 
     ASSIST("Assistant", null),
+    NAVBAR_APPS("Navbar Apps", null),
     NONE("None", null);
 
     companion object {

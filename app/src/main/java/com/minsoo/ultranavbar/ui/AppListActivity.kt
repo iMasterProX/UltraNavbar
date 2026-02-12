@@ -10,6 +10,7 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
 import android.widget.ProgressBar
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -18,6 +19,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.minsoo.ultranavbar.R
+import com.minsoo.ultranavbar.core.NavbarAppsPanel
 import com.minsoo.ultranavbar.settings.SettingsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,6 +34,7 @@ class AppListActivity : AppCompatActivity() {
         const val MODE_MULTIPLE = "multiple"
         const val MODE_DISABLED_APPS = "disabled_apps"
         const val MODE_SHORTCUT_DISABLED_APPS = "shortcut_disabled_apps"
+        const val MODE_NAVBAR_APPS = "navbar_apps"
     }
 
     private lateinit var settings: SettingsManager
@@ -52,10 +55,11 @@ class AppListActivity : AppCompatActivity() {
         settings = SettingsManager.getInstance(this)
         selectionMode = intent.getStringExtra(EXTRA_SELECTION_MODE) ?: MODE_DISABLED_APPS
 
-        // MODE_DISABLED_APPS 또는 MODE_SHORTCUT_DISABLED_APPS 모드에서 비활성화된 앱 목록 로드
+        // 모드별 초기 선택 앱 목록 로드
         when (selectionMode) {
             MODE_DISABLED_APPS -> selectedPackages = settings.disabledApps.toMutableSet()
             MODE_SHORTCUT_DISABLED_APPS -> selectedPackages = settings.shortcutDisabledApps.toMutableSet()
+            MODE_NAVBAR_APPS -> selectedPackages = settings.navbarAppsItems.toMutableSet()
         }
 
         initViews()
@@ -95,6 +99,12 @@ class AppListActivity : AppCompatActivity() {
             },
             onItemChecked = { packageName, isChecked -> // Multi-selection
                 if (isChecked) {
+                    if (selectionMode == MODE_NAVBAR_APPS && selectedPackages.size >= NavbarAppsPanel.MAX_APPS) {
+                        Toast.makeText(this, getString(R.string.navbar_apps_max_limit, NavbarAppsPanel.MAX_APPS), Toast.LENGTH_SHORT).show()
+                        // 체크 되돌리기
+                        adapter.submitList(sortAppsWithSelectedFirst(allApps), selectedPackages)
+                        return@AppListAdapter
+                    }
                     selectedPackages.add(packageName)
                 } else {
                     selectedPackages.remove(packageName)
@@ -200,10 +210,14 @@ class AppListActivity : AppCompatActivity() {
     }
 
     private fun saveAndFinish() {
-        // 모드에 따라 비활성화된 앱 목록 저장
+        // 모드에 따라 선택된 앱 목록 저장
         when (selectionMode) {
             MODE_DISABLED_APPS -> settings.disabledApps = selectedPackages
             MODE_SHORTCUT_DISABLED_APPS -> settings.shortcutDisabledApps = selectedPackages
+            MODE_NAVBAR_APPS -> {
+                settings.navbarAppsItems = selectedPackages.toList()
+                sendBroadcast(Intent(com.minsoo.ultranavbar.core.Constants.Action.SETTINGS_CHANGED))
+            }
         }
         finish()
     }

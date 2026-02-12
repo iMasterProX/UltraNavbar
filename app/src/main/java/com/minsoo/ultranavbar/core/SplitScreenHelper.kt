@@ -419,6 +419,21 @@ object SplitScreenHelper {
             val primaryWarm = resolvedCurrent.isNotEmpty() && isAppProcessRunning(context, resolvedCurrent)
             val delayMs = resolveSplitReadyTimeoutMs(targetWarm, primaryWarm)
             markSplitScreenUsed()
+
+            // UltraNavbar의 Activity task가 스택에 남아있으면 split toggle 시
+            // 시스템이 UltraNavbar를 primary로 잡을 수 있음.
+            // (AppListActivity finish 후에도 task record가 남아있는 경우)
+            // 항상 primary 앱을 foreground로 한번 올려서 task 스택 최상위를 확보한 후 진행
+            if (resolvedCurrent.isNotEmpty()) {
+                Log.d(TAG, "Bringing primary to front before split toggle: $resolvedCurrent")
+                launchAppNormally(context, resolvedCurrent)
+                val bringToFrontDelay = if (primaryWarm) 300L else 500L
+                handler.postDelayed({
+                    if (!isLaunchTokenValid(launchToken)) return@postDelayed
+                    toggleThenLaunch(context, service, targetPackage, delayMs, launchToken)
+                }, bringToFrontDelay)
+                return true
+            }
             toggleThenLaunch(context, service, targetPackage, delayMs, launchToken)
             true
         } catch (e: Exception) {

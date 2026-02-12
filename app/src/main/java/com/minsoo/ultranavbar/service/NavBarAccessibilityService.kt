@@ -527,9 +527,14 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         updateRecentsState(isRecents, "event")
 
-        // 이 앱이 열리면 홈 화면 상태를 false로 설정 후 리턴
+        // 이 앱의 액티비티가 열리면 홈 화면 상태를 false로 설정 후 리턴
+        // 단, 오버레이 윈도우(className이 android.widget.* 등 시스템 뷰)는 무시
+        // NavbarApps 패널 등 TYPE_ACCESSIBILITY_OVERLAY는 홈 상태에 영향을 주지 않아야 함
         if (packageName == this.packageName) {
-            updateHomeScreenState(false, "self_app")
+            val isActivity = className.startsWith(packageName)
+            if (isActivity) {
+                updateHomeScreenState(false, "self_app")
+            }
             return
         }
 

@@ -35,6 +35,7 @@ import com.minsoo.ultranavbar.core.BackgroundManager
 import com.minsoo.ultranavbar.core.ButtonManager
 import com.minsoo.ultranavbar.core.Constants
 import com.minsoo.ultranavbar.core.GestureHandler
+import com.minsoo.ultranavbar.core.NavbarAppsPanel
 import com.minsoo.ultranavbar.core.RecentAppsManager
 import com.minsoo.ultranavbar.core.RecentAppsTaskbar
 import com.minsoo.ultranavbar.core.SplitScreenHelper
@@ -70,6 +71,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private lateinit var gestureHandler: GestureHandler
     private var recentAppsManager: RecentAppsManager? = null
     private var recentAppsTaskbar: RecentAppsTaskbar? = null
+    private var navbarAppsPanel: NavbarAppsPanel? = null
     private var cachedLauncherPackages: Set<String> = emptySet()
 
     // === 뷰 참조 ===
@@ -83,6 +85,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var dragIconView: ImageView? = null  // 드래그 오버레이 안의 아이콘 복사본
     private var dragIconCenterOffsetX: Float = 0f  // 아이콘 중심 오프셋
     private var dragIconCenterOffsetY: Float = 0f
+    private var dragFreeMove: Boolean = false  // true: 손가락 추적 자유이동, false: X 고정 수직이동
     private var centerGroupView: View? = null  // 최근 앱 작업 표시줄 뷰 (홈화면에서 숨기기용)
 
     // === 상태 ===
@@ -268,22 +271,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             }
         }
 
-        fun getFallbackPrimaryPackage(targetPackage: String): String? {
-            val apps = recentAppsManager?.getRecentApps() ?: return null
-            for (app in apps) {
-                val pkg = app.packageName
-                if (pkg == targetPackage) continue
-                if (!SplitScreenHelper.isResizeableActivity(context, pkg)) continue
-                return pkg
-            }
-            return null
-        }
+        fun getFallbackPrimaryPackage(targetPackage: String): String? =
+            this@NavBarOverlay.getFallbackPrimaryPackage(targetPackage)
 
         override fun onDragStateChanged(isDragging: Boolean, progress: Float) {
             updateSplitScreenOverlay(isDragging, progress)
         }
 
         override fun onDragStart(iconView: ImageView, screenX: Float, screenY: Float) {
+            dragFreeMove = false  // 태스크바: X 고정 수직이동
             showDragOverlay(iconView, screenX, screenY)
         }
 
@@ -298,6 +294,107 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         override fun shouldIgnoreTouch(toolType: Int): Boolean {
             return settings.ignoreStylus && toolType == MotionEvent.TOOL_TYPE_STYLUS
         }
+    }
+
+    private val navbarAppsPanelListener = object : NavbarAppsPanel.PanelActionListener {
+        override fun onAppTapped(packageName: String) {
+            Log.d(TAG, "NavbarApps: app tapped: $packageName")
+            try {
+                val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+                if (intent != null) {
+                    intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                   android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                    context.startActivity(intent)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "NavbarApps: launch failed: $packageName", e)
+            }
+        }
+
+        override fun onAppDraggedToSplit(packageName: String) {
+            if (!SplitScreenHelper.isResizeableActivity(context, packageName)) {
+                showSplitNotSupportedToast(packageName)
+                return
+            }
+            val launchContext = service.getSplitLaunchContext()
+            if (launchContext.isOnHomeScreen && !launchContext.isRecentsVisible) {
+                Log.d(TAG, "NavbarApps: split request ignored on home screen")
+                return
+            }
+            if (launchContext.currentPackage.isEmpty() &&
+                !launchContext.hasVisibleNonLauncherApp &&
+                service.isSelfAppVisibleForSplit()
+            ) {
+                showSplitNotSupportedToast(context.packageName)
+                return
+            }
+            val fallbackPrimary = getFallbackPrimaryPackage(packageName)
+            SplitScreenHelper.launchSplitScreen(context, packageName, launchContext, fallbackPrimary)
+        }
+
+        override fun onDragStateChanged(isDragging: Boolean, progress: Float) {
+            updateSplitScreenOverlay(isDragging, progress)
+        }
+
+        override fun onDragStart(iconView: ImageView, screenX: Float, screenY: Float) {
+            dragFreeMove = true  // 네비바앱스: 손가락 추적 자유이동
+            showDragOverlay(iconView, screenX, screenY)
+        }
+
+        override fun onDragIconUpdate(screenX: Float, screenY: Float, scale: Float) {
+            updateDragOverlayPosition(screenX, screenY, scale)
+        }
+
+        override fun onDragEnd() {
+            hideDragOverlay()
+        }
+
+        override fun onAddAppRequested() {
+            val intent = android.content.Intent(
+                context,
+                com.minsoo.ultranavbar.ui.NavbarAppsAddActivity::class.java
+            ).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        }
+
+        override fun isOnHomeScreen(): Boolean {
+            val launchContext = service.getSplitLaunchContext()
+            return launchContext.isOnHomeScreen && !launchContext.isRecentsVisible
+        }
+
+        override fun isSplitScreenDragEnabled(): Boolean {
+            return settings.splitScreenTaskbarEnabled
+        }
+    }
+
+    private fun toggleNavbarAppsPanel() {
+        val panel = navbarAppsPanel ?: return
+        if (panel.isShowing()) {
+            panel.hide()
+        } else {
+            // 분할화면 오버레이는 드래그 시작 시(onDragStateChanged)에서 생성되므로
+            // 패널 열 때는 생성하지 않음 (불필요한 윈도우 추가로 배경 깜빡임 방지)
+            val barHeight = getSystemNavigationBarHeightPx()
+            val isSwapped = settings.navButtonsSwapped
+            panel.show(0, barHeight, isSwapped)
+        }
+    }
+
+    /**
+     * 최근 앱 목록에서 분할화면 가능한 대체 primary 앱을 찾는다.
+     * taskbarListener와 navbarAppsPanelListener 모두에서 사용.
+     */
+    private fun getFallbackPrimaryPackage(targetPackage: String): String? {
+        val apps = recentAppsManager?.getRecentApps() ?: return null
+        for (app in apps) {
+            val pkg = app.packageName
+            if (pkg == targetPackage) continue
+            if (!SplitScreenHelper.isResizeableActivity(context, pkg)) continue
+            return pkg
+        }
+        return null
     }
 
     private fun showSplitNotSupportedToast(packageName: String?) {
@@ -384,6 +481,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 splitScreenEnabled = settings.splitScreenTaskbarEnabled
             }
         }
+
+        navbarAppsPanel = NavbarAppsPanel(context, windowManager, navbarAppsPanelListener)
     }
 
     fun destroy() {
@@ -403,6 +502,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             recentAppsManager?.clear()
             destroySplitScreenOverlay()
             hideDragOverlay()
+            navbarAppsPanel?.hide()
+            navbarAppsPanel = null
 
             windowManager.removeView(rootView)
             rootView = null
@@ -502,7 +603,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         if (isSwapped) {
-            // When swapped to left: Notifications first, then Screenshot
+            // When swapped to left: Notifications, Screenshot, NavbarApps (innermost = right)
             extraGroup.addView(
                 buttonManager.createNavButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel, buttonSizePx, initialButtonColor)
             )
@@ -510,8 +611,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             extraGroup.addView(
                 buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
             )
+            buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
+            extraGroup.addView(
+                buttonManager.createNavButton(NavAction.NAVBAR_APPS, R.drawable.ic_sysbar_apps, buttonSizePx, initialButtonColor)
+            )
         } else {
-            // Default order: Screenshot first, then Notifications
+            // Default order: NavbarApps (innermost = left), Screenshot, Notifications
+            extraGroup.addView(
+                buttonManager.createNavButton(NavAction.NAVBAR_APPS, R.drawable.ic_sysbar_apps, buttonSizePx, initialButtonColor)
+            )
+            buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
             extraGroup.addView(
                 buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
             )
@@ -1007,6 +1116,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         hotspotView?.visibility = if (shouldShowHotspot) View.VISIBLE else View.GONE
         isShowing = false
         hideGestureOverlay()
+        navbarAppsPanel?.hide()
         Log.d(TAG, "Overlay hidden (animate=$animate, showHotspot=$showHotspot)")
     }
 
@@ -1605,7 +1715,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             if (!shouldUseCustom) {
                 backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
             }
+
+            // 분할화면 오버레이 색상 업데이트
+            updateSplitScreenOverlayColor()
         }
+    }
+
+    private fun updateSplitScreenOverlayColor() {
+        splitScreenOverlayView?.setBackgroundColor(
+            if (backgroundManager.isDarkMode) Color.WHITE else Color.BLACK
+        )
     }
 
     /**
@@ -1653,6 +1772,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             )
             if (!shouldUseCustom) {
                 backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+            }
+
+            // 분할화면 오버레이 색상 업데이트
+            if (darkModeChanged) {
+                updateSplitScreenOverlayColor()
             }
         }
     }
@@ -1784,6 +1908,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 // ===== 버튼 액션 처리 =====
 
     private fun handleButtonClick(action: NavAction) {
+        if (action == NavAction.NAVBAR_APPS) {
+            toggleNavbarAppsPanel()
+            return
+        }
         if (action == NavAction.NOTIFICATIONS) {
             when {
                 isQuickSettingsOpen -> {
@@ -1935,8 +2063,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun createSplitScreenOverlay() {
         if (splitScreenOverlayView != null) return
 
+        val overlayColor = if (backgroundManager.isDarkMode) Color.WHITE else Color.BLACK
         splitScreenOverlayView = View(context).apply {
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(overlayColor)
             alpha = 0f
             visibility = View.INVISIBLE
         }
@@ -1996,11 +2125,17 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
         dragOverlayView = container
 
-        // 아이콘 중심 X를 원본 아이콘 위치에 고정 (수직 이동만 허용)
+        // X 기준: 자유이동이면 손가락 위치, 아니면 원본 아이콘 위치 고정
         val iconLoc = IntArray(2)
         iconView.getLocationOnScreen(iconLoc)
-        dragIconCenterOffsetX = (iconLoc[0] + iconSize / 2f)  // 고정 X 좌표
+        dragIconCenterOffsetX = (iconLoc[0] + iconSize / 2f)  // 태스크바용 고정 X 좌표
         dragIconCenterOffsetY = iconSize / 2f
+
+        val initialX = if (dragFreeMove) {
+            (screenX - iconSize / 2f).toInt()
+        } else {
+            (dragIconCenterOffsetX - iconSize / 2f).toInt()
+        }
 
         val params = WindowManager.LayoutParams().apply {
             type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
@@ -2012,7 +2147,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             width = iconSize
             height = iconSize
             gravity = Gravity.TOP or Gravity.START
-            x = (dragIconCenterOffsetX - iconSize / 2f).toInt()  // 고정 X
+            x = initialX
             y = (screenY - dragIconCenterOffsetY).toInt()
         }
 
@@ -2027,7 +2162,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     /**
-     * 드래그 중 아이콘 Y 위치/스케일 업데이트 (X는 고정)
+     * 드래그 중 아이콘 위치/스케일 업데이트
+     * dragFreeMove=true: X/Y 모두 손가락 추적 (네비바앱스)
+     * dragFreeMove=false: X 고정, Y만 이동 (태스크바)
      */
     private fun updateDragOverlayPosition(screenX: Float, screenY: Float, scale: Float) {
         val container = dragOverlayView ?: return
@@ -2039,8 +2176,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             // window 크기를 스케일에 맞춰 변경
             params.width = scaledSize
             params.height = scaledSize
-            // 중심 유지하면서 X 고정, Y만 업데이트
-            params.x = (dragIconCenterOffsetX - scaledSize / 2f).toInt()
+            // X: 자유이동이면 손가락 추적, 아니면 원본 위치 고정
+            params.x = if (dragFreeMove) {
+                (screenX - scaledSize / 2f).toInt()
+            } else {
+                (dragIconCenterOffsetX - scaledSize / 2f).toInt()
+            }
             params.y = (screenY - scaledSize / 2f).toInt()
             windowManager.updateViewLayout(container, params)
 
@@ -2094,6 +2235,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             recentAppsManager = null
             recentAppsTaskbar = null
         }
+
+        navbarAppsPanel?.hide()
+        navbarAppsPanel = NavbarAppsPanel(context, windowManager, navbarAppsPanelListener)
 
         rootView?.let { root ->
             root.removeAllViews()

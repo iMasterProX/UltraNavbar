@@ -75,6 +75,14 @@
             android:parentActivityName=".MainActivity" />
 
         <activity
+            android:name=".ui.NavbarAppsAddActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false"
+            android:taskAffinity="com.minsoo.ultranavbar.navbarapps"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
+        <activity
             android:name=".ui.WallpaperPreviewActivity"
             android:exported="false"
             android:theme="@style/Theme.UltraNavbar.Fullscreen" />
