@@ -29,7 +29,6 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 앱입니다
 - 스타일러스 입력 무시: 펜 사용 중 의도치 않은 네비게이션 바 호출 방지
 - 앱별 비활성화: 특정 앱에서는 네비게이션 바 완전 숨김
 - 네비게이션 바에 앱 즐겨찾기 패널 추가 (최대 10개, 3열 그리드)
-- 앱 아이콘을 위로 드래그하여 분할화면 실행
 
 #### 홈 화면 배경 커스텀
 - 자동 크롭 배경: 현재 배경화면의 하단 72px를 자동 크롭하여 네비게이션 바 배경으로 사용
@@ -52,7 +51,6 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 앱입니다
 - 시스템 펜 설정과 동기화
 - 특정 앱(OneNote 등)에서 제스처 간섭 방지
 
-<<<<<<< HEAD
 #### 앱 즐겨찾기 (App Favorites)
 - 네비게이션 바에 즐겨찾기 앱 패널 추가 (최대 10개, 3열 그리드)
 - 앱 아이콘을 위로 드래그하여 분할화면 실행
@@ -64,7 +62,6 @@ LG UltraTab Extension은 LG UltraTab 기기를 위한 종합 확장 앱입니다
 #### 분할화면 실행 (실험적)
 - 최근 앱 목록(커스텀 태스크바)에서 앱을 위로 슬라이드하여 분할화면 실행
 - 앱 즐겨찾기 창에서 앱 아이콘 드래그로도 분할화면 실행 가능
->>>>>>> c23159654c188f63f8846c73b600de0dd12f5c28
 - 이미 분할화면 상태일 경우, 오른쪽(세로 모드에서는 아래쪽) 패널 앱 교체 시도
 - 일부 앱은 시스템 제한으로 왼쪽/전체화면으로 열릴 수 있음
 - 분할화면 미지원 앱은 토스트로 안내
@@ -164,13 +161,11 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 - Sync with system pen settings
 - Reduce pen gesture interference in drawing apps
 
-<<<<<<< HEAD
 #### App Favorites
 - Favorite apps panel on the navigation bar (up to 10 apps, 3-column grid)
 - Drag app icons upward to launch split-screen
 
 =======
->>>>>>> c23159654c188f63f8846c73b600de0dd12f5c28
 #### Split-Screen Launcher (Experimental)
 - Slide up an app in the custom recents taskbar to launch split‑screen
 - Also launchable by dragging app icons from App Favorites
