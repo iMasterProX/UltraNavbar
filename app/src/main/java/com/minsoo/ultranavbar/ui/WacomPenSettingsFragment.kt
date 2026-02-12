@@ -1,6 +1,9 @@
 package com.minsoo.ultranavbar.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -162,8 +165,8 @@ class WacomPenSettingsFragment : Fragment() {
      * 권한 설정 가이드 다이얼로그
      */
     private fun showPermissionGuideDialog() {
-        val message = getString(R.string.pen_settings_permission_guide) +
-                "\n\n" + getString(R.string.pen_settings_adb_command) +
+        val message = getString(R.string.setup_adb_guide) +
+                "\n\n" + getString(R.string.setup_adb_command) +
                 "\n\n" + getString(R.string.pen_settings_permission_note)
 
         AlertDialog.Builder(requireContext())
@@ -177,7 +180,7 @@ class WacomPenSettingsFragment : Fragment() {
                     view?.let { setupUI(it) }
                     Toast.makeText(
                         requireContext(),
-                        "Permission granted!",
+                        R.string.setup_adb_already_granted,
                         Toast.LENGTH_SHORT
                     ).show()
                 } else {
@@ -187,6 +190,12 @@ class WacomPenSettingsFragment : Fragment() {
                         Toast.LENGTH_LONG
                     ).show()
                 }
+            }
+            .setNeutralButton(R.string.copy_command) { _, _ ->
+                val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("ADB Command", getString(R.string.setup_adb_command))
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(requireContext(), R.string.command_copied, Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()

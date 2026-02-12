@@ -21,7 +21,7 @@
     <string name="navbar_enable_summary">Show custom navigation bar overlay</string>
 
     <string name="nav_buttons_swap_title">Swap Button Layout</string>
-    <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (Notifications/Screenshot) to left side</string>
+    <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (App Favorites/Screenshot/Notifications) to left side</string>
 
     <string name="recent_apps_taskbar_title">Recent Apps Taskbar</string>
     <string name="recent_apps_taskbar_summary">Show recent app icons in the center of the navigation bar. Tap an icon to switch apps.\n\nApps must be used at least once before they appear in the list.</string>
@@ -448,19 +448,20 @@
     <string name="auto_touch_method_node">UI Element Click (Recommended)</string>
     <string name="auto_touch_method_node_desc">Clicks a specific UI element regardless of screen orientation.</string>
 
-    <!-- NavbarApps -->
-    <string name="navbar_apps_button">Apps</string>
+    <!-- NavbarApps (App Favorites) -->
+    <string name="navbar_apps_button">Favorites</string>
     <string name="navbar_apps_add">Add App</string>
     <string name="navbar_apps_empty">Tap + to add apps</string>
     <string name="navbar_apps_remove">Remove</string>
-    <string name="navbar_apps_remove_confirm">Remove %s from Navbar Apps?</string>
+    <string name="navbar_apps_remove_confirm">Remove %s from App Favorites?</string>
     <string name="navbar_apps_max_limit">Maximum %d apps can be added</string>
+    <string name="split_screen_zone_cancelled">Drop in the other half to start split screen</string>
 
     <!-- Experimental Features -->
     <string name="experimental_features_title">⚠️ Experimental Features</string>
     <string name="experimental_features_warning">These features are experimental and may not work properly. They may cause unexpected behavior, crashes, or other issues. Use at your own risk.</string>
-    <string name="split_screen_taskbar_title">Split Screen via Taskbar &amp; Navbar Apps</string>
-    <string name="split_screen_taskbar_summary">Drag an app icon from the taskbar or Navbar Apps panel to add it to split screen (right side in landscape, bottom in portrait).</string>
+    <string name="split_screen_taskbar_title">Split Screen via Taskbar &amp; App Favorites</string>
+    <string name="split_screen_taskbar_summary">Drag an app icon from the taskbar or App Favorites panel to add it to split screen (right side in landscape, bottom in portrait).</string>
     <string name="touch_point_experimental_title">Auto Touch (Coordinate)</string>
     <string name="touch_point_experimental_summary">This feature attempts to auto-touch a user-specified coordinate, but due to Wacom pen limitations, it works differently from UI Element Auto Touch. To use it, press the assigned pen button near the screen, then immediately lift the pen away from the screen for the touch to register.</string>
 </resources>

@@ -2163,8 +2163,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     /**
      * 드래그 중 아이콘 위치/스케일 업데이트
-     * dragFreeMove=true: X/Y 모두 손가락 추적 (네비바앱스)
-     * dragFreeMove=false: X 고정, Y만 이동 (태스크바)
+     * dragFreeMove=true: X/Y 모두 손가락 추적 (앱 즐겨찾기)
+     * dragFreeMove=false: X 고정 + 가로모드 중앙 끌림, Y만 이동 (태스크바)
      */
     private fun updateDragOverlayPosition(screenX: Float, screenY: Float, scale: Float) {
         val container = dragOverlayView ?: return
@@ -2176,11 +2176,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             // window 크기를 스케일에 맞춰 변경
             params.width = scaledSize
             params.height = scaledSize
-            // X: 자유이동이면 손가락 추적, 아니면 원본 위치 고정
+            // X: 자유이동이면 손가락 추적, 아니면 원본 위치 고정 (+ 가로모드 중앙 끌림)
             params.x = if (dragFreeMove) {
                 (screenX - scaledSize / 2f).toInt()
             } else {
-                (dragIconCenterOffsetX - scaledSize / 2f).toInt()
+                val targetX = calcTaskbarDragX(screenY)
+                (targetX - scaledSize / 2f).toInt()
             }
             params.y = (screenY - scaledSize / 2f).toInt()
             windowManager.updateViewLayout(container, params)
@@ -2190,6 +2191,28 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         } catch (e: Exception) {
             // 레이아웃 업데이트 실패 무시
         }
+    }
+
+    /**
+     * 태스크바 드래그 시 X 좌표 계산
+     * 가로모드: 위로 올라갈수록 화면 중앙 쪽으로 X 이동 (하단 1/3 지점 도달 시 완전 중앙)
+     * 세로모드: 원본 X 고정
+     */
+    private fun calcTaskbarDragX(screenY: Float): Float {
+        val bounds = windowManager.maximumWindowMetrics.bounds
+        val sw = bounds.width()
+        val sh = bounds.height()
+        val isLandscape = sw > sh
+        if (!isLandscape) return dragIconCenterOffsetX
+
+        val screenCenterX = sw / 2f
+        // 화면 하단(네비바)에서 하단 1/3 지점까지의 progress 계산
+        val thresholdY = sh * 2f / 3f  // 하단에서 1/3 지점 (= 상단에서 2/3)
+        val startY = sh.toFloat()  // 하단 (네비바 근처)
+        val progress = ((startY - screenY) / (startY - thresholdY)).coerceIn(0f, 1f)
+
+        // 원본 X → 화면 중앙 X로 lerp
+        return dragIconCenterOffsetX + (screenCenterX - dragIconCenterOffsetX) * progress
     }
 
     /**

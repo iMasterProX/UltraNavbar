@@ -14,6 +14,7 @@
         android:layout_marginBottom="8dp"
         android:background="?attr/selectableItemBackground" />
 
+    <!-- 설정 열기: 바로가기로 대체 가능하므로 숨김 처리 -->
     <RadioButton
         android:id="@+id/radioSettings"
         android:layout_width="match_parent"
@@ -21,7 +22,8 @@
         android:text="@string/action_open_settings"
         android:padding="16dp"
         android:layout_marginBottom="8dp"
-        android:background="?attr/selectableItemBackground" />
+        android:background="?attr/selectableItemBackground"
+        android:visibility="gone" />
 
     <RadioButton
         android:id="@+id/radioShortcut"

@@ -18,11 +18,13 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
+import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.settings.SettingsManager
 import kotlin.math.abs
@@ -59,6 +61,8 @@ class NavbarAppsPanel(
 
     private var panelView: View? = null
     private var backdropView: View? = null
+    private var closingPanelView: View? = null   // 닫힘 애니메이션 중인 이전 패널
+    private var closingBackdropView: View? = null // 닫힘 애니메이션 중인 이전 배경
     private var isVisible = false
     private var isDragActive = false
 
@@ -66,6 +70,15 @@ class NavbarAppsPanel(
         if (isVisible) {
             hide()
             return
+        }
+
+        // 닫힘 애니메이션 중인 이전 패널 즉시 제거
+        cancelClosingAnimation()
+
+        // 혹시 남아있는 이전 패널 즉시 정리
+        panelView?.let {
+            try { windowManager.removeView(it) } catch (_: Exception) {}
+            panelView = null
         }
 
         val settings = SettingsManager.getInstance(context)
@@ -114,19 +127,85 @@ class NavbarAppsPanel(
 
     fun hide() {
         if (!isVisible) return
-
-        panelView?.let {
-            try { windowManager.removeView(it) } catch (_: Exception) {}
-        }
-        panelView = null
-
-        backdropView?.let {
-            try { windowManager.removeView(it) } catch (_: Exception) {}
-        }
-        backdropView = null
-
         isVisible = false
         isDragActive = false
+
+        // 이전 닫힘 애니메이션이 진행 중이면 즉시 완료
+        cancelClosingAnimation()
+
+        val panel = panelView
+        val backdrop = backdropView
+        panelView = null
+        backdropView = null
+
+        // 패널 닫기 애니메이션: 아래로 슬라이드 + 페이드아웃 (backdrop도 함께 페이드아웃)
+        if (panel != null && panel.alpha > 0f && panel.isAttachedToWindow) {
+            panel.animate().cancel()
+
+            // 닫힘 애니메이션 중인 뷰를 추적 (show()에서 정리 가능하도록)
+            closingPanelView = panel
+            closingBackdropView = backdrop
+
+            // backdrop 터치 이벤트 해제 (닫힘 중 재호출 방지)
+            backdrop?.setOnTouchListener(null)
+
+            val animators = mutableListOf<android.animation.Animator>(
+                ObjectAnimator.ofFloat(panel, View.ALPHA, panel.alpha, 0f),
+                ObjectAnimator.ofFloat(panel, View.TRANSLATION_Y, panel.translationY, context.dpToPx(30).toFloat())
+            )
+            // backdrop도 함께 페이드아웃 (즉시 제거하면 깜박임 발생)
+            if (backdrop != null && backdrop.isAttachedToWindow) {
+                animators.add(ObjectAnimator.ofFloat(backdrop, View.ALPHA, backdrop.alpha, 0f))
+            }
+
+            AnimatorSet().apply {
+                playTogether(animators)
+                duration = 150
+                interpolator = AccelerateInterpolator()
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        removeViewSafely(panel)
+                        removeViewSafely(backdrop)
+                        // 추적 해제
+                        if (closingPanelView === panel) closingPanelView = null
+                        if (closingBackdropView === backdrop) closingBackdropView = null
+                    }
+                })
+                start()
+            }
+        } else {
+            // alpha=0이거나 attach 안 된 경우 즉시 제거
+            removeViewSafely(panel)
+            removeViewSafely(backdrop)
+        }
+    }
+
+    /**
+     * 닫힘 애니메이션 중인 뷰를 즉시 제거
+     */
+    private fun cancelClosingAnimation() {
+        closingPanelView?.let {
+            it.animate().cancel()
+            removeViewSafely(it)
+            closingPanelView = null
+        }
+        closingBackdropView?.let {
+            it.animate().cancel()
+            removeViewSafely(it)
+            closingBackdropView = null
+        }
+    }
+
+    /**
+     * WindowManager에서 안전하게 뷰 제거
+     */
+    private fun removeViewSafely(view: View?) {
+        view ?: return
+        try {
+            if (view.isAttachedToWindow) {
+                windowManager.removeView(view)
+            }
+        } catch (_: Exception) {}
     }
 
     /**
@@ -382,10 +461,13 @@ class NavbarAppsPanel(
 
                     if (isDragging) {
                         val distance = sqrt(deltaX * deltaX + deltaY * deltaY)
-                        val progress = (distance / splitTriggerPx).coerceAtLeast(0f)
-                        val scale = 1f + (progress.coerceAtMost(1f) * 0.3f)
+                        val rawProgress = (distance / splitTriggerPx).coerceAtLeast(0f)
+                        // 아이콘 크기: distance 기반 (zone과 무관하게 부드럽게)
+                        val scale = 1f + (rawProgress.coerceAtMost(1f) * 0.3f)
                         listener.onDragIconUpdate(event.rawX, event.rawY, scale)
-                        listener.onDragStateChanged(true, progress)
+                        // 오버레이: zone 밖이면 서서히 사라짐
+                        val zoneFactor = splitZoneFactor(event.rawX, event.rawY)
+                        listener.onDragStateChanged(true, rawProgress * zoneFactor)
                     }
                     true
                 }
@@ -401,7 +483,11 @@ class NavbarAppsPanel(
                         listener.onDragEnd()
 
                         if (distance > splitTriggerPx) {
-                            listener.onAppDraggedToSplit(packageName)
+                            if (splitZoneFactor(event.rawX, event.rawY) > 0.5f) {
+                                listener.onAppDraggedToSplit(packageName)
+                            } else {
+                                Toast.makeText(context, R.string.split_screen_zone_cancelled, Toast.LENGTH_SHORT).show()
+                            }
                         }
                         // 드래그 종료 → 패널 실제 제거
                         finishDrag()
@@ -481,6 +567,27 @@ class NavbarAppsPanel(
         })
 
         return cell
+    }
+
+    /**
+     * 손가락 위치의 분할화면 영역 진입도 (0.0 ~ 1.0)
+     * 가로: 오른쪽 절반이 split zone, 경계 근처에서 부드럽게 전환
+     * 세로: 아래쪽 절반이 split zone
+     * 0.0 = 완전히 영역 밖, 1.0 = 완전히 영역 안
+     */
+    private fun splitZoneFactor(rawX: Float, rawY: Float): Float {
+        val bounds = windowManager.maximumWindowMetrics.bounds
+        val screenWidth = bounds.width()
+        val screenHeight = bounds.height()
+        val isLandscape = screenWidth > screenHeight
+
+        // 경계 전환 구간: 화면 크기의 10% (부드러운 전환용)
+        val transitionPx = if (isLandscape) screenWidth * 0.1f else screenHeight * 0.1f
+        val midPoint = if (isLandscape) screenWidth / 2f else screenHeight / 2f
+        val pos = if (isLandscape) rawX else rawY
+
+        // midPoint 기준: 이전 transitionPx/2 ~ 이후 transitionPx/2 구간에서 0→1 전환
+        return ((pos - midPoint + transitionPx / 2f) / transitionPx).coerceIn(0f, 1f)
     }
 
     private fun resolveThemeColor(attrResId: Int, fallback: Int): Int {

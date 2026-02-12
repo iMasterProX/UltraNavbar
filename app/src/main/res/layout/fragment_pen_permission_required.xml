@@ -31,7 +31,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/pen_settings_permission_guide"
+            android:text="@string/setup_adb_guide"
             android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
             android:layout_marginBottom="24dp" />
 

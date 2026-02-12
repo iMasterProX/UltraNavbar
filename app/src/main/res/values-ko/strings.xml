@@ -21,7 +21,7 @@
     <string name="navbar_enable_summary">커스텀 네비게이션 바 오버레이 표시</string>
 
     <string name="nav_buttons_swap_title">버튼 배치 반전</string>
-    <string name="nav_buttons_swap_summary">네비게이션 버튼(뒤로/홈/최근앱)을 오른쪽으로, 추가 버튼(알림/캡처)을 왼쪽으로 이동</string>
+    <string name="nav_buttons_swap_summary">네비게이션 버튼(뒤로/홈/최근앱)을 오른쪽으로, 추가 버튼(앱 즐겨찾기/캡처/알림)을 왼쪽으로 이동</string>
 
     <string name="recent_apps_taskbar_title">최근 앱 작업 표시줄</string>
     <string name="recent_apps_taskbar_summary">네비게이션 바 중앙에 최근 앱 아이콘을 표시합니다. 아이콘을 탭하면 앱을 전환할 수 있습니다.\n\n앱이 한 번 이상 사용되어야 목록에 표시됩니다.</string>
@@ -128,19 +128,20 @@
     <string name="nav_menu_app_settings">앱 설정</string>
     <string name="nav_menu_experimental">실험적 기능</string>
 
-    <!-- NavbarApps -->
-    <string name="navbar_apps_button">앱스</string>
+    <!-- NavbarApps (앱 즐겨찾기) -->
+    <string name="navbar_apps_button">즐겨찾기</string>
     <string name="navbar_apps_add">앱 추가</string>
     <string name="navbar_apps_empty">+ 버튼을 탭하여 앱을 추가하세요</string>
     <string name="navbar_apps_remove">제거</string>
-    <string name="navbar_apps_remove_confirm">네비바앱스에서 %s을(를) 제거하시겠습니까?</string>
+    <string name="navbar_apps_remove_confirm">앱 즐겨찾기에서 %s을(를) 제거하시겠습니까?</string>
     <string name="navbar_apps_max_limit">최대 %d개의 앱만 추가할 수 있습니다</string>
+    <string name="split_screen_zone_cancelled">이 영역에는 분할화면을 놓을 수 없습니다</string>
 
     <!-- Experimental Features -->
     <string name="experimental_features_title">⚠️ 실험적 기능</string>
     <string name="experimental_features_warning">이 기능들은 실험적이며 정상적으로 동작하지 않을 수 있습니다. 예기치 않은 동작, 충돌 등의 문제가 발생할 수 있으니 주의해서 사용하세요.</string>
-    <string name="split_screen_taskbar_title">작업 표시줄 및 네비바앱스 분할화면 지원</string>
-    <string name="split_screen_taskbar_summary">작업 표시줄이나 네비바앱스 패널에서 앱 아이콘을 드래그하여 분할 화면으로 추가합니다 (가로는 오른쪽, 세로는 아래).</string>
+    <string name="split_screen_taskbar_title">작업 표시줄 및 앱 즐겨찾기 분할화면 지원</string>
+    <string name="split_screen_taskbar_summary">작업 표시줄이나 앱 즐겨찾기 패널에서 앱 아이콘을 드래그하여 분할 화면으로 추가합니다 (가로는 오른쪽, 세로는 아래).</string>
     <string name="touch_point_experimental_title">자동 터치 (좌표 기반)</string>
     <string name="touch_point_experimental_summary">이 기능은 사용자가 지정한 좌표를 자동 터치하려 하나, 와콤 펜 커스텀의 한계로 사용 방식이 UI 요소 자동 터치와 다릅니다. 기능을 사용하려면 화면 가까이에서 기능이 할당된 펜 버튼을 누르고, 그 상태에서 즉시 펜을 화면에서 잠시 떨어뜨려야 기능이 작동합니다.</string>
     <string name="hardware_info_desc">기기 CPU, 디스플레이, 센서 및 입력 장치 정보를 확인합니다.</string>
