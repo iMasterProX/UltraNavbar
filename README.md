@@ -157,7 +157,6 @@ LG UltraTab Extension is a comprehensive extension app for LG UltraTab devices. 
 #### NavbarApps
 - Favorite apps panel on the navigation bar (up to 10 apps, 3-column grid)
 - Drag app icons upward to launch split-screen
-- Dark mode support
 
 #### Split-Screen Launcher (Experimental)
 - Slide up an app in the custom recents taskbar to launch split‑screen
