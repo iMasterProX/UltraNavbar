@@ -16,11 +16,11 @@ class AppListAdapter(
 ) : RecyclerView.Adapter<AppListAdapter.ViewHolder>() {
 
     private var apps: List<AppListActivity.AppInfo> = emptyList()
-    private var selectedPackages: Set<String> = emptySet()
+    private var selectedPackages: MutableSet<String> = mutableSetOf()
 
     fun submitList(apps: List<AppListActivity.AppInfo>, selected: Set<String>) {
         this.apps = apps
-        this.selectedPackages = selected.toSet()
+        this.selectedPackages = selected.toMutableSet()
         notifyDataSetChanged()
     }
 
@@ -65,6 +65,11 @@ class AppListAdapter(
                     checkBox.toggle()
                 }
                 checkBox.setOnCheckedChangeListener { _, isChecked ->
+                    if (isChecked) {
+                        selectedPackages.add(app.packageName)
+                    } else {
+                        selectedPackages.remove(app.packageName)
+                    }
                     onItemChecked(app.packageName, isChecked)
                 }
             }

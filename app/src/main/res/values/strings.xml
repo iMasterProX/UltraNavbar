@@ -21,13 +21,14 @@
     <string name="navbar_enable_summary">Show custom navigation bar overlay</string>
 
     <string name="nav_buttons_swap_title">Swap Button Layout</string>
-    <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (App Favorites/Screenshot/Notifications) to left side</string>
+    <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (Screenshot/App Favorites/Notification Panel) to left side</string>
 
     <string name="recent_apps_taskbar_title">Recent Apps Taskbar</string>
     <string name="recent_apps_taskbar_summary">Show recent app icons in the center of the navigation bar. Tap an icon to switch apps.\n\nApps must be used at least once before they appear in the list.</string>
     <string name="split_screen_not_supported">%1$s does not support split screen</string>
     <string name="split_screen_not_supported_generic">This app does not support split screen.</string>
     <string name="split_screen_failed_generic">Unable to start split screen.</string>
+    <string name="split_screen_io_system_error">An I/O system error occurred while attempting split screen. Please reboot your device to resolve the issue.</string>
 
     <string name="disabled_apps_settings">Disabled apps</string>
     <string name="disabled_apps_summary">Select apps where the custom navigation bar will be completely disabled. In these apps, only the default navigation bar will be used.</string>
@@ -414,7 +415,7 @@
 
     <!-- Auto Touch Guide -->
     <string name="touch_point_guide_title">Auto Touch Setup Guide</string>
-    <string name="touch_point_guide_message_simple">How to set up auto touch:\n\n1. A floating button will appear\n2. Navigate to the app where you want to use auto touch\n3. Tap the floating button\n4. Tap the location you want to assign\n5. Tap \"Activate Auto Touch\" to confirm\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nNote:\n• Auto touch only works when the pen is close to the screen</string>
+    <string name="touch_point_guide_message_simple">How to set up auto touch:\n\n1. A floating button will appear\n2. Navigate to the app where you want to use auto touch\n3. Tap the floating button\n4. Tap the location you want to assign\n5. Tap \"Activate Auto Touch\" to confirm\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nNote:\n• Auto touch only works when the pen is close to the screen\n• Long-press the assigned pen button for about 2 seconds to immediately open setup again so you can select another UI element or location</string>
     <string name="touch_point_guide_start">Start Setup</string>
     <string name="touch_point_confirm">Activate Auto Touch at This Location</string>
 
@@ -425,7 +426,7 @@
     <string name="pen_button_action_node_click">Auto Touch (UI Element)</string>
     <string name="node_selection_title">UI Element Selection</string>
     <string name="node_selection_guide_title">UI Element Selection Guide</string>
-    <string name="node_selection_guide_message">This feature clicks a specific UI element when the pen button is pressed.\n\n• Works regardless of screen orientation\n• Target app must be open for it to work\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nTap \'Start Setup\' to select a UI element.</string>
+    <string name="node_selection_guide_message">This feature clicks a specific UI element when the pen button is pressed.\n\n• Works regardless of screen orientation\n• Target app must be open for it to work\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nNote:\n• Long-press the assigned pen button for about 2 seconds to immediately open setup again so you can select another UI element\n\nTap \'Start Setup\' to select a UI element.</string>
     <string name="node_selection_guide_start">Start Setup</string>
     <string name="node_selection_instruction">Open the target app and tap on the UI element you want to click.\n\nTap the floating button when ready.</string>
     <string name="node_selection_overlay_hint">Tap the element you want to select</string>

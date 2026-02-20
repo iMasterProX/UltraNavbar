@@ -33,6 +33,7 @@ class NodeSelectionActivity : Activity() {
 
     companion object {
         const val EXTRA_BUTTON = "button" // "A" or "B"
+        const val EXTRA_DIRECT_START = "direct_start"
         private const val TAG = "NodeSelection"
     }
 
@@ -58,6 +59,7 @@ class NodeSelectionActivity : Activity() {
 
         settings = SettingsManager.getInstance(this)
         buttonName = intent.getStringExtra(EXTRA_BUTTON) ?: "A"
+        val directStart = intent.getBooleanExtra(EXTRA_DIRECT_START, false)
 
         // 접근성 서비스 확인
         if (!NavBarAccessibilityService.isRunning()) {
@@ -66,8 +68,13 @@ class NodeSelectionActivity : Activity() {
             return
         }
 
-        // 1단계: 플로팅 버튼 표시
-        showFloatingButton()
+        if (directStart) {
+            // 재설정 직진입: 바로 요소 선택 단계
+            showNodeSelectionOverlay()
+        } else {
+            // 1단계: 플로팅 버튼 표시
+            showFloatingButton()
+        }
 
         // Activity는 투명하게 유지하고 백그라운드로
         moveTaskToBack(true)

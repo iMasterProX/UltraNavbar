@@ -1,7 +1,5 @@
 package com.minsoo.ultranavbar.core
 
-import android.animation.AnimatorSet
-import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
@@ -18,8 +16,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
-import android.view.animation.AccelerateInterpolator
-import android.view.animation.DecelerateInterpolator
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -61,24 +57,23 @@ class NavbarAppsPanel(
 
     private var panelView: View? = null
     private var backdropView: View? = null
-    private var closingPanelView: View? = null   // 닫힘 애니메이션 중인 이전 패널
-    private var closingBackdropView: View? = null // 닫힘 애니메이션 중인 이전 배경
     private var isVisible = false
     private var isDragActive = false
 
     fun show(anchorX: Int, anchorY: Int, isSwapped: Boolean = false) {
         if (isVisible) {
-            hide()
+            hide(reason = "show_while_visible")
             return
         }
-
-        // 닫힘 애니메이션 중인 이전 패널 즉시 제거
-        cancelClosingAnimation()
 
         // 혹시 남아있는 이전 패널 즉시 정리
         panelView?.let {
             try { windowManager.removeView(it) } catch (_: Exception) {}
             panelView = null
+        }
+        backdropView?.let {
+            try { windowManager.removeView(it) } catch (_: Exception) {}
+            backdropView = null
         }
 
         val settings = SettingsManager.getInstance(context)
@@ -107,93 +102,30 @@ class NavbarAppsPanel(
         try {
             windowManager.addView(panel, params)
             isVisible = true
-
-            // 열기 애니메이션: 아래에서 위로 슬라이드 + 페이드인
-            panel.alpha = 0f
-            panel.translationY = context.dpToPx(30).toFloat()
-            AnimatorSet().apply {
-                playTogether(
-                    ObjectAnimator.ofFloat(panel, View.ALPHA, 0f, 1f),
-                    ObjectAnimator.ofFloat(panel, View.TRANSLATION_Y, context.dpToPx(30).toFloat(), 0f)
-                )
-                duration = 200
-                interpolator = DecelerateInterpolator()
-                start()
-            }
+            Log.d(TAG, "show() opened panel")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to show panel", e)
         }
     }
 
-    fun hide() {
-        if (!isVisible) return
+    fun hide(immediate: Boolean = false, reason: String = "unspecified") {
+        if (!isVisible) {
+            Log.d(TAG, "hide() ignored: already hidden (reason=$reason)")
+            return
+        }
+
+        Log.d(TAG, "hide() start (immediate=$immediate, reason=$reason)")
         isVisible = false
         isDragActive = false
-
-        // 이전 닫힘 애니메이션이 진행 중이면 즉시 완료
-        cancelClosingAnimation()
 
         val panel = panelView
         val backdrop = backdropView
         panelView = null
         backdropView = null
 
-        // 패널 닫기 애니메이션: 아래로 슬라이드 + 페이드아웃 (backdrop도 함께 페이드아웃)
-        if (panel != null && panel.alpha > 0f && panel.isAttachedToWindow) {
-            panel.animate().cancel()
-
-            // 닫힘 애니메이션 중인 뷰를 추적 (show()에서 정리 가능하도록)
-            closingPanelView = panel
-            closingBackdropView = backdrop
-
-            // backdrop 터치 이벤트 해제 (닫힘 중 재호출 방지)
-            backdrop?.setOnTouchListener(null)
-
-            val animators = mutableListOf<android.animation.Animator>(
-                ObjectAnimator.ofFloat(panel, View.ALPHA, panel.alpha, 0f),
-                ObjectAnimator.ofFloat(panel, View.TRANSLATION_Y, panel.translationY, context.dpToPx(30).toFloat())
-            )
-            // backdrop도 함께 페이드아웃 (즉시 제거하면 깜박임 발생)
-            if (backdrop != null && backdrop.isAttachedToWindow) {
-                animators.add(ObjectAnimator.ofFloat(backdrop, View.ALPHA, backdrop.alpha, 0f))
-            }
-
-            AnimatorSet().apply {
-                playTogether(animators)
-                duration = 150
-                interpolator = AccelerateInterpolator()
-                addListener(object : android.animation.AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: android.animation.Animator) {
-                        removeViewSafely(panel)
-                        removeViewSafely(backdrop)
-                        // 추적 해제
-                        if (closingPanelView === panel) closingPanelView = null
-                        if (closingBackdropView === backdrop) closingBackdropView = null
-                    }
-                })
-                start()
-            }
-        } else {
-            // alpha=0이거나 attach 안 된 경우 즉시 제거
-            removeViewSafely(panel)
-            removeViewSafely(backdrop)
-        }
-    }
-
-    /**
-     * 닫힘 애니메이션 중인 뷰를 즉시 제거
-     */
-    private fun cancelClosingAnimation() {
-        closingPanelView?.let {
-            it.animate().cancel()
-            removeViewSafely(it)
-            closingPanelView = null
-        }
-        closingBackdropView?.let {
-            it.animate().cancel()
-            removeViewSafely(it)
-            closingBackdropView = null
-        }
+        removeViewSafely(panel)
+        removeViewSafely(backdrop)
+        Log.d(TAG, "hide() complete (reason=$reason)")
     }
 
     /**
@@ -223,7 +155,7 @@ class NavbarAppsPanel(
     fun finishDrag() {
         if (isDragActive) {
             isDragActive = false
-            hide()
+            hide(reason = "finish_drag")
         }
     }
 
@@ -234,10 +166,17 @@ class NavbarAppsPanel(
         val backdrop = View(context).apply {
             setBackgroundColor(Color.TRANSPARENT)
             setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_DOWN && !isDragActive) {
-                    hide()
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> true
+                    MotionEvent.ACTION_UP -> {
+                        if (!isDragActive) {
+                            hide(reason = "backdrop_tap")
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_CANCEL -> true
+                    else -> true
                 }
-                true
             }
         }
         backdropView = backdrop
@@ -493,7 +432,7 @@ class NavbarAppsPanel(
                         finishDrag()
                     } else if (!hasMoved && !longPressTriggered) {
                         listener.onAppTapped(packageName)
-                        hide()
+                        hide(reason = "app_tap")
                     }
                     true
                 }
@@ -551,7 +490,7 @@ class NavbarAppsPanel(
         }.apply {
             layoutParams = LinearLayout.LayoutParams(iconSizePx, iconSizePx)
             setOnClickListener {
-                hide()
+                hide(reason = "add_button")
                 listener.onAddAppRequested()
             }
         }

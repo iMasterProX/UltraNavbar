@@ -20,6 +20,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -43,6 +44,8 @@ object SplitScreenHelper {
     private const val LAUNCHER_CACHE_TTL_MS = 30000L
     private const val SPLIT_STICKY_MS = 5000L
     private const val SPLIT_PANE_MIN_AREA_RATIO = 0.15f
+    private const val SELECTION_FALLBACK_FAILURE_THRESHOLD = 2
+    private const val SPLIT_TOAST_COOLDOWN_MS = 1200L
     private val handler = Handler(Looper.getMainLooper())
     private val launchTokenCounter = AtomicInteger(0)
     @Volatile
@@ -81,6 +84,8 @@ object SplitScreenHelper {
     }
     @Volatile
     private var hiddenApiUnblocked: Boolean = false
+    @Volatile
+    private var lastToastAt: Long = 0L
 
     enum class SplitLaunchFailure {
         NONE,
@@ -91,6 +96,7 @@ object SplitScreenHelper {
         SPLIT_NOT_READY,
         LAUNCH_FAILED,
         SPLIT_FAILED,
+        IO_SYSTEM_ERROR,
         EXCEPTION
     }
 
@@ -198,6 +204,56 @@ object SplitScreenHelper {
 
     private fun resolveFocusDelayMs(targetWarm: Boolean): Long {
         return if (targetWarm) SPLIT_FOCUS_DELAY_MS else SPLIT_FOCUS_DELAY_MS + SPLIT_FOCUS_COLD_EXTRA_MS
+    }
+
+    private fun isIoSystemError(throwable: Throwable?): Boolean {
+        var current = throwable
+        while (current != null) {
+            if (current is IOException) return true
+            val message = current.message.orEmpty()
+            if (message.contains("i/o", ignoreCase = true) ||
+                message.contains("io error", ignoreCase = true) ||
+                message.contains("failed to open apk", ignoreCase = true) ||
+                message.contains("asset path", ignoreCase = true)
+            ) {
+                return true
+            }
+            current = current.cause
+        }
+        return false
+    }
+
+    private fun markFailureFromException(defaultFailure: SplitLaunchFailure, throwable: Throwable) {
+        lastLaunchFailure = if (isIoSystemError(throwable)) {
+            SplitLaunchFailure.IO_SYSTEM_ERROR
+        } else {
+            defaultFailure
+        }
+    }
+
+    private fun markLaunchFailedIfUnset() {
+        if (lastLaunchFailure == SplitLaunchFailure.NONE) {
+            lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
+        }
+    }
+
+    private fun showFailureToast(context: Context, messageResId: Int, longDuration: Boolean = false) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastToastAt < SPLIT_TOAST_COOLDOWN_MS) {
+            return
+        }
+        lastToastAt = now
+        handler.post {
+            try {
+                Toast.makeText(
+                    context.applicationContext,
+                    context.getString(messageResId),
+                    if (longDuration) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to show split toast", e)
+            }
+        }
     }
 
     /**
@@ -332,8 +388,7 @@ object SplitScreenHelper {
                         return true
                     }
                     if (options == null) {
-                        lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
-                        return false
+                        Log.d(TAG, "Selection failed; falling back to adjacent launch without options")
                     }
                 }
                 val launched = launchToSecondary(
@@ -347,7 +402,7 @@ object SplitScreenHelper {
                     allowOptions = false
                 )
                 if (!launched) {
-                    lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
+                    markLaunchFailedIfUnset()
                 }
                 return launched
             }
@@ -438,7 +493,7 @@ object SplitScreenHelper {
             true
         } catch (e: Exception) {
             Log.e(TAG, "Split screen failed", e)
-            lastLaunchFailure = SplitLaunchFailure.EXCEPTION
+            markFailureFromException(SplitLaunchFailure.EXCEPTION, e)
             false
         }
     }
@@ -453,8 +508,13 @@ object SplitScreenHelper {
             return
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
-        Log.d(TAG, "Launched normally: $targetPackage")
+        try {
+            context.startActivity(intent)
+            Log.d(TAG, "Launched normally: $targetPackage")
+        } catch (e: Exception) {
+            markFailureFromException(SplitLaunchFailure.LAUNCH_FAILED, e)
+            Log.e(TAG, "Failed to launch normally: $targetPackage", e)
+        }
     }
 
     private fun waitForPackageVisible(
@@ -620,6 +680,7 @@ object SplitScreenHelper {
         val startAt = SystemClock.elapsedRealtime()
         val launched = booleanArrayOf(false)
         val lastSelectionAttemptAt = longArrayOf(0L)
+        val selectionFailures = intArrayOf(0)
         val poll = object : Runnable {
             override fun run() {
                 if (launched[0]) return
@@ -665,6 +726,40 @@ object SplitScreenHelper {
                             scheduleSplitRetryIfNeeded(context, service, targetPackage, maxWaitMs, launchToken, attempt)
                             return
                         }
+                        selectionFailures[0]++
+                    }
+                    if (options == null &&
+                        splitActive &&
+                        !homeReady &&
+                        selectionFailures[0] >= SELECTION_FALLBACK_FAILURE_THRESHOLD
+                    ) {
+                        launched[0] = true
+                        Log.d(
+                            TAG,
+                            "Selection click fallback after ${selectionFailures[0]} failures; launching adjacent without options"
+                        )
+                        val launchedOk = launchToSecondary(
+                            context,
+                            service,
+                            targetPackage,
+                            focusDelayMs,
+                            launchToken,
+                            targetWarm,
+                            optionsOverride = null,
+                            allowOptions = false
+                        )
+                        if (!launchedOk) {
+                            markLaunchFailedIfUnset()
+                            Log.w(TAG, "Fallback adjacent launch failed after selection failures")
+                            restorePrimaryIfPossible(context, targetPackage)
+                            showSplitFailureToast(context)
+                            return
+                        }
+                        setSplitScreenActive(true)
+                        lastSplitDetectedAt = SystemClock.elapsedRealtime()
+                        markSplitScreenUsed()
+                        scheduleSplitRetryIfNeeded(context, service, targetPackage, maxWaitMs, launchToken, attempt)
+                        return
                     }
                     if (options == null) {
                         if (elapsed >= maxWaitMs) {
@@ -701,7 +796,7 @@ object SplitScreenHelper {
                         allowOptions = false
                     )
                     if (!launchedOk) {
-                        lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
+                        markLaunchFailedIfUnset()
                         Log.w(TAG, "Failed to launch adjacent while split ready")
                         restorePrimaryIfPossible(context, targetPackage)
                         showSplitFailureToast(context)
@@ -756,7 +851,7 @@ object SplitScreenHelper {
                     return@postDelayed
                 }
                 if (!launchAdjacent(context, targetPackage, preferSecondary = true, optionsOverride = options)) {
-                    lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
+                    markLaunchFailedIfUnset()
                     Log.w(TAG, "Failed to launch adjacent with secondary options")
                 }
             }, maxOf(0L, delayMs))
@@ -878,7 +973,7 @@ object SplitScreenHelper {
                 return@postDelayed
             }
             if (!launchAdjacent(context, targetPackage, preferSecondary = true)) {
-                lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
+                markLaunchFailedIfUnset()
                 Log.w(TAG, "Failed to launch adjacent after focusing primary pane")
             }
         }, maxOf(0L, delayMs))
@@ -901,7 +996,7 @@ object SplitScreenHelper {
                 return@postDelayed
             }
             if (!launchAdjacent(context, targetPackage, preferSecondary = true)) {
-                lastLaunchFailure = SplitLaunchFailure.LAUNCH_FAILED
+                markLaunchFailedIfUnset()
                 Log.w(TAG, "Failed to launch adjacent after focusing secondary pane")
             }
         }, SPLIT_FOCUS_DELAY_MS)
@@ -1057,13 +1152,7 @@ object SplitScreenHelper {
     }
 
     private fun showSplitNotSupportedToast(context: Context) {
-        handler.post {
-            Toast.makeText(
-                context,
-                context.getString(R.string.split_screen_not_supported_generic),
-                Toast.LENGTH_SHORT
-            ).show()
-        }
+        showFailureToast(context, R.string.split_screen_not_supported_generic)
     }
 
     private fun showSplitFailureToast(context: Context) {
@@ -1075,17 +1164,14 @@ object SplitScreenHelper {
             SplitLaunchFailure.CURRENT_UNSUPPORTED -> {
                 showSplitNotSupportedToast(context)
             }
+            SplitLaunchFailure.IO_SYSTEM_ERROR -> {
+                showFailureToast(context, R.string.split_screen_io_system_error, longDuration = true)
+            }
             SplitLaunchFailure.NONE -> {
                 // 실패 원인 없음 — 토스트 불필요
             }
             else -> {
-                handler.post {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.split_screen_failed_generic),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+                showFailureToast(context, R.string.split_screen_failed_generic)
             }
         }
     }
@@ -1118,6 +1204,7 @@ object SplitScreenHelper {
             Log.d(TAG, "Launched adjacent: $packageName")
             return true
         } catch (e: Exception) {
+            markFailureFromException(SplitLaunchFailure.LAUNCH_FAILED, e)
             Log.e(TAG, "Failed to launch adjacent: $packageName", e)
             return false
         }
@@ -1289,6 +1376,9 @@ object SplitScreenHelper {
             }
         } catch (e: Exception) {
             secondaryLaunchOptionsAvailable = false
+            if (isIoSystemError(e)) {
+                lastLaunchFailure = SplitLaunchFailure.IO_SYSTEM_ERROR
+            }
             Log.w(TAG, "Secondary launch options unavailable", e)
             null
         }

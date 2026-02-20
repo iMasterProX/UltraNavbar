@@ -40,6 +40,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         private const val HOME_ENTRY_STABILIZE_MS = 400L  // 홈 진입 후 안정화 시간
         private const val HOME_EXIT_STABILIZE_MS = 500L   // 홈 이탈 후 안정화 시간 (windows 소스의 잘못된 재진입 방지)
         private const val ORIENTATION_CHANGE_STABILIZE_MS = 500L  // 화면 회전 후 안정화 시간
+        private const val DISABLED_HOME_RECOVERY_WINDOW_MS = 5000L
         private const val SPLIT_FOREGROUND_STALE_MS = 2500L
         private const val EMPTY_SPLIT_EXIT_MS = 5000L
 
@@ -90,6 +91,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var lastNonLauncherClassName: String = ""
     private var lastNonLauncherClassAt: Long = 0
     private var emptySplitSince: Long = 0
+    private var lastDisabledAppHideAt: Long = 0
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
@@ -534,6 +536,16 @@ class NavBarAccessibilityService : AccessibilityService() {
             val isActivity = className.startsWith(packageName)
             if (isActivity) {
                 updateHomeScreenState(false, "self_app")
+
+                // self app에서도 currentPackage를 동기화해야
+                // 최근 앱 taskbar 노출 조건이 정확히 계산된다.
+                val packageChanged = updateForegroundPackage(packageName, "self_app", className)
+                if (packageChanged) {
+                    handler.post {
+                        checkFullscreenState()
+                        updateOverlayVisibility()
+                    }
+                }
             }
             return
         }
@@ -723,6 +735,19 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Disabled app transition: wasDisabled=$wasDisabled, isDisabled=$isDisabled")
         }
 
+        val disabledHideElapsed = now - lastDisabledAppHideAt
+        val shouldRecoverHomeFromDisabled =
+            !isDisabled &&
+            !isRecentsVisible &&
+            !isOnHomeScreen &&
+            windowAnalyzer.isLauncherPackage(packageName) &&
+            disabledHideElapsed in 1..DISABLED_HOME_RECOVERY_WINDOW_MS
+        if (shouldRecoverHomeFromDisabled) {
+            Log.d(TAG, "Disabled-home recovery: forcing home state (elapsed=${disabledHideElapsed}ms)")
+            updateHomeScreenState(true, "disabled_recovery")
+            lastDisabledAppHideAt = 0L
+        }
+
         overlay?.setForegroundPackage(packageName)
         return true
     }
@@ -817,6 +842,11 @@ class NavBarAccessibilityService : AccessibilityService() {
     fun isRecentsVisibleForSplit(): Boolean = isRecentsVisible
 
     fun isOnHomeScreenForSplit(): Boolean = isOnHomeScreen
+
+    fun isLauncherPackageForOverlay(packageName: String): Boolean {
+        if (packageName.isBlank()) return false
+        return windowAnalyzer.isLauncherPackage(packageName)
+    }
 
     fun isLauncherTopForSplit(): Boolean {
         val windowList = windows.toList()
@@ -1119,6 +1149,16 @@ class NavBarAccessibilityService : AccessibilityService() {
         if (packageName.isNullOrEmpty() || packageName == this.packageName) {
             if (packageName == this.packageName) {
                 updateHomeScreenState(false, "self_app_windows")
+
+                // root의 클래스명이 실제 액티비티일 때만 self foreground를 반영
+                // (오버레이 뷰 class는 제외)
+                val rootClass = root?.className?.toString() ?: ""
+                if (rootClass.startsWith(this.packageName)) {
+                    val packageChanged = updateForegroundPackage(this.packageName, "self_app_windows", rootClass)
+                    if (packageChanged) {
+                        updateOverlayVisibility()
+                    }
+                }
             }
             return
         }
@@ -1235,6 +1275,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         // 1. 비활성화된 앱 체크 - 오버레이를 완전히 숨김 (핫스팟 없음, 재호출 불가)
         if (currentPackage.isNotEmpty() && settings.isAppDisabled(currentPackage)) {
+            lastDisabledAppHideAt = SystemClock.elapsedRealtime()
             Log.d(TAG, "App disabled: $currentPackage - hiding overlay completely")
             overlay?.hide(animate = false, showHotspot = false)
             // 비활성화 앱 상태에서 이벤트 누락 시 복구를 위해 지연 재확인 예약
@@ -1540,7 +1581,8 @@ class NavBarAccessibilityService : AccessibilityService() {
                 Log.d(TAG, "onKeyEvent: pen button event consumed")
                 return true
             }
-            Log.d(TAG, "onKeyEvent: pen button event not consumed, passing through")
+            Log.d(TAG, "onKeyEvent: pen button event not consumed, passing through to system")
+            return false
         }
 
         // 현재 앱에서 키보드 단축키가 비활성화되어 있으면 이벤트 전파

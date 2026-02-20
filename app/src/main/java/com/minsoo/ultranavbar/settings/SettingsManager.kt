@@ -230,7 +230,7 @@ class SettingsManager private constructor(context: Context) {
 
     // 네비게이션 버튼 좌우 반전 (Android 12L 스타일)
     var navButtonsSwapped: Boolean
-        get() = prefs.getBoolean(KEY_NAV_BUTTONS_SWAPPED, false)
+        get() = prefs.getBoolean(KEY_NAV_BUTTONS_SWAPPED, true)
         set(value) = prefs.edit().putBoolean(KEY_NAV_BUTTONS_SWAPPED, value).apply()
 
     // 최근 앱 작업 표시줄

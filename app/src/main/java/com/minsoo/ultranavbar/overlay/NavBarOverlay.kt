@@ -127,6 +127,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var isUnlockFadeRunning: Boolean = false
     private var isUnlockFadeSuppressed: Boolean = false
     private var unlockUseCustomOverride: Boolean? = null
+    private var lastNavbarAppsToggleAt: Long = 0L
 
     private var currentWindowHeight: Int = -1
 
@@ -264,6 +265,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         // (예: UltraNavbar 앱 자체에서 분할화면 시도)
                         showSplitNotSupportedToast(null)
                     }
+                    SplitScreenHelper.SplitLaunchFailure.IO_SYSTEM_ERROR -> {
+                        showSplitIoErrorToast()
+                    }
                     else -> {
                         Log.w(TAG, "Split launch failed: $failure (target=$packageName)")
                     }
@@ -279,7 +283,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         override fun onDragStart(iconView: ImageView, screenX: Float, screenY: Float) {
-            dragFreeMove = false  // 태스크바: X 고정 수직이동
+            dragFreeMove = true  // 태스크바: Android 12L 스타일 자유 드래그
             showDragOverlay(iconView, screenX, screenY)
         }
 
@@ -329,7 +333,28 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 return
             }
             val fallbackPrimary = getFallbackPrimaryPackage(packageName)
-            SplitScreenHelper.launchSplitScreen(context, packageName, launchContext, fallbackPrimary)
+            val launched = SplitScreenHelper.launchSplitScreen(context, packageName, launchContext, fallbackPrimary)
+            if (!launched) {
+                val failure = SplitScreenHelper.getLastLaunchFailure()
+                when (failure) {
+                    SplitScreenHelper.SplitLaunchFailure.TARGET_UNSUPPORTED -> {
+                        showSplitNotSupportedToast(packageName)
+                    }
+                    SplitScreenHelper.SplitLaunchFailure.CURRENT_UNSUPPORTED -> {
+                        val current = launchContext.currentPackage.takeIf { it.isNotEmpty() }
+                        showSplitNotSupportedToast(current)
+                    }
+                    SplitScreenHelper.SplitLaunchFailure.NO_PRIMARY -> {
+                        showSplitNotSupportedToast(null)
+                    }
+                    SplitScreenHelper.SplitLaunchFailure.IO_SYSTEM_ERROR -> {
+                        showSplitIoErrorToast()
+                    }
+                    else -> {
+                        Log.w(TAG, "NavbarApps split launch failed: $failure (target=$packageName)")
+                    }
+                }
+            }
         }
 
         override fun onDragStateChanged(isDragging: Boolean, progress: Float) {
@@ -370,9 +395,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     private fun toggleNavbarAppsPanel() {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastNavbarAppsToggleAt < 180L) {
+            Log.d(TAG, "NavbarApps toggle debounced")
+            return
+        }
+        lastNavbarAppsToggleAt = now
+
         val panel = navbarAppsPanel ?: return
         if (panel.isShowing()) {
-            panel.hide()
+            panel.hide(reason = "toggle_button")
         } else {
             // 분할화면 오버레이는 드래그 시작 시(onDragStateChanged)에서 생성되므로
             // 패널 열 때는 생성하지 않음 (불필요한 윈도우 추가로 배경 깜빡임 방지)
@@ -407,6 +439,18 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
     }
 
+    private fun showSplitIoErrorToast() {
+        try {
+            android.widget.Toast.makeText(
+                context,
+                context.getString(R.string.split_screen_io_system_error),
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to show split I/O error toast", e)
+        }
+    }
+
     private fun getAppLabel(packageName: String): String? {
         return try {
             val info = context.packageManager.getApplicationInfo(packageName, 0)
@@ -420,6 +464,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         override fun onRecentAppsChanged(apps: List<RecentAppsManager.RecentAppInfo>) {
             handler.post {
                 recentAppsTaskbar?.updateApps(apps)
+
+                // 아이콘 목록 갱신 시점에도 가시성을 동기화해
+                // 아이콘이 "뿅" 나타나는 대신 진입 애니메이션이 보이도록 보장
+                if (apps.isNotEmpty()) {
+                    syncTaskbarVisibility(animate = true)
+                } else {
+                    hideTaskbarImmediate()
+                }
             }
         }
     }
@@ -502,7 +554,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             recentAppsManager?.clear()
             destroySplitScreenOverlay()
             hideDragOverlay()
-            navbarAppsPanel?.hide()
+            navbarAppsPanel?.hide(immediate = true, reason = "overlay_destroy")
             navbarAppsPanel = null
 
             windowManager.removeView(rootView)
@@ -596,33 +648,33 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             buttonManager.createNavButton(NavAction.RECENTS, R.drawable.ic_sysbar_recent, buttonSizePx, initialButtonColor)
         )
 
-        // Extra buttons group: Screenshot / Notifications (order reversed when swapped)
+        // Extra buttons group: Screenshot / NavbarApps / Notifications
         val extraGroup = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
 
         if (isSwapped) {
-            // When swapped to left: Notifications, Screenshot, NavbarApps (innermost = right)
+            // When swapped to left: Notifications, NavbarApps, Screenshot (innermost = right)
             extraGroup.addView(
                 buttonManager.createNavButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel, buttonSizePx, initialButtonColor)
             )
             buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
             extraGroup.addView(
-                buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
+                buttonManager.createNavButton(NavAction.NAVBAR_APPS, R.drawable.ic_sysbar_apps, buttonSizePx, initialButtonColor)
             )
             buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
             extraGroup.addView(
-                buttonManager.createNavButton(NavAction.NAVBAR_APPS, R.drawable.ic_sysbar_apps, buttonSizePx, initialButtonColor)
+                buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
             )
         } else {
-            // Default order: NavbarApps (innermost = left), Screenshot, Notifications
+            // Default order: Screenshot (innermost = left), NavbarApps, Notifications
             extraGroup.addView(
-                buttonManager.createNavButton(NavAction.NAVBAR_APPS, R.drawable.ic_sysbar_apps, buttonSizePx, initialButtonColor)
+                buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
             )
             buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
             extraGroup.addView(
-                buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
+                buttonManager.createNavButton(NavAction.NAVBAR_APPS, R.drawable.ic_sysbar_apps, buttonSizePx, initialButtonColor)
             )
             buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
             extraGroup.addView(
@@ -1116,7 +1168,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         hotspotView?.visibility = if (shouldShowHotspot) View.VISIBLE else View.GONE
         isShowing = false
         hideGestureOverlay()
-        navbarAppsPanel?.hide()
+        navbarAppsPanel?.hide(immediate = true, reason = "overlay_hide")
         Log.d(TAG, "Overlay hidden (animate=$animate, showHotspot=$showHotspot)")
     }
 
@@ -1257,12 +1309,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             isOnHomeScreen = false
             Log.d(TAG, "Home screen state: false (debounced)")
 
-            // 앱이 실행중이면 최근 앱 작업 표시줄 표시 (애니메이션 적용)
-            if (isRecentsVisible) {
-                hideTaskbarImmediate()
-            } else {
-                animateTaskbarEntry()
-            }
+            // 홈 -> 앱 전환 시 진입 애니메이션이 항상 보이도록
+            // 한 프레임 리셋 후 재생
+            playTaskbarEntryFromHomeIfNeeded()
 
             updateNavBarBackground()
         }
@@ -1271,6 +1320,19 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         updateNavBarBackground()
         pendingHomeState = task
         handler.postDelayed(task, Constants.Timing.HOME_STATE_DEBOUNCE_MS)
+    }
+
+    private fun playTaskbarEntryFromHomeIfNeeded() {
+        if (!shouldShowTaskbar()) {
+            hideTaskbarImmediate()
+            return
+        }
+        hideTaskbarImmediate()
+        handler.post {
+            if (shouldShowTaskbar()) {
+                animateTaskbarEntry()
+            }
+        }
     }
 
     // ===== 최근 앱 작업 표시줄 애니메이션 =====
@@ -1285,25 +1347,48 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun animateTaskbarEntry() {
         val view = centerGroupView ?: return
 
+        if (!shouldShowTaskbar()) {
+            hideTaskbarImmediate()
+            return
+        }
+
+        if (taskbarEntryAnimator?.isRunning == true) {
+            return
+        }
+
+        if (view.visibility == View.VISIBLE &&
+            taskbarEntryAnimator == null &&
+            taskbarExitAnimator == null &&
+            view.alpha >= 0.99f
+        ) {
+            return
+        }
+
         // 퇴장 애니메이션 취소
         taskbarExitAnimator?.cancel()
         taskbarExitAnimator = null
 
-        // 등장 애니메이션 취소 (중복 방지)
-        taskbarEntryAnimator?.cancel()
+        val startAlpha = if (view.visibility == View.VISIBLE) view.alpha else 0f
+        val startTranslationY = if (view.visibility == View.VISIBLE) {
+            view.translationY
+        } else {
+            context.dpToPx(30).toFloat()
+        }
+        val startScaleX = if (view.visibility == View.VISIBLE) view.scaleX else 0.85f
+        val startScaleY = if (view.visibility == View.VISIBLE) view.scaleY else 0.85f
 
-        // 초기 상태 설정
-        view.alpha = 0f
-        view.translationY = context.dpToPx(30).toFloat()
-        view.scaleX = 0.85f
-        view.scaleY = 0.85f
+        // 초기 상태 보정
+        view.alpha = startAlpha
+        view.translationY = startTranslationY
+        view.scaleX = startScaleX
+        view.scaleY = startScaleY
         view.visibility = View.VISIBLE
 
         // 애니메이션 생성
-        val alphaAnim = ObjectAnimator.ofFloat(view, "alpha", 0f, 1f)
-        val translateAnim = ObjectAnimator.ofFloat(view, "translationY", context.dpToPx(30).toFloat(), 0f)
-        val scaleXAnim = ObjectAnimator.ofFloat(view, "scaleX", 0.85f, 1f)
-        val scaleYAnim = ObjectAnimator.ofFloat(view, "scaleY", 0.85f, 1f)
+        val alphaAnim = ObjectAnimator.ofFloat(view, "alpha", startAlpha, 1f)
+        val translateAnim = ObjectAnimator.ofFloat(view, "translationY", startTranslationY, 0f)
+        val scaleXAnim = ObjectAnimator.ofFloat(view, "scaleX", startScaleX, 1f)
+        val scaleYAnim = ObjectAnimator.ofFloat(view, "scaleY", startScaleY, 1f)
 
         taskbarEntryAnimator = AnimatorSet().apply {
             playTogether(alphaAnim, translateAnim, scaleXAnim, scaleYAnim)
@@ -1311,6 +1396,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             interpolator = android.view.animation.DecelerateInterpolator(2f)
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
+                    view.alpha = 1f
+                    view.translationY = 0f
+                    view.scaleX = 1f
+                    view.scaleY = 1f
+                    taskbarEntryAnimator = null
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
                     taskbarEntryAnimator = null
                 }
             })
@@ -1391,6 +1484,47 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             translationY = 0f
             scaleX = 1f
             scaleY = 1f
+        }
+    }
+
+    /**
+     * 최근 앱 작업 표시줄 즉시 표시 (애니메이션 없이)
+     */
+    private fun showTaskbarImmediate() {
+        taskbarEntryAnimator?.cancel()
+        taskbarExitAnimator?.cancel()
+        taskbarEntryAnimator = null
+        taskbarExitAnimator = null
+
+        centerGroupView?.apply {
+            visibility = View.VISIBLE
+            alpha = 1f
+            translationY = 0f
+            scaleX = 1f
+            scaleY = 1f
+        }
+    }
+
+    /**
+     * 현재 상태에 맞춰 최근 앱 작업 표시줄 가시성 동기화
+     */
+    private fun syncTaskbarVisibility(animate: Boolean) {
+        if (shouldShowTaskbar()) {
+            val view = centerGroupView
+            val isCurrentlyHidden =
+                view == null ||
+                view.visibility != View.VISIBLE ||
+                view.alpha < 0.99f ||
+                taskbarEntryAnimator != null ||
+                taskbarExitAnimator != null
+
+            if (animate || isCurrentlyHidden) {
+                animateTaskbarEntry()
+            } else {
+                showTaskbarImmediate()
+            }
+        } else {
+            hideTaskbarImmediate()
         }
     }
 
@@ -1577,11 +1711,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         } else {
             val task = Runnable {
                 pendingRecentsClose = null
-                if (isRecentsVisible || isOnHomeScreen) {
-                    hideTaskbarImmediate()
-                    return@Runnable
-                }
-                animateTaskbarEntry()
+                syncTaskbarVisibility(animate = true)
             }
             pendingRecentsClose = task
             handler.postDelayed(task, Constants.Timing.RECENTS_STATE_DEBOUNCE_MS)
@@ -1608,6 +1738,17 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         Log.d(TAG, "Foreground package changed: $packageName")
         updateNavBarBackground()
         recentAppsManager?.onForegroundAppChanged(packageName)
+
+        // 포그라운드 패키지 변동(IME/런처/앱 전환) 후 진입 애니메이션 우선
+        syncTaskbarVisibility(animate = true)
+    }
+
+    private fun shouldShowTaskbar(): Boolean {
+        if (!settings.recentAppsTaskbarEnabled) return false
+        if (isOnHomeScreen || isRecentsVisible || isHomeExitPending) return false
+        if (currentPackage.isEmpty()) return false
+        if (cachedLauncherPackages.contains(currentPackage)) return false
+        return true
     }
 
     fun setPanelStates(isNotificationOpen: Boolean, isQuickSettingsOpen: Boolean) {
@@ -1797,6 +1938,19 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (isHomeExitPending || now < homeExitSuppressUntil) {
             return false
         }
+
+        // 홈 상태 플래그가 지연 갱신되는 동안(non-home 앱으로 전환 직후)
+        // 커스텀 홈 배경이 재적용되지 않도록 포그라운드 패키지로 한 번 더 가드한다.
+        val appForegroundWhileHome =
+            isOnHomeScreen &&
+            currentPackage.isNotEmpty() &&
+            currentPackage != context.packageName &&
+            currentPackage != "com.android.systemui" &&
+            !service.isLauncherPackageForOverlay(currentPackage)
+        if (appForegroundWhileHome) {
+            return false
+        }
+
         return backgroundManager.shouldUseCustomBackground(
             isOnHomeScreen = isOnHomeScreen,
             isRecentsVisible = isRecentsVisible,
@@ -2259,7 +2413,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             recentAppsTaskbar = null
         }
 
-        navbarAppsPanel?.hide()
+        navbarAppsPanel?.hide(immediate = true, reason = "refresh_settings")
         navbarAppsPanel = NavbarAppsPanel(context, windowManager, navbarAppsPanelListener)
 
         rootView?.let { root ->

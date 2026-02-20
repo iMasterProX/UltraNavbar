@@ -29,6 +29,7 @@ class TouchPointSetupActivity : Activity() {
 
     companion object {
         const val EXTRA_BUTTON = "button" // "A" or "B"
+        const val EXTRA_DIRECT_START = "direct_start"
         private const val INDICATOR_SIZE = 60 // 파란 원 크기 (px)
     }
 
@@ -50,9 +51,15 @@ class TouchPointSetupActivity : Activity() {
 
         settings = SettingsManager.getInstance(this)
         buttonName = intent.getStringExtra(EXTRA_BUTTON) ?: "A"
+        val directStart = intent.getBooleanExtra(EXTRA_DIRECT_START, false)
 
-        // 1단계: 플로팅 버튼 표시
-        showFloatingButton()
+        if (directStart) {
+            // 재설정 직진입: 바로 좌표 선택 단계
+            showTouchPointOverlay()
+        } else {
+            // 1단계: 플로팅 버튼 표시
+            showFloatingButton()
+        }
 
         // Activity는 투명하게 유지하고 백그라운드로
         moveTaskToBack(true)

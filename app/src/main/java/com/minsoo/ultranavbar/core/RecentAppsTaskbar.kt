@@ -6,23 +6,23 @@ import android.content.res.ColorStateList
 import android.graphics.Outline
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
-import android.os.SystemClock
+import android.view.WindowManager
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.ImageView
 import android.widget.LinearLayout
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 /**
  * 최근 앱 작업 표시줄 UI 관리
  *
  * 중앙 LinearLayout에 원형 앱 아이콘 표시
  * 탭: 앱 전환
- * 위로 슬라이드: 분할화면 실행
+ * 길게 누른 뒤 드래그: 분할화면 실행
  */
 class RecentAppsTaskbar(
     private val context: Context,
@@ -31,8 +31,8 @@ class RecentAppsTaskbar(
     companion object {
         private const val TAG = "RecentAppsTaskbar"
         const val MOVE_THRESHOLD_DP = 10        // 움직임 인식 임계값
-        const val DRAG_START_THRESHOLD_DP = 20  // 드래그 시작 임계값
         const val SPLIT_TRIGGER_DP = 80         // 분할화면 트리거 거리
+        const val LONG_PRESS_TIME_MS = 400L
     }
 
     /**
@@ -54,6 +54,8 @@ class RecentAppsTaskbar(
     private var centerGroup: LinearLayout? = null
     private val iconViews = mutableListOf<ImageView>()
     private var currentApps = listOf<RecentAppsManager.RecentAppInfo>()
+    private val windowManager: WindowManager =
+        context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
     /**
      * Center group 생성
@@ -165,8 +167,8 @@ class RecentAppsTaskbar(
 
     /**
      * 터치 리스너 설정
-     * - 탭 (움직임 없이 짧게 터치): 앱 전환
-     * - 위로 슬라이드: 분할화면 실행
+     * - 탭: 앱 전환
+     * - 길게 누른 뒤 드래그: 분할화면 실행
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun setupTouchListener(
@@ -175,12 +177,27 @@ class RecentAppsTaskbar(
     ) {
         var startRawX = 0f
         var startRawY = 0f
-        var downTime = 0L
-        var isDraggingUp = false
+        var isDragging = false
         var hasMoved = false
+        var longPressTriggered = false
         val moveThresholdPx = context.dpToPx(MOVE_THRESHOLD_DP)
-        val dragStartThresholdPx = context.dpToPx(DRAG_START_THRESHOLD_DP)
         val splitTriggerPx = context.dpToPx(SPLIT_TRIGGER_DP)
+
+        val longPressRunnable = Runnable {
+            if (!splitScreenEnabled || hasMoved) {
+                return@Runnable
+            }
+            longPressTriggered = true
+            isDragging = true
+            iconView.animate()
+                .scaleX(1.06f)
+                .scaleY(1.06f)
+                .setDuration(90L)
+                .start()
+            listener.onDragStateChanged(true, 0f)
+            iconView.alpha = 0f
+            listener.onDragStart(iconView, startRawX, startRawY)
+        }
 
         iconView.setOnTouchListener { view, event ->
             if (listener.shouldIgnoreTouch(event.getToolType(0))) {
@@ -191,82 +208,80 @@ class RecentAppsTaskbar(
                 MotionEvent.ACTION_DOWN -> {
                     startRawX = event.rawX
                     startRawY = event.rawY
-                    downTime = SystemClock.uptimeMillis()
-                    isDraggingUp = false
+                    isDragging = false
                     hasMoved = false
+                    longPressTriggered = false
                     view.parent?.requestDisallowInterceptTouchEvent(true)
+                    if (splitScreenEnabled) {
+                        view.postDelayed(longPressRunnable, LONG_PRESS_TIME_MS)
+                    }
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val deltaX = event.rawX - startRawX
-                    val deltaY = startRawY - event.rawY  // 양수 = 위로
+                    val deltaY = startRawY - event.rawY
 
                     // 움직임 감지
                     if (!hasMoved && (abs(deltaX) > moveThresholdPx || abs(deltaY) > moveThresholdPx)) {
                         hasMoved = true
+                        if (!longPressTriggered) {
+                            view.removeCallbacks(longPressRunnable)
+                        }
                     }
 
-                    // 위로 드래그 시작 감지 (분할화면 활성화 시에만)
-                    if (splitScreenEnabled && !isDraggingUp && deltaY > dragStartThresholdPx) {
-                        isDraggingUp = true
-                        // 분할화면 반투명 오버레이를 먼저 생성 (z-order가 아래)
-                        listener.onDragStateChanged(true, 0f)
-                        // 그 다음 드래그 아이콘 오버레이 생성 (z-order가 위)
-                        view.alpha = 0f
-                        listener.onDragStart(view as ImageView, event.rawX, event.rawY)
-                    }
+                    if (isDragging) {
+                        val distance = sqrt(deltaX * deltaX + deltaY * deltaY)
+                        val rawProgress = (distance / splitTriggerPx).coerceAtLeast(0f)
+                        val scale = 1f + (rawProgress.coerceAtMost(1f) * 0.3f)
 
-                    if (isDraggingUp) {
-                        // 드래그 진행률 계산 (0.0 ~ 1.0+)
-                        val progress = (deltaY / splitTriggerPx).coerceAtLeast(0f)
-
-                        // 스케일 효과
-                        val scale = 1f + (progress.coerceAtMost(1f) * 0.3f)
-
-                        // 드래그 오버레이 아이콘 좌표 업데이트
                         listener.onDragIconUpdate(event.rawX, event.rawY, scale)
 
-                        // 분할화면 오버레이 진행률 업데이트
-                        listener.onDragStateChanged(true, progress)
+                        val zoneFactor = splitZoneFactor(event.rawX, event.rawY)
+                        listener.onDragStateChanged(true, rawProgress * zoneFactor)
                     }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    view.removeCallbacks(longPressRunnable)
+
+                    val deltaX = event.rawX - startRawX
                     val deltaY = startRawY - event.rawY
-                    val elapsed = SystemClock.uptimeMillis() - downTime
+                    val distance = sqrt(deltaX * deltaX + deltaY * deltaY)
 
                     // 드래그 상태 종료 콜백
-                    if (isDraggingUp) {
+                    if (isDragging) {
                         listener.onDragStateChanged(false, 0f)
                         listener.onDragEnd()
                         view.alpha = 1f
                     }
 
-                    // 원위치 복귀 (translationY는 더 이상 사용하지 않지만 안전장치)
                     view.translationY = 0f
                     view.scaleX = 1f
                     view.scaleY = 1f
 
                     when {
-                        // 위로 충분히 드래그 → 분할화면
-                        isDraggingUp && deltaY > splitTriggerPx -> {
-                            Log.d(TAG, "Slide to split: ${app.packageName}, deltaY=$deltaY")
-                            listener.onAppDraggedToSplit(app.packageName)
+                        isDragging -> {
+                            if (distance > splitTriggerPx && splitZoneFactor(event.rawX, event.rawY) > 0.5f) {
+                                Log.d(TAG, "Long-press drag to split: ${app.packageName}, distance=$distance")
+                                listener.onAppDraggedToSplit(app.packageName)
+                            } else {
+                                Log.d(TAG, "Long-press drag cancelled: ${app.packageName}, distance=$distance")
+                            }
                         }
-                        // 탭: 움직임 없이 터치
-                        !hasMoved -> {
+                        !hasMoved && !longPressTriggered -> {
                             Log.d(TAG, "Tap: ${app.packageName}")
                             listener.onAppTapped(app.packageName)
                         }
-                        // 그 외 (드래그했지만 충분하지 않음): 아무것도 안 함
                         else -> {
-                            Log.d(TAG, "No action: hasMoved=$hasMoved, isDraggingUp=$isDraggingUp, deltaY=$deltaY")
+                            Log.d(TAG, "No action: hasMoved=$hasMoved, longPressTriggered=$longPressTriggered")
                         }
                     }
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    if (isDraggingUp) {
+                    view.removeCallbacks(longPressRunnable)
+
+                    if (isDragging) {
                         listener.onDragStateChanged(false, 0f)
                         listener.onDragEnd()
                         view.alpha = 1f
@@ -279,5 +294,22 @@ class RecentAppsTaskbar(
                 else -> false
             }
         }
+    }
+
+    /**
+     * 손가락 위치의 분할화면 영역 진입도 (0.0 ~ 1.0)
+     * 가로: 오른쪽 절반, 세로: 아래쪽 절반
+     */
+    private fun splitZoneFactor(rawX: Float, rawY: Float): Float {
+        val bounds = windowManager.maximumWindowMetrics.bounds
+        val screenWidth = bounds.width()
+        val screenHeight = bounds.height()
+        val isLandscape = screenWidth > screenHeight
+
+        val transitionPx = if (isLandscape) screenWidth * 0.1f else screenHeight * 0.1f
+        val midPoint = if (isLandscape) screenWidth / 2f else screenHeight / 2f
+        val pos = if (isLandscape) rawX else rawY
+
+        return ((pos - midPoint + transitionPx / 2f) / transitionPx).coerceIn(0f, 1f)
     }
 }

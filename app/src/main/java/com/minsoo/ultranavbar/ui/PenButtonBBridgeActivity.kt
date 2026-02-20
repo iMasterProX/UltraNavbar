@@ -7,9 +7,11 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
 import com.minsoo.ultranavbar.settings.SettingsManager
+import com.minsoo.ultranavbar.util.PenButtonHandler
 
 /**
  * 펜 버튼 B 브릿지 Activity
@@ -33,10 +35,25 @@ class PenButtonBBridgeActivity : Activity() {
         // 노드 클릭 재시도 설정
         private const val NODE_CLICK_DELAY_MS = 80L
         private const val NODE_CLICK_MAX_RETRIES = 6
+        // 자동터치 계열 롱프레스 감지
+        private const val SHORT_PRESS_DELAY_MS = 120L
+        private const val HOLD_RECHECK_DELAY_MS = 60L
+        private const val LONG_PRESS_HOLD_THRESHOLD_MS = 2000L
+        private const val MIN_VALID_TAP_HOLD_MS = 8L
+        private const val RELEASE_WAIT_GRACE_MS = 300L
+        private const val LONG_PRESS_RECONFIG_COOLDOWN_MS = 1200L
 
         // 세션 ID - 새 버튼 누름 시 증가, 이전 재시도 무효화
         @Volatile
         private var currentSessionId = 0L
+
+        @Volatile
+        private var pendingPressId = 0L
+        @Volatile
+        private var lastHandledPressId = 0L
+        @Volatile
+        private var lastReconfigureAt = 0L
+        private var pendingSingleAction: Runnable? = null
 
         // 공유 핸들러
         private val sharedHandler = Handler(Looper.getMainLooper())
@@ -47,24 +64,26 @@ class PenButtonBBridgeActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 새 세션 시작 - 이전 재시도 모두 무효화
-        mySessionId = ++currentSessionId
-        Log.d(TAG, "Button B bridge started, session: $mySessionId")
+        val currentPressId = PenButtonHandler.getCurrentPenButtonPressId(false)
+        if (currentPressId > currentSessionId) {
+            currentSessionId = currentPressId
+        }
+        mySessionId = currentSessionId
+        Log.d(TAG, "Button B bridge started, session: $mySessionId, pressId: $currentPressId")
 
         val settings = SettingsManager.getInstance(this)
         val actionType = settings.penBActionType
 
         Log.d(TAG, "Action type: $actionType")
 
+        if (actionType == "TOUCH_POINT" || actionType == "NODE_CLICK") {
+            handleLongPressAwareAutoTouch(settings, actionType)
+            moveTaskToBack(true)
+            finish()
+            return
+        }
+
         when (actionType) {
-            "TOUCH_POINT" -> {
-                val x = settings.penBTouchX
-                val y = settings.penBTouchY
-                Log.d(TAG, "Touch point: ($x, $y)")
-                if (x >= 0 && y >= 0) {
-                    performAutoTouch(x, y)
-                }
-            }
             "SHORTCUT" -> {
                 val shortcutUri = settings.penBShortcutPackage  // URI 저장됨
                 Log.d(TAG, "Shortcut URI: $shortcutUri")
@@ -72,20 +91,165 @@ class PenButtonBBridgeActivity : Activity() {
                     launchShortcut(shortcutUri)
                 }
             }
-            "NODE_CLICK" -> {
-                // UI 요소 클릭 - 권장 (화면 방향 무관)
-                val nodeId = settings.penBNodeId
-                val nodeText = settings.penBNodeText
-                val nodeDesc = settings.penBNodeDesc
-                val nodePackage = settings.penBNodePackage
-                Log.d(TAG, "Node click: id=$nodeId, text=$nodeText, desc=$nodeDesc")
-                performNodeClick(nodeId, nodeText, nodeDesc, nodePackage)
-            }
         }
 
         // Theme.NoDisplay는 onResume() 전에 finish() 필수
         moveTaskToBack(true)
         finish()
+    }
+
+    private fun handleLongPressAwareAutoTouch(settings: SettingsManager, actionType: String) {
+        val pressId = PenButtonHandler.getCurrentPenButtonPressId(false)
+        if (pressId <= 0L) {
+            Log.d(TAG, "No valid press id for B; skipping")
+            return
+        }
+
+        if (pressId == lastHandledPressId) {
+            Log.d(TAG, "Press already handled (B): pressId=$pressId")
+            return
+        }
+
+        if (pressId == pendingPressId) {
+            Log.d(TAG, "Duplicate bridge launch for same press (B): pressId=$pressId")
+            return
+        }
+
+        pendingSingleAction?.let { sharedHandler.removeCallbacks(it) }
+        pendingPressId = pressId
+        if (pressId > currentSessionId) {
+            currentSessionId = pressId
+        }
+        mySessionId = pressId
+
+        val pressStartAt = PenButtonHandler.getCurrentPenButtonDownAtMs(false).takeIf { it > 0L }
+            ?: SystemClock.elapsedRealtime()
+        val singlePressAction = object : Runnable {
+            override fun run() {
+                if (pressId != pendingPressId) return
+
+                val latestPressId = PenButtonHandler.getCurrentPenButtonPressId(false)
+                if (latestPressId != pressId) {
+                    Log.d(TAG, "Press changed before handling (B): expected=$pressId, latest=$latestPressId")
+                    pendingSingleAction = null
+                    pendingPressId = 0L
+                    return
+                }
+
+                if (PenButtonHandler.isPenButtonCurrentlyPressed(false)) {
+                    val downAt = PenButtonHandler.getCurrentPenButtonDownAtMs(false)
+                    val pressedElapsed = if (downAt > 0L) {
+                        SystemClock.elapsedRealtime() - downAt
+                    } else {
+                        SystemClock.elapsedRealtime() - pressStartAt
+                    }
+                    if (pressedElapsed >= LONG_PRESS_HOLD_THRESHOLD_MS) {
+                        pendingSingleAction = null
+                        pendingPressId = 0L
+                        lastHandledPressId = pressId
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastReconfigureAt >= LONG_PRESS_RECONFIG_COOLDOWN_MS) {
+                            startDirectReconfigure(actionType)
+                            lastReconfigureAt = now
+                            Log.d(TAG, "Long-press detected while pressed: ${pressedElapsed}ms (B)")
+                        } else {
+                            Log.d(TAG, "Long-press skipped by cooldown (B)")
+                        }
+                        return
+                    }
+                    sharedHandler.postDelayed(this, HOLD_RECHECK_DELAY_MS)
+                    return
+                }
+
+                val releasedPressId = PenButtonHandler.getLastReleasedPenButtonPressId(false)
+                if (releasedPressId < pressId) {
+                    val waited = SystemClock.elapsedRealtime() - pressStartAt
+                    if (waited < LONG_PRESS_HOLD_THRESHOLD_MS + RELEASE_WAIT_GRACE_MS) {
+                        sharedHandler.postDelayed(this, HOLD_RECHECK_DELAY_MS)
+                        return
+                    }
+                    Log.d(TAG, "Release info missing for pressId=$pressId after ${waited}ms (B)")
+                    pendingSingleAction = null
+                    pendingPressId = 0L
+                    lastHandledPressId = pressId
+                    return
+                }
+
+                pendingSingleAction = null
+                pendingPressId = 0L
+                val holdDuration = PenButtonHandler.getLastPenButtonHoldDurationMs(false)
+                Log.d(TAG, "Hold check (B): holdDuration=${holdDuration}ms")
+                if (holdDuration >= LONG_PRESS_HOLD_THRESHOLD_MS) {
+                    lastHandledPressId = pressId
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastReconfigureAt >= LONG_PRESS_RECONFIG_COOLDOWN_MS) {
+                        startDirectReconfigure(actionType)
+                        lastReconfigureAt = now
+                        Log.d(TAG, "Long-press detected by hold duration: ${holdDuration}ms (B)")
+                    } else {
+                        Log.d(TAG, "Long-press release skipped by cooldown (B)")
+                    }
+                    return
+                }
+
+                if (holdDuration in 1 until MIN_VALID_TAP_HOLD_MS) {
+                    Log.d(TAG, "Ignored ultra-short pen pulse: ${holdDuration}ms (B)")
+                    lastHandledPressId = pressId
+                    return
+                }
+
+                lastHandledPressId = pressId
+                executeAutoTouchAction(settings, actionType)
+            }
+        }
+
+        pendingSingleAction = singlePressAction
+        sharedHandler.postDelayed(singlePressAction, SHORT_PRESS_DELAY_MS)
+    }
+
+    private fun executeAutoTouchAction(settings: SettingsManager, actionType: String) {
+        when (actionType) {
+            "TOUCH_POINT" -> {
+                val x = settings.penBTouchX
+                val y = settings.penBTouchY
+                Log.d(TAG, "Single-press confirmed: touch point ($x, $y)")
+                if (x >= 0 && y >= 0) {
+                    performAutoTouch(x, y)
+                }
+            }
+
+            "NODE_CLICK" -> {
+                val nodeId = settings.penBNodeId
+                val nodeText = settings.penBNodeText
+                val nodeDesc = settings.penBNodeDesc
+                val nodePackage = settings.penBNodePackage
+                Log.d(TAG, "Single-press confirmed: node click id=$nodeId, text=$nodeText, desc=$nodeDesc")
+                performNodeClick(nodeId, nodeText, nodeDesc, nodePackage)
+            }
+        }
+    }
+
+    private fun startDirectReconfigure(actionType: String) {
+        val intent = when (actionType) {
+            "TOUCH_POINT" -> Intent(this, TouchPointSetupActivity::class.java).apply {
+                putExtra(TouchPointSetupActivity.EXTRA_BUTTON, "B")
+                putExtra(TouchPointSetupActivity.EXTRA_DIRECT_START, true)
+            }
+
+            "NODE_CLICK" -> Intent(this, NodeSelectionActivity::class.java).apply {
+                putExtra(NodeSelectionActivity.EXTRA_BUTTON, "B")
+                putExtra(NodeSelectionActivity.EXTRA_DIRECT_START, true)
+            }
+
+            else -> return
+        }
+
+        try {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start direct reconfigure", e)
+        }
     }
 
     private fun launchShortcut(shortcutUri: String) {
@@ -119,6 +283,7 @@ class PenButtonBBridgeActivity : Activity() {
         retryCount: Int,
         sessionId: Long
     ) {
+        val delay = if (retryCount == 0) 0L else NODE_CLICK_DELAY_MS
         sharedHandler.postDelayed({
             // 세션이 바뀌었으면 (새 버튼 누름) 이 재시도는 무시
             if (sessionId != currentSessionId) {
@@ -141,7 +306,7 @@ class PenButtonBBridgeActivity : Activity() {
             } else if (!success) {
                 Log.e(TAG, "Node click max retries ($NODE_CLICK_MAX_RETRIES) reached, giving up")
             }
-        }, NODE_CLICK_DELAY_MS)
+        }, delay)
     }
 
     /**

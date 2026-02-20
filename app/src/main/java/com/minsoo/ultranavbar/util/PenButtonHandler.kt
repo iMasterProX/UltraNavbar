@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import android.view.KeyEvent
 import com.minsoo.ultranavbar.model.PaintFunction
 import com.minsoo.ultranavbar.service.NavBarAccessibilityService
@@ -39,6 +40,27 @@ object PenButtonHandler {
     private const val KEYCODE_STYLUS_BUTTON_SECONDARY = 289 // 버튼 B
     private const val KEYCODE_STYLUS_BUTTON_TERTIARY = 290  // 버튼 B (일부 기기)
 
+    @Volatile
+    private var buttonADownAt: Long = 0L
+    @Volatile
+    private var buttonBDownAt: Long = 0L
+    @Volatile
+    private var lastButtonAHoldDurationMs: Long = 0L
+    @Volatile
+    private var lastButtonBHoldDurationMs: Long = 0L
+    @Volatile
+    private var lastButtonAHoldCapturedAt: Long = 0L
+    @Volatile
+    private var lastButtonBHoldCapturedAt: Long = 0L
+    @Volatile
+    private var buttonAPressId: Long = 0L
+    @Volatile
+    private var buttonBPressId: Long = 0L
+    @Volatile
+    private var lastButtonAReleasedPressId: Long = 0L
+    @Volatile
+    private var lastButtonBReleasedPressId: Long = 0L
+
     /**
      * 펜 버튼 이벤트인지 확인
      */
@@ -62,12 +84,6 @@ object PenButtonHandler {
      * @return true if consumed, false otherwise
      */
     fun handlePenButtonEvent(context: Context, event: KeyEvent): Boolean {
-        if (event.action != KeyEvent.ACTION_DOWN) {
-            return false // UP 이벤트는 무시
-        }
-
-        val settings = SettingsManager.getInstance(context)
-
         // 버튼 구분 (표준, LG UltraTab, Android 표준 키코드 모두 지원)
         // 주의: 시스템 펜 버튼 설정에서 Bridge Activity를 실행하므로, 여기서는 감지만 하고 처리하지 않음
         // LG UltraTab: keyCode 289 = Button A, keyCode 290 = Button B
@@ -79,6 +95,18 @@ object PenButtonHandler {
                         event.keyCode == KEYCODE_PENB ||
                         event.keyCode == KEYCODE_STYLUS_BUTTON_TERTIARY   // LG UltraTab에서 290이 버튼 B
         val buttonName = if (isButtonB) "B" else "A"  // B가 아니면 A로 처리
+
+        if (!isButtonA && !isButtonB) {
+            return false
+        }
+
+        updatePenButtonState(event, isButtonA)
+
+        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) {
+            return false // UP 이벤트는 무시
+        }
+
+        val settings = SettingsManager.getInstance(context)
 
         val actionType = if (isButtonB) {
             settings.penBActionType
@@ -100,6 +128,77 @@ object PenButtonHandler {
             }
             else -> false
         }
+    }
+
+    private fun updatePenButtonState(event: KeyEvent, isButtonA: Boolean) {
+        val now = SystemClock.elapsedRealtime()
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            if (isButtonA) {
+                if (buttonADownAt > 0L) {
+                    return
+                }
+                buttonAPressId += 1L
+                buttonADownAt = now
+                lastButtonAHoldDurationMs = 0L
+                lastButtonAHoldCapturedAt = 0L
+            } else {
+                if (buttonBDownAt > 0L) {
+                    return
+                }
+                buttonBPressId += 1L
+                buttonBDownAt = now
+                lastButtonBHoldDurationMs = 0L
+                lastButtonBHoldCapturedAt = 0L
+            }
+            return
+        }
+
+        if (event.action == KeyEvent.ACTION_UP) {
+            if (isButtonA) {
+                val downAt = buttonADownAt
+                if (downAt > 0L) {
+                    lastButtonAHoldDurationMs = now - downAt
+                    lastButtonAHoldCapturedAt = now
+                    lastButtonAReleasedPressId = buttonAPressId
+                    android.util.Log.d(TAG, "Button A hold duration: ${lastButtonAHoldDurationMs}ms")
+                }
+                buttonADownAt = 0L
+            } else {
+                val downAt = buttonBDownAt
+                if (downAt > 0L) {
+                    lastButtonBHoldDurationMs = now - downAt
+                    lastButtonBHoldCapturedAt = now
+                    lastButtonBReleasedPressId = buttonBPressId
+                    android.util.Log.d(TAG, "Button B hold duration: ${lastButtonBHoldDurationMs}ms")
+                }
+                buttonBDownAt = 0L
+            }
+            return
+        }
+    }
+
+    fun isPenButtonCurrentlyPressed(isButtonA: Boolean): Boolean {
+        return if (isButtonA) buttonADownAt > 0L else buttonBDownAt > 0L
+    }
+
+    fun getCurrentPenButtonPressId(isButtonA: Boolean): Long {
+        return if (isButtonA) buttonAPressId else buttonBPressId
+    }
+
+    fun getLastReleasedPenButtonPressId(isButtonA: Boolean): Long {
+        return if (isButtonA) lastButtonAReleasedPressId else lastButtonBReleasedPressId
+    }
+
+    fun getCurrentPenButtonDownAtMs(isButtonA: Boolean): Long {
+        return if (isButtonA) buttonADownAt else buttonBDownAt
+    }
+
+    fun getLastPenButtonHoldDurationMs(isButtonA: Boolean): Long {
+        return if (isButtonA) lastButtonAHoldDurationMs else lastButtonBHoldDurationMs
+    }
+
+    fun getLastPenButtonHoldCapturedAtMs(isButtonA: Boolean): Long {
+        return if (isButtonA) lastButtonAHoldCapturedAt else lastButtonBHoldCapturedAt
     }
 
     /**
