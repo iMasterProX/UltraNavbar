@@ -1,6 +1,6 @@
 ﻿# LG UltraTab Extension
 
-![Guide](guide.png)
+![Guide](https://github.com/iMasterProX/UltraNavbar/blob/main/guide.png)
 
 [한국어](#한국어) | [English](#english)
 
