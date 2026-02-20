@@ -417,19 +417,22 @@ class NavbarAppsPanel(
                         val deltaX = event.rawX - startRawX
                         val deltaY = startRawY - event.rawY
                         val distance = sqrt(deltaX * deltaX + deltaY * deltaY)
+                        val zoneFactor = splitZoneFactor(event.rawX, event.rawY)
+                        val shouldLaunchSplit = distance > splitTriggerPx && zoneFactor > 0.5f
 
                         listener.onDragStateChanged(false, 0f)
                         listener.onDragEnd()
 
-                        if (distance > splitTriggerPx) {
-                            if (splitZoneFactor(event.rawX, event.rawY) > 0.5f) {
-                                listener.onAppDraggedToSplit(packageName)
-                            } else {
-                                Toast.makeText(context, R.string.split_screen_zone_cancelled, Toast.LENGTH_SHORT).show()
-                            }
+                        if (distance > splitTriggerPx && !shouldLaunchSplit) {
+                            Toast.makeText(context, R.string.split_screen_zone_cancelled, Toast.LENGTH_SHORT).show()
                         }
+
                         // 드래그 종료 → 패널 실제 제거
                         finishDrag()
+
+                        if (shouldLaunchSplit) {
+                            listener.onAppDraggedToSplit(packageName)
+                        }
                     } else if (!hasMoved && !longPressTriggered) {
                         listener.onAppTapped(packageName)
                         hide(reason = "app_tap")

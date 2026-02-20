@@ -729,34 +729,38 @@ object SplitScreenHelper {
                         selectionFailures[0]++
                     }
                     if (options == null &&
-                        splitActive &&
                         !homeReady &&
                         selectionFailures[0] >= SELECTION_FALLBACK_FAILURE_THRESHOLD
                     ) {
                         launched[0] = true
                         Log.d(
                             TAG,
-                            "Selection click fallback after ${selectionFailures[0]} failures; launching adjacent without options"
+                            "Selection click fallback after ${selectionFailures[0]} failures; launching fallback from selection mode (active=${splitActive}, recents=${recentsReady}, selection=${selectionReady})"
                         )
-                        val launchedOk = launchToSecondary(
-                            context,
-                            service,
-                            targetPackage,
-                            focusDelayMs,
-                            launchToken,
-                            targetWarm,
-                            optionsOverride = null,
-                            allowOptions = false
-                        )
-                        if (!launchedOk) {
-                            markLaunchFailedIfUnset()
-                            Log.w(TAG, "Fallback adjacent launch failed after selection failures")
-                            restorePrimaryIfPossible(context, targetPackage)
-                            showSplitFailureToast(context)
-                            return
+                        val launchedOk = if (!splitActive && (recentsReady || selectionReady)) {
+                            Log.d(TAG, "Selection fallback: launching target normally from selection mode")
+                            launchAppNormally(context, targetPackage)
+                            true
+                        } else {
+                            launchToSecondary(
+                                context,
+                                service,
+                                targetPackage,
+                                focusDelayMs,
+                                launchToken,
+                                targetWarm,
+                                optionsOverride = null,
+                                allowOptions = false
+                            )
                         }
-                        setSplitScreenActive(true)
-                        lastSplitDetectedAt = SystemClock.elapsedRealtime()
+                        if (!launchedOk) {
+                            Log.w(TAG, "Fallback adjacent launch unavailable; trying normal launch from selection mode")
+                            launchAppNormally(context, targetPackage)
+                        }
+                        if (splitActive) {
+                            setSplitScreenActive(true)
+                            lastSplitDetectedAt = SystemClock.elapsedRealtime()
+                        }
                         markSplitScreenUsed()
                         scheduleSplitRetryIfNeeded(context, service, targetPackage, maxWaitMs, launchToken, attempt)
                         return

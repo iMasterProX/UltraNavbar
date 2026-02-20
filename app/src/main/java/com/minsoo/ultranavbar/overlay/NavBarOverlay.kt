@@ -230,53 +230,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         override fun onAppDraggedToSplit(packageName: String) {
-            if (!SplitScreenHelper.isResizeableActivity(context, packageName)) {
-                showSplitNotSupportedToast(packageName)
-                return
-            }
-            val launchContext = service.getSplitLaunchContext()
-            if (launchContext.isOnHomeScreen && !launchContext.isRecentsVisible) {
-                Log.d(TAG, "Split request ignored on home screen")
-                return
-            }
-            // UltraNavbar 자체가 전체화면이면 분할화면 미지원 토스트 표시
-            if (launchContext.currentPackage.isEmpty() &&
-                !launchContext.hasVisibleNonLauncherApp &&
-                service.isSelfAppVisibleForSplit()
-            ) {
-                Log.d(TAG, "Self app in foreground, split screen not supported")
-                showSplitNotSupportedToast(context.packageName)
-                return
-            }
-            val fallbackPrimary = getFallbackPrimaryPackage(packageName)
-            val launched = SplitScreenHelper.launchSplitScreen(context, packageName, launchContext, fallbackPrimary)
-            if (!launched) {
-                val failure = SplitScreenHelper.getLastLaunchFailure()
-                when (failure) {
-                    SplitScreenHelper.SplitLaunchFailure.TARGET_UNSUPPORTED -> {
-                        showSplitNotSupportedToast(packageName)
-                    }
-                    SplitScreenHelper.SplitLaunchFailure.CURRENT_UNSUPPORTED -> {
-                        val current = launchContext.currentPackage.takeIf { it.isNotEmpty() }
-                        showSplitNotSupportedToast(current)
-                    }
-                    SplitScreenHelper.SplitLaunchFailure.NO_PRIMARY -> {
-                        // 현재 앱이 분할화면을 지원하지 않아 primary가 없는 경우
-                        // (예: UltraNavbar 앱 자체에서 분할화면 시도)
-                        showSplitNotSupportedToast(null)
-                    }
-                    SplitScreenHelper.SplitLaunchFailure.IO_SYSTEM_ERROR -> {
-                        showSplitIoErrorToast()
-                    }
-                    else -> {
-                        Log.w(TAG, "Split launch failed: $failure (target=$packageName)")
-                    }
-                }
-            }
+            handleSplitLaunchRequest(packageName, sourceTag = "Taskbar")
         }
-
-        fun getFallbackPrimaryPackage(targetPackage: String): String? =
-            this@NavBarOverlay.getFallbackPrimaryPackage(targetPackage)
 
         override fun onDragStateChanged(isDragging: Boolean, progress: Float) {
             updateSplitScreenOverlay(isDragging, progress)
@@ -316,45 +271,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         override fun onAppDraggedToSplit(packageName: String) {
-            if (!SplitScreenHelper.isResizeableActivity(context, packageName)) {
-                showSplitNotSupportedToast(packageName)
-                return
-            }
-            val launchContext = service.getSplitLaunchContext()
-            if (launchContext.isOnHomeScreen && !launchContext.isRecentsVisible) {
-                Log.d(TAG, "NavbarApps: split request ignored on home screen")
-                return
-            }
-            if (launchContext.currentPackage.isEmpty() &&
-                !launchContext.hasVisibleNonLauncherApp &&
-                service.isSelfAppVisibleForSplit()
-            ) {
-                showSplitNotSupportedToast(context.packageName)
-                return
-            }
-            val fallbackPrimary = getFallbackPrimaryPackage(packageName)
-            val launched = SplitScreenHelper.launchSplitScreen(context, packageName, launchContext, fallbackPrimary)
-            if (!launched) {
-                val failure = SplitScreenHelper.getLastLaunchFailure()
-                when (failure) {
-                    SplitScreenHelper.SplitLaunchFailure.TARGET_UNSUPPORTED -> {
-                        showSplitNotSupportedToast(packageName)
-                    }
-                    SplitScreenHelper.SplitLaunchFailure.CURRENT_UNSUPPORTED -> {
-                        val current = launchContext.currentPackage.takeIf { it.isNotEmpty() }
-                        showSplitNotSupportedToast(current)
-                    }
-                    SplitScreenHelper.SplitLaunchFailure.NO_PRIMARY -> {
-                        showSplitNotSupportedToast(null)
-                    }
-                    SplitScreenHelper.SplitLaunchFailure.IO_SYSTEM_ERROR -> {
-                        showSplitIoErrorToast()
-                    }
-                    else -> {
-                        Log.w(TAG, "NavbarApps split launch failed: $failure (target=$packageName)")
-                    }
-                }
-            }
+            handleSplitLaunchRequest(packageName, sourceTag = "NavbarApps")
         }
 
         override fun onDragStateChanged(isDragging: Boolean, progress: Float) {
@@ -427,6 +344,54 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return pkg
         }
         return null
+    }
+
+    private fun handleSplitLaunchRequest(packageName: String, sourceTag: String) {
+        if (!SplitScreenHelper.isResizeableActivity(context, packageName)) {
+            showSplitNotSupportedToast(packageName)
+            return
+        }
+
+        val launchContext = service.getSplitLaunchContext()
+        if (launchContext.isOnHomeScreen && !launchContext.isRecentsVisible) {
+            Log.d(TAG, "$sourceTag: split request ignored on home screen")
+            return
+        }
+
+        // UltraNavbar 자체가 전체화면이면 분할화면 미지원 토스트 표시
+        if (launchContext.currentPackage.isEmpty() &&
+            !launchContext.hasVisibleNonLauncherApp &&
+            service.isSelfAppVisibleForSplit()
+        ) {
+            Log.d(TAG, "$sourceTag: self app in foreground, split screen not supported")
+            showSplitNotSupportedToast(context.packageName)
+            return
+        }
+
+        val fallbackPrimary = getFallbackPrimaryPackage(packageName)
+        val launched = SplitScreenHelper.launchSplitScreen(context, packageName, launchContext, fallbackPrimary)
+        if (launched) return
+
+        val failure = SplitScreenHelper.getLastLaunchFailure()
+        when (failure) {
+            SplitScreenHelper.SplitLaunchFailure.TARGET_UNSUPPORTED -> {
+                showSplitNotSupportedToast(packageName)
+            }
+            SplitScreenHelper.SplitLaunchFailure.CURRENT_UNSUPPORTED -> {
+                val current = launchContext.currentPackage.takeIf { it.isNotEmpty() }
+                showSplitNotSupportedToast(current)
+            }
+            SplitScreenHelper.SplitLaunchFailure.NO_PRIMARY -> {
+                // 현재 앱이 분할화면을 지원하지 않아 primary가 없는 경우
+                showSplitNotSupportedToast(null)
+            }
+            SplitScreenHelper.SplitLaunchFailure.IO_SYSTEM_ERROR -> {
+                showSplitIoErrorToast()
+            }
+            else -> {
+                Log.w(TAG, "$sourceTag split launch failed: $failure (target=$packageName)")
+            }
+        }
     }
 
     private fun showSplitNotSupportedToast(packageName: String?) {
