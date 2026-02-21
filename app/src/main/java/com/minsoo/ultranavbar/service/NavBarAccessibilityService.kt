@@ -608,7 +608,8 @@ class NavBarAccessibilityService : AccessibilityService() {
                 if (wasSplitScreenUsed || helperFlag) {
                     val splitLikelyActive = isSplitScreenMode ||
                         SplitScreenHelper.isSplitScreenActive() ||
-                        SplitScreenHelper.isSplitActiveOrRecent(4000)
+                        SplitScreenHelper.isSplitActiveOrRecent(4000) ||
+                        SplitScreenHelper.isInRecoveryGracePeriod()
                     if (splitLikelyActive) {
                         Log.d(TAG, "Recents closed but split still active; skipping cleanup")
                     } else {
@@ -1008,7 +1009,16 @@ class NavBarAccessibilityService : AccessibilityService() {
         // - 작은 창이 있되, 리사이즈 가능한 앱에서 발생한 경우에만 분할화면으로 판단
         //   (리사이즈 불가 앱의 다이얼로그/팝업은 분할화면이 아님)
         // - 또는 2개 이상 서로 다른 앱 창이 보이는 경우
-        isSplitScreenMode = (hasSmallWindow && smallWindowFromResizableApp) || distinctPackages.size >= 2
+        val detectedSplit = (hasSmallWindow && smallWindowFromResizableApp) || distinctPackages.size >= 2
+
+        // 분할 전환 직후에는 런처/리센트 윈도우만 잠깐 보이는 구간이 있어 false로 흔들릴 수 있음.
+        // 상태 플래그는 실제 감지값으로 유지하고, cleanup만 잠시 지연한다.
+        val shouldDeferCleanup =
+            wasInSplitScreen && !detectedSplit && SplitScreenHelper.isSplitActiveOrRecent(2000)
+        if (shouldDeferCleanup) {
+            Log.d(TAG, "Split false detection observed during stabilization; deferring cleanup")
+        }
+        isSplitScreenMode = detectedSplit
 
         // SplitScreenHelper에 상태 동기화
         SplitScreenHelper.setSplitScreenActive(isSplitScreenMode)
@@ -1049,18 +1059,22 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         // 분할화면이 종료되었는지 확인
         if (wasInSplitScreen && !isSplitScreenMode) {
-            Log.d(TAG, "Split screen ended, cleaning split state")
-            cleanSplitScreenStacks()
-            wasSplitScreenUsed = false
+            if (shouldDeferCleanup) {
+                Log.d(TAG, "Split screen end cleanup deferred")
+            } else {
+                Log.d(TAG, "Split screen ended, cleaning split state")
+                cleanSplitScreenStacks()
+                wasSplitScreenUsed = false
 
-            // 분할화면 종료 후 currentPackage가 비활성화된 앱에 남아있을 수 있음
-            // 윈도우 기반으로 포그라운드 패키지를 갱신하고 오버레이 가시성 재확인
-            handler.postDelayed({
-                if (instance == null) return@postDelayed
-                Log.d(TAG, "Post-split: refreshing foreground package and visibility")
-                updateHomeAndRecentsFromWindows()
-                updateOverlayVisibility()
-            }, 300)
+                // 분할화면 종료 후 currentPackage가 비활성화된 앱에 남아있을 수 있음
+                // 윈도우 기반으로 포그라운드 패키지를 갱신하고 오버레이 가시성 재확인
+                handler.postDelayed({
+                    if (instance == null) return@postDelayed
+                    Log.d(TAG, "Post-split: refreshing foreground package and visibility")
+                    updateHomeAndRecentsFromWindows()
+                    updateOverlayVisibility()
+                }, 300)
+            }
         }
 
         if (wasInSplitScreen != isSplitScreenMode) {

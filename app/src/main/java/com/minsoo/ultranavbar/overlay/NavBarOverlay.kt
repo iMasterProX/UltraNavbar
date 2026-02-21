@@ -369,7 +369,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         val fallbackPrimary = getFallbackPrimaryPackage(packageName)
-        val launched = SplitScreenHelper.launchSplitScreen(context, packageName, launchContext, fallbackPrimary)
+        val preferSelectionFromLauncher = true
+        val launched = SplitScreenHelper.launchSplitScreen(
+            context,
+            packageName,
+            launchContext,
+            fallbackPrimary,
+            preferSelectionFromLauncher = preferSelectionFromLauncher
+        )
         if (launched) return
 
         val failure = SplitScreenHelper.getLastLaunchFailure()
