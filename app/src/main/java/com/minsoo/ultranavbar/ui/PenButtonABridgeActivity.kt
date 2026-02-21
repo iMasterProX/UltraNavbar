@@ -39,7 +39,7 @@ class PenButtonABridgeActivity : Activity() {
         // 자동터치 계열 롱프레스 감지
         private const val SHORT_PRESS_DELAY_MS = 120L
         private const val HOLD_RECHECK_DELAY_MS = 60L
-        private const val LONG_PRESS_HOLD_THRESHOLD_MS = 2000L
+        private const val LONG_PRESS_HOLD_THRESHOLD_MS = 750L
         private const val MIN_VALID_TAP_HOLD_MS = 8L
         private const val RELEASE_WAIT_GRACE_MS = 300L
         private const val LONG_PRESS_RECONFIG_COOLDOWN_MS = 1200L

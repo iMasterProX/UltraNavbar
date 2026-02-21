@@ -415,7 +415,7 @@
 
     <!-- Auto Touch Guide -->
     <string name="touch_point_guide_title">Auto Touch Setup Guide</string>
-    <string name="touch_point_guide_message_simple">How to set up auto touch:\n\n1. A floating button will appear\n2. Navigate to the app where you want to use auto touch\n3. Tap the floating button\n4. Tap the location you want to assign\n5. Tap \"Activate Auto Touch\" to confirm\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nNote:\n• Auto touch only works when the pen is close to the screen\n• Long-press the assigned pen button for about 2 seconds to immediately open setup again so you can select another UI element or location</string>
+    <string name="touch_point_guide_message_simple">How to set up auto touch:\n\n1. A floating button will appear\n2. Navigate to the app where you want to use auto touch\n3. Tap the floating button\n4. Tap the location you want to assign\n5. Tap \"Activate Auto Touch\" to confirm\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nNote:\n• Auto touch only works when the pen is close to the screen\n• Long-press the assigned pen button for about 0.75 seconds to immediately open setup again so you can select another UI element or location</string>
     <string name="touch_point_guide_start">Start Setup</string>
     <string name="touch_point_confirm">Activate Auto Touch at This Location</string>
 
@@ -426,7 +426,7 @@
     <string name="pen_button_action_node_click">Auto Touch (UI Element)</string>
     <string name="node_selection_title">UI Element Selection</string>
     <string name="node_selection_guide_title">UI Element Selection Guide</string>
-    <string name="node_selection_guide_message">This feature clicks a specific UI element when the pen button is pressed.\n\n• Works regardless of screen orientation\n• Target app must be open for it to work\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nNote:\n• Long-press the assigned pen button for about 2 seconds to immediately open setup again so you can select another UI element\n\nTap \'Start Setup\' to select a UI element.</string>
+    <string name="node_selection_guide_message">This feature clicks a specific UI element when the pen button is pressed.\n\n• Works regardless of screen orientation\n• Target app must be open for it to work\n\nUsage tips:\n• In drawing apps like OneNote, assign the Undo button to Button A and Redo to Button B for quick access\n• You can also assign eraser or color picker buttons\n\nNote:\n• Long-press the assigned pen button for about 0.75 seconds to immediately open setup again so you can select another UI element\n\nTap \'Start Setup\' to select a UI element.</string>
     <string name="node_selection_guide_start">Start Setup</string>
     <string name="node_selection_instruction">Open the target app and tap on the UI element you want to click.\n\nTap the floating button when ready.</string>
     <string name="node_selection_overlay_hint">Tap the element you want to select</string>
