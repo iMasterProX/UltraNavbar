@@ -31,6 +31,9 @@
     <string name="recent_apps_taskbar_icon_shape_square">네모 (기본값)</string>
     <string name="recent_apps_taskbar_icon_shape_squircle">스퀘어클</string>
     <string name="recent_apps_taskbar_icon_shape_rounded_rect">둥근 사각형</string>
+    <string name="recent_apps_taskbar_icon_count_title">작업 표시줄 아이콘 개수</string>
+    <string name="recent_apps_taskbar_icon_count_summary">최근 앱 작업 표시줄에 표시할 아이콘 개수를 설정합니다 (3~7개, 기본값 5개).</string>
+    <string name="recent_apps_taskbar_icon_count_value">현재: %1$d개</string>
     <string name="recent_apps_taskbar_show_on_home_title">홈 화면에서도 작업 표시줄 표시</string>
     <string name="recent_apps_taskbar_show_on_home_summary">홈 화면에서도 최근 앱 아이콘을 계속 표시합니다.</string>
     <string name="split_screen_not_supported">%1$s은(는) 분할 화면을 지원하지 않습니다</string>

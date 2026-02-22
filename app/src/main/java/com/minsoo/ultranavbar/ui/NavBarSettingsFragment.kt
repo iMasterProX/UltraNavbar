@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.slider.Slider
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.core.Constants
@@ -44,6 +45,8 @@ class NavBarSettingsFragment : Fragment() {
     private lateinit var btnTaskbarShapeSquare: MaterialButton
     private lateinit var btnTaskbarShapeSquircle: MaterialButton
     private lateinit var btnTaskbarShapeRoundedRect: MaterialButton
+    private lateinit var sliderRecentAppsIconCount: Slider
+    private lateinit var txtRecentAppsIconCountValue: TextView
 
     // 버튼 배치 반전 (Android 12L 스타일)
     private lateinit var switchNavButtonsSwap: SwitchMaterial
@@ -167,6 +170,8 @@ class NavBarSettingsFragment : Fragment() {
         btnTaskbarShapeSquare = view.findViewById(R.id.btnTaskbarShapeSquare)
         btnTaskbarShapeSquircle = view.findViewById(R.id.btnTaskbarShapeSquircle)
         btnTaskbarShapeRoundedRect = view.findViewById(R.id.btnTaskbarShapeRoundedRect)
+        sliderRecentAppsIconCount = view.findViewById(R.id.sliderRecentAppsIconCount)
+        txtRecentAppsIconCountValue = view.findViewById(R.id.txtRecentAppsIconCountValue)
 
         // 버튼 배치 반전 스위치
         switchNavButtonsSwap = view.findViewById(R.id.switchNavButtonsSwap)
@@ -264,6 +269,8 @@ class NavBarSettingsFragment : Fragment() {
         switchRecentAppsTaskbar.isChecked = settings.recentAppsTaskbarEnabled
         switchRecentAppsTaskbarShowOnHome.isChecked = settings.recentAppsTaskbarShowOnHome
         updateRecentAppsIconShapeUi(settings.recentAppsTaskbarIconShape)
+        sliderRecentAppsIconCount.value = settings.recentAppsTaskbarIconCount.toFloat()
+        updateRecentAppsIconCountValueText(settings.recentAppsTaskbarIconCount)
         setRecentAppsTaskbarControlsEnabled(settings.recentAppsTaskbarEnabled)
 
         // 버튼 배치 반전 상태 로드
@@ -313,6 +320,12 @@ class NavBarSettingsFragment : Fragment() {
         btnTaskbarShapeSquare.isEnabled = enabled
         btnTaskbarShapeSquircle.isEnabled = enabled
         btnTaskbarShapeRoundedRect.isEnabled = enabled
+        sliderRecentAppsIconCount.isEnabled = enabled
+        txtRecentAppsIconCountValue.alpha = if (enabled) 1f else 0.5f
+    }
+
+    private fun updateRecentAppsIconCountValueText(count: Int) {
+        txtRecentAppsIconCountValue.text = getString(R.string.recent_apps_taskbar_icon_count_value, count)
     }
 
     private fun setHomeBgButtonColorControlsEnabled(enabled: Boolean) {
@@ -363,6 +376,15 @@ class NavBarSettingsFragment : Fragment() {
 
             if (settings.recentAppsTaskbarIconShape != shape) {
                 settings.recentAppsTaskbarIconShape = shape
+                notifySettingsChanged()
+            }
+        }
+
+        sliderRecentAppsIconCount.addOnChangeListener { _, value, _ ->
+            val count = value.toInt().coerceIn(3, 7)
+            updateRecentAppsIconCountValueText(count)
+            if (settings.recentAppsTaskbarIconCount != count) {
+                settings.recentAppsTaskbarIconCount = count
                 notifySettingsChanged()
             }
         }

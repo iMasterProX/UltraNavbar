@@ -23,7 +23,7 @@ class RecentAppsManager(
 ) {
     companion object {
         private const val TAG = "RecentAppsManager"
-        const val MAX_RECENT_APPS = 6
+        const val MAX_RECENT_APPS = 7
         private const val PREFS_NAME = "recent_apps_prefs"
         private const val KEY_RECENT_APPS = "recent_apps_list"
     }
@@ -71,13 +71,14 @@ class RecentAppsManager(
      */
     fun loadInitialRecentApps() {
         Log.d(TAG, "Loading initial recent apps")
+        val maxCount = maxRecentAppsCount()
 
         // 먼저 저장된 목록 로드 시도
         val savedPackages = loadSavedRecentApps()
         if (savedPackages.isNotEmpty()) {
             Log.d(TAG, "Loading from saved list: ${savedPackages.size} apps")
             for (packageName in savedPackages) {
-                if (recentApps.size >= MAX_RECENT_APPS) break
+                if (recentApps.size >= maxCount) break
 
                 val icon = loadAppIcon(packageName) ?: continue
                 val label = loadAppLabel(packageName) ?: packageName
@@ -90,7 +91,7 @@ class RecentAppsManager(
             val recentPackages = queryUsageStats()
 
             for (packageName in recentPackages) {
-                if (recentApps.size >= MAX_RECENT_APPS) break
+                if (recentApps.size >= maxCount) break
 
                 val icon = loadAppIcon(packageName) ?: continue
                 val label = loadAppLabel(packageName) ?: packageName
@@ -132,7 +133,8 @@ class RecentAppsManager(
         }
 
         // 최대 개수 초과 시 마지막 항목 제거
-        while (recentApps.size > MAX_RECENT_APPS) {
+        val maxCount = maxRecentAppsCount()
+        while (recentApps.size > maxCount) {
             recentApps.removeAt(recentApps.size - 1)
         }
 
@@ -250,7 +252,7 @@ class RecentAppsManager(
                 .map { it.packageName }
                 .distinct()
                 .filter { !isExcluded(it) }
-                .take(MAX_RECENT_APPS)
+                .take(maxRecentAppsCount())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to query usage stats", e)
             emptyList()
@@ -276,6 +278,10 @@ class RecentAppsManager(
 
         return joinedString.split(",")
             .filter { it.isNotEmpty() && !isExcluded(it) }
-            .take(MAX_RECENT_APPS)
+            .take(maxRecentAppsCount())
+    }
+
+    private fun maxRecentAppsCount(): Int {
+        return MAX_RECENT_APPS
     }
 }

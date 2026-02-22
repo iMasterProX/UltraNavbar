@@ -19,7 +19,7 @@ object Constants {
         const val MIN_NAV_BAR_HEIGHT_DP = 40
         const val CROP_HEIGHT_PX = 72
         const val TASKBAR_ICON_SIZE_DP = 36
-        const val TASKBAR_ICON_SPACING_DP = 6
+        const val TASKBAR_ICON_SPACING_DP = 22
     }
 
     // ===== 타이밍 관련 (ms) =====

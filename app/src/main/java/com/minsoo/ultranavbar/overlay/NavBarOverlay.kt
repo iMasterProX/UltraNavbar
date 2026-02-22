@@ -440,11 +440,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private val recentAppsListener = object : RecentAppsManager.RecentAppsChangeListener {
         override fun onRecentAppsChanged(apps: List<RecentAppsManager.RecentAppInfo>) {
             handler.post {
-                recentAppsTaskbar?.updateApps(apps)
+                val displayedApps = apps.take(settings.recentAppsTaskbarIconCount.coerceIn(3, 7))
+                recentAppsTaskbar?.updateApps(displayedApps)
 
                 // 아이콘 목록 갱신 시점에도 가시성을 동기화해
                 // 아이콘이 "뿅" 나타나는 대신 진입 애니메이션이 보이도록 보장
-                if (apps.isNotEmpty()) {
+                if (displayedApps.isNotEmpty()) {
                     syncTaskbarVisibility(animate = true)
                 } else {
                     hideTaskbarImmediate()
@@ -2447,8 +2448,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             // 최근 앱 목록 복원 (createNavBar가 새 centerGroup을 만들었으므로)
             if (settings.recentAppsTaskbarEnabled) {
                 recentAppsManager?.getRecentApps()?.let { apps ->
-                    if (apps.isNotEmpty()) {
-                        recentAppsTaskbar?.updateApps(apps)
+                    val displayedApps = apps.take(settings.recentAppsTaskbarIconCount.coerceIn(3, 7))
+                    if (displayedApps.isNotEmpty()) {
+                        recentAppsTaskbar?.updateApps(displayedApps)
                     }
                 }
             }

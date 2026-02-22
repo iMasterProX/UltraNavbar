@@ -31,6 +31,9 @@
     <string name="recent_apps_taskbar_icon_shape_square">Square (Default)</string>
     <string name="recent_apps_taskbar_icon_shape_squircle">Squircle</string>
     <string name="recent_apps_taskbar_icon_shape_rounded_rect">Rounded Rect</string>
+    <string name="recent_apps_taskbar_icon_count_title">Taskbar Icon Count</string>
+    <string name="recent_apps_taskbar_icon_count_summary">Set how many icons are shown on the recent apps taskbar (3-7, default 5).</string>
+    <string name="recent_apps_taskbar_icon_count_value">Current: %1$d icons</string>
     <string name="recent_apps_taskbar_show_on_home_title">Show Taskbar on Home Screen</string>
     <string name="recent_apps_taskbar_show_on_home_summary">Keep recent app icons visible on the home screen.</string>
     <string name="split_screen_not_supported">%1$s does not support split screen</string>

@@ -66,6 +66,7 @@ class SettingsManager private constructor(context: Context) {
         // Recent Apps Taskbar
         private const val KEY_RECENT_APPS_TASKBAR_ENABLED = "recent_apps_taskbar_enabled"
         private const val KEY_RECENT_APPS_TASKBAR_ICON_SHAPE = "recent_apps_taskbar_icon_shape"
+        private const val KEY_RECENT_APPS_TASKBAR_ICON_COUNT = "recent_apps_taskbar_icon_count"
         private const val KEY_RECENT_APPS_TASKBAR_SHOW_ON_HOME = "recent_apps_taskbar_show_on_home"
 
         // Experimental: Split Screen via Taskbar
@@ -260,6 +261,10 @@ class SettingsManager private constructor(context: Context) {
             }
         }
         set(value) = prefs.edit().putString(KEY_RECENT_APPS_TASKBAR_ICON_SHAPE, value.name).apply()
+
+    var recentAppsTaskbarIconCount: Int
+        get() = prefs.getInt(KEY_RECENT_APPS_TASKBAR_ICON_COUNT, 5).coerceIn(3, 7)
+        set(value) = prefs.edit().putInt(KEY_RECENT_APPS_TASKBAR_ICON_COUNT, value.coerceIn(3, 7)).apply()
 
     var recentAppsTaskbarShowOnHome: Boolean
         get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_SHOW_ON_HOME, true)
