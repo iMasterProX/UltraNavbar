@@ -1503,7 +1503,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 taskbarEntryAnimator != null ||
                 taskbarExitAnimator != null
 
-            if (animate || isCurrentlyHidden) {
+            val shouldAnimateEntry = animate && !settings.recentAppsTaskbarShowOnHome
+
+            if (shouldAnimateEntry || (isCurrentlyHidden && !settings.recentAppsTaskbarShowOnHome)) {
                 animateTaskbarEntry()
             } else {
                 showTaskbarImmediate()
@@ -1730,7 +1732,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private fun shouldShowTaskbar(): Boolean {
         if (!settings.recentAppsTaskbarEnabled) return false
-        if (isRecentsVisible || isHomeExitPending) return false
+        if (isRecentsVisible) return false
+
+        // 홈 상시 표시가 켜져 있으면 홈/앱 전환 중에도 숨기지 않아
+        // 불필요한 재진입 애니메이션/깜빡임을 방지
+        if (settings.recentAppsTaskbarShowOnHome) return true
+
+        if (isHomeExitPending) return false
         if (isOnHomeScreen) return settings.recentAppsTaskbarShowOnHome
         if (currentPackage.isEmpty()) return false
         if (cachedLauncherPackages.contains(currentPackage)) return false
