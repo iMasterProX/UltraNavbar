@@ -208,6 +208,7 @@ class NavbarAppsPanel(
         val paddingPx = context.dpToPx(PANEL_PADDING_DP)
         val iconSizePx = context.dpToPx(ICON_SIZE_DP)
         val iconPaddingPx = context.dpToPx(ICON_PADDING_DP)
+        val iconShape = SettingsManager.getInstance(context).recentAppsTaskbarIconShape
 
         // 네비바와 동일한 배경색: 라이트=WHITE, 다크=BLACK
         val dark = isDarkMode()
@@ -244,7 +245,14 @@ class NavbarAppsPanel(
         var cellIndex = 0
         for (item in items) {
             val isShortcut = item.startsWith("shortcut:")
-            val cellView = createAppCell(item, isShortcut, iconSizePx, iconPaddingPx, textColor)
+            val cellView = createAppCell(
+                item,
+                isShortcut,
+                iconSizePx,
+                iconPaddingPx,
+                textColor,
+                iconShape
+            )
             val col = cellIndex % GRID_COLUMNS
             val row = cellIndex / GRID_COLUMNS
             cellView.layoutParams = GridLayout.LayoutParams(
@@ -280,7 +288,8 @@ class NavbarAppsPanel(
         isShortcut: Boolean,
         iconSizePx: Int,
         paddingPx: Int,
-        textColor: Int
+        textColor: Int,
+        iconShape: SettingsManager.RecentAppsTaskbarIconShape
     ): View {
         val pm = context.packageManager
         val packageName = if (isShortcut) item.removePrefix("shortcut:") else item
@@ -312,12 +321,7 @@ class NavbarAppsPanel(
             setImageDrawable(icon)
             scaleType = ImageView.ScaleType.CENTER_CROP
             layoutParams = LinearLayout.LayoutParams(iconSizePx, iconSizePx)
-            outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
-                    outline.setOval(0, 0, view.width, view.height)
-                }
-            }
-            clipToOutline = true
+            applyIconShape(this, iconShape)
         }
 
         val labelView = TextView(context).apply {
@@ -341,6 +345,37 @@ class NavbarAppsPanel(
         setupCellTouchListener(cell, iconView, packageName, isShortcut)
 
         return cell
+    }
+
+    private fun applyIconShape(
+        iconView: ImageView,
+        iconShape: SettingsManager.RecentAppsTaskbarIconShape
+    ) {
+        iconView.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                val width = view.width
+                val height = view.height
+                if (width <= 0 || height <= 0) return
+
+                when (iconShape) {
+                    SettingsManager.RecentAppsTaskbarIconShape.CIRCLE -> {
+                        outline.setOval(0, 0, width, height)
+                    }
+                    SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> {
+                        outline.setRect(0, 0, width, height)
+                    }
+                    SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> {
+                        val radius = minOf(width, height) * 0.38f
+                        outline.setRoundRect(0, 0, width, height, radius)
+                    }
+                    SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> {
+                        val radius = minOf(width, height) * 0.22f
+                        outline.setRoundRect(0, 0, width, height, radius)
+                    }
+                }
+            }
+        }
+        iconView.clipToOutline = true
     }
 
     @SuppressLint("ClickableViewAccessibility")

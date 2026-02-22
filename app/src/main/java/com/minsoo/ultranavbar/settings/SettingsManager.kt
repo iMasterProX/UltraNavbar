@@ -11,6 +11,13 @@ class SettingsManager private constructor(context: Context) {
         BLACK
     }
 
+    enum class RecentAppsTaskbarIconShape {
+        CIRCLE,
+        SQUARE,
+        SQUIRCLE,
+        ROUNDED_RECT
+    }
+
     companion object {
         private const val PREF_NAME = "UltraNavbarSettings"
         const val CROP_HEIGHT_PX = 72 // 배경 크롭 높이 (px)
@@ -58,6 +65,8 @@ class SettingsManager private constructor(context: Context) {
 
         // Recent Apps Taskbar
         private const val KEY_RECENT_APPS_TASKBAR_ENABLED = "recent_apps_taskbar_enabled"
+        private const val KEY_RECENT_APPS_TASKBAR_ICON_SHAPE = "recent_apps_taskbar_icon_shape"
+        private const val KEY_RECENT_APPS_TASKBAR_SHOW_ON_HOME = "recent_apps_taskbar_show_on_home"
 
         // Experimental: Split Screen via Taskbar
         private const val KEY_SPLIT_SCREEN_TASKBAR_ENABLED = "split_screen_taskbar_enabled"
@@ -237,6 +246,24 @@ class SettingsManager private constructor(context: Context) {
     var recentAppsTaskbarEnabled: Boolean
         get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, value).apply()
+
+    var recentAppsTaskbarIconShape: RecentAppsTaskbarIconShape
+        get() {
+            val stored = prefs.getString(
+                KEY_RECENT_APPS_TASKBAR_ICON_SHAPE,
+                RecentAppsTaskbarIconShape.SQUARE.name
+            ) ?: RecentAppsTaskbarIconShape.SQUARE.name
+            return try {
+                RecentAppsTaskbarIconShape.valueOf(stored)
+            } catch (e: IllegalArgumentException) {
+                RecentAppsTaskbarIconShape.SQUARE
+            }
+        }
+        set(value) = prefs.edit().putString(KEY_RECENT_APPS_TASKBAR_ICON_SHAPE, value.name).apply()
+
+    var recentAppsTaskbarShowOnHome: Boolean
+        get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_SHOW_ON_HOME, true)
+        set(value) = prefs.edit().putBoolean(KEY_RECENT_APPS_TASKBAR_SHOW_ON_HOME, value).apply()
 
     // 분할 화면 via 작업 표시줄 (실험적)
     var splitScreenTaskbarEnabled: Boolean

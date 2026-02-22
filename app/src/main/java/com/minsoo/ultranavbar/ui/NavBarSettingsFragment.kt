@@ -38,6 +38,12 @@ class NavBarSettingsFragment : Fragment() {
 
     // 최근 앱 작업 표시줄
     private lateinit var switchRecentAppsTaskbar: SwitchMaterial
+    private lateinit var switchRecentAppsTaskbarShowOnHome: SwitchMaterial
+    private lateinit var toggleRecentAppsIconShape: MaterialButtonToggleGroup
+    private lateinit var btnTaskbarShapeCircle: MaterialButton
+    private lateinit var btnTaskbarShapeSquare: MaterialButton
+    private lateinit var btnTaskbarShapeSquircle: MaterialButton
+    private lateinit var btnTaskbarShapeRoundedRect: MaterialButton
 
     // 버튼 배치 반전 (Android 12L 스타일)
     private lateinit var switchNavButtonsSwap: SwitchMaterial
@@ -155,6 +161,12 @@ class NavBarSettingsFragment : Fragment() {
 
         // 최근 앱 작업 표시줄 스위치
         switchRecentAppsTaskbar = view.findViewById(R.id.switchRecentAppsTaskbar)
+        switchRecentAppsTaskbarShowOnHome = view.findViewById(R.id.switchRecentAppsTaskbarShowOnHome)
+        toggleRecentAppsIconShape = view.findViewById(R.id.toggleRecentAppsIconShape)
+        btnTaskbarShapeCircle = view.findViewById(R.id.btnTaskbarShapeCircle)
+        btnTaskbarShapeSquare = view.findViewById(R.id.btnTaskbarShapeSquare)
+        btnTaskbarShapeSquircle = view.findViewById(R.id.btnTaskbarShapeSquircle)
+        btnTaskbarShapeRoundedRect = view.findViewById(R.id.btnTaskbarShapeRoundedRect)
 
         // 버튼 배치 반전 스위치
         switchNavButtonsSwap = view.findViewById(R.id.switchNavButtonsSwap)
@@ -250,6 +262,9 @@ class NavBarSettingsFragment : Fragment() {
 
         // 최근 앱 작업 표시줄 상태 로드
         switchRecentAppsTaskbar.isChecked = settings.recentAppsTaskbarEnabled
+        switchRecentAppsTaskbarShowOnHome.isChecked = settings.recentAppsTaskbarShowOnHome
+        updateRecentAppsIconShapeUi(settings.recentAppsTaskbarIconShape)
+        setRecentAppsTaskbarControlsEnabled(settings.recentAppsTaskbarEnabled)
 
         // 버튼 배치 반전 상태 로드
         switchNavButtonsSwap.isChecked = settings.navButtonsSwapped
@@ -279,6 +294,27 @@ class NavBarSettingsFragment : Fragment() {
         }
     }
 
+    private fun updateRecentAppsIconShapeUi(shape: SettingsManager.RecentAppsTaskbarIconShape) {
+        val targetId = when (shape) {
+            SettingsManager.RecentAppsTaskbarIconShape.CIRCLE -> R.id.btnTaskbarShapeCircle
+            SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> R.id.btnTaskbarShapeSquare
+            SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> R.id.btnTaskbarShapeSquircle
+            SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> R.id.btnTaskbarShapeRoundedRect
+        }
+        if (toggleRecentAppsIconShape.checkedButtonId != targetId) {
+            toggleRecentAppsIconShape.check(targetId)
+        }
+    }
+
+    private fun setRecentAppsTaskbarControlsEnabled(enabled: Boolean) {
+        switchRecentAppsTaskbarShowOnHome.isEnabled = enabled
+        toggleRecentAppsIconShape.isEnabled = enabled
+        btnTaskbarShapeCircle.isEnabled = enabled
+        btnTaskbarShapeSquare.isEnabled = enabled
+        btnTaskbarShapeSquircle.isEnabled = enabled
+        btnTaskbarShapeRoundedRect.isEnabled = enabled
+    }
+
     private fun setHomeBgButtonColorControlsEnabled(enabled: Boolean) {
         toggleHomeBgButtonColor.isEnabled = enabled
         btnHomeBgColorAuto.isEnabled = enabled
@@ -305,7 +341,30 @@ class NavBarSettingsFragment : Fragment() {
         // 최근 앱 작업 표시줄
         switchRecentAppsTaskbar.setOnCheckedChangeListener { _, isChecked ->
             settings.recentAppsTaskbarEnabled = isChecked
+            setRecentAppsTaskbarControlsEnabled(isChecked)
             notifySettingsChanged()
+        }
+
+        switchRecentAppsTaskbarShowOnHome.setOnCheckedChangeListener { _, isChecked ->
+            settings.recentAppsTaskbarShowOnHome = isChecked
+            notifySettingsChanged()
+        }
+
+        toggleRecentAppsIconShape.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+
+            val shape = when (checkedId) {
+                R.id.btnTaskbarShapeCircle -> SettingsManager.RecentAppsTaskbarIconShape.CIRCLE
+                R.id.btnTaskbarShapeSquare -> SettingsManager.RecentAppsTaskbarIconShape.SQUARE
+                R.id.btnTaskbarShapeSquircle -> SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE
+                R.id.btnTaskbarShapeRoundedRect -> SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT
+                else -> return@addOnButtonCheckedListener
+            }
+
+            if (settings.recentAppsTaskbarIconShape != shape) {
+                settings.recentAppsTaskbarIconShape = shape
+                notifySettingsChanged()
+            }
         }
 
         // 버튼 배치 반전 (Android 12L 스타일)

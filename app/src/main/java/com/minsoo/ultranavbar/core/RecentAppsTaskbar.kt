@@ -14,13 +14,14 @@ import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.ImageView
 import android.widget.LinearLayout
+import com.minsoo.ultranavbar.settings.SettingsManager
 import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
  * 최근 앱 작업 표시줄 UI 관리
  *
- * 중앙 LinearLayout에 원형 앱 아이콘 표시
+ * 중앙 LinearLayout에 앱 아이콘 표시
  * 탭: 앱 전환
  * 길게 누른 뒤 드래그: 분할화면 실행
  */
@@ -46,10 +47,15 @@ class RecentAppsTaskbar(
         fun onDragStart(iconView: ImageView, screenX: Float, screenY: Float)  // 드래그 시작 (아이콘 정보 전달)
         fun onDragEnd()  // 드래그 종료
         fun shouldIgnoreTouch(toolType: Int): Boolean
+        fun isSplitDragAllowed(): Boolean
     }
 
     /** 분할화면 드래그 활성화 여부 (false면 탭만 가능) */
     var splitScreenEnabled: Boolean = false
+
+    /** 최근 앱 아이콘 모양 */
+    var iconShape: SettingsManager.RecentAppsTaskbarIconShape =
+        SettingsManager.RecentAppsTaskbarIconShape.SQUARE
 
     private var centerGroup: LinearLayout? = null
     private val iconViews = mutableListOf<ImageView>()
@@ -100,7 +106,7 @@ class RecentAppsTaskbar(
         // 새 아이콘 추가
         val sizePx = context.dpToPx(Constants.Dimension.TASKBAR_ICON_SIZE_DP)
         for (app in apps) {
-            val iconView = createCircularIconView(app, sizePx)
+            val iconView = createIconView(app, sizePx)
             setupTouchListener(iconView, app)
             group.addView(iconView)
             iconViews.add(iconView)
@@ -126,13 +132,20 @@ class RecentAppsTaskbar(
     }
 
     /**
-     * 원형 아이콘 뷰 생성
+     * 아이콘 뷰 생성
      */
-    private fun createCircularIconView(
+    private fun createIconView(
         app: RecentAppsManager.RecentAppInfo,
         sizePx: Int
     ): ImageView {
         val spacingPx = context.dpToPx(Constants.Dimension.TASKBAR_ICON_SPACING_DP / 2)
+        val shapeMode = iconShape
+        val cornerRadiusPx = when (shapeMode) {
+            SettingsManager.RecentAppsTaskbarIconShape.CIRCLE -> sizePx / 2f
+            SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> 0f
+            SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> sizePx * 0.38f
+            SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> sizePx * 0.22f
+        }
 
         return ImageView(context).apply {
             val params = LinearLayout.LayoutParams(sizePx, sizePx).apply {
@@ -144,10 +157,26 @@ class RecentAppsTaskbar(
             setImageDrawable(app.icon)
             contentDescription = app.label
 
-            // 원형 클리핑
+            // 모양별 클리핑
             outlineProvider = object : ViewOutlineProvider() {
                 override fun getOutline(view: View, outline: Outline) {
-                    outline.setOval(0, 0, view.width, view.height)
+                    val width = view.width
+                    val height = view.height
+                    if (width <= 0 || height <= 0) {
+                        return
+                    }
+                    when (shapeMode) {
+                        SettingsManager.RecentAppsTaskbarIconShape.CIRCLE -> {
+                            outline.setOval(0, 0, width, height)
+                        }
+                        SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> {
+                            outline.setRect(0, 0, width, height)
+                        }
+                        SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE,
+                        SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> {
+                            outline.setRoundRect(0, 0, width, height, cornerRadiusPx)
+                        }
+                    }
                 }
             }
             clipToOutline = true
@@ -158,7 +187,20 @@ class RecentAppsTaskbar(
             // Ripple 효과
             val rippleColor = ColorStateList.valueOf(0x33808080)
             val maskDrawable = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
+                when (shapeMode) {
+                    SettingsManager.RecentAppsTaskbarIconShape.CIRCLE -> {
+                        shape = GradientDrawable.OVAL
+                    }
+                    SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> {
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = 0f
+                    }
+                    SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE,
+                    SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> {
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = cornerRadiusPx
+                    }
+                }
                 setColor(android.graphics.Color.GRAY)
             }
             foreground = RippleDrawable(rippleColor, null, maskDrawable)
@@ -184,7 +226,7 @@ class RecentAppsTaskbar(
         val splitTriggerPx = context.dpToPx(SPLIT_TRIGGER_DP)
 
         val longPressRunnable = Runnable {
-            if (!splitScreenEnabled || hasMoved) {
+            if (!splitScreenEnabled || hasMoved || !listener.isSplitDragAllowed()) {
                 return@Runnable
             }
             longPressTriggered = true

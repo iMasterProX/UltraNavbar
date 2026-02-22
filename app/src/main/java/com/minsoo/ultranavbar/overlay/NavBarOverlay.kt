@@ -253,6 +253,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         override fun shouldIgnoreTouch(toolType: Int): Boolean {
             return settings.ignoreStylus && toolType == MotionEvent.TOOL_TYPE_STYLUS
         }
+
+        override fun isSplitDragAllowed(): Boolean {
+            val launchContext = service.getSplitLaunchContext()
+            return !launchContext.isOnHomeScreen && settings.splitScreenTaskbarEnabled
+        }
     }
 
     private val navbarAppsPanelListener = object : NavbarAppsPanel.PanelActionListener {
@@ -503,6 +508,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             recentAppsManager = RecentAppsManager(context, recentAppsListener)
             recentAppsTaskbar = RecentAppsTaskbar(context, taskbarListener).apply {
                 splitScreenEnabled = settings.splitScreenTaskbarEnabled
+                iconShape = settings.recentAppsTaskbarIconShape
             }
         }
 
@@ -691,8 +697,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 bar.addView(centerView, centerParams)
                 centerGroupView = centerView
 
-                // 홈화면이면 숨김
-                if (isOnHomeScreen || isRecentsVisible) {
+                if (!shouldShowTaskbar()) {
                     centerView.visibility = View.GONE
                 }
             }
@@ -1236,8 +1241,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 clearHomeExitSuppression()
                 Log.d(TAG, "Home screen state: true")
 
-                // 홈화면에서는 최근 앱 작업 표시줄 숨김 (애니메이션 적용)
-                animateTaskbarExit()
+                if (settings.recentAppsTaskbarShowOnHome) {
+                    syncTaskbarVisibility(animate = true)
+                } else {
+                    // 홈화면에서는 최근 앱 작업 표시줄 숨김 (애니메이션 적용)
+                    animateTaskbarExit()
+                }
 
                 // 언락 페이드 중에는 배경 전환하지 않음 (언락 완료 후 자동 업데이트)
                 if (isUnlockPending || isUnlockFadeRunning || isUnlockFadeSuppressed) {
@@ -1283,7 +1292,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             // 홈 -> 앱 전환 시 진입 애니메이션이 항상 보이도록
             // 한 프레임 리셋 후 재생
-            playTaskbarEntryFromHomeIfNeeded()
+            if (settings.recentAppsTaskbarShowOnHome) {
+                syncTaskbarVisibility(animate = true)
+            } else {
+                playTaskbarEntryFromHomeIfNeeded()
+            }
 
             updateNavBarBackground()
         }
@@ -1679,7 +1692,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         isRecentsVisible = false
         updateNavBarBackground()
         if (isOnHomeScreen) {
-            hideTaskbarImmediate()
+            syncTaskbarVisibility(animate = true)
         } else {
             val task = Runnable {
                 pendingRecentsClose = null
@@ -1717,7 +1730,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private fun shouldShowTaskbar(): Boolean {
         if (!settings.recentAppsTaskbarEnabled) return false
-        if (isOnHomeScreen || isRecentsVisible || isHomeExitPending) return false
+        if (isRecentsVisible || isHomeExitPending) return false
+        if (isOnHomeScreen) return settings.recentAppsTaskbarShowOnHome
         if (currentPackage.isEmpty()) return false
         if (cachedLauncherPackages.contains(currentPackage)) return false
         return true
@@ -2228,19 +2242,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val iconSize = iconView.width
         if (iconSize <= 0) return
 
-        // 아이콘 drawable 복사 + 원형 클리핑 적용
+        // 아이콘 drawable 복사 + 모양 클리핑 적용
         val drawable = iconView.drawable?.constantState?.newDrawable()?.mutate() ?: return
 
         val icon = ImageView(context).apply {
             setImageDrawable(drawable)
             scaleType = ImageView.ScaleType.CENTER_CROP
-            // 원형 클리핑 (원본 아이콘과 동일)
-            outlineProvider = object : android.view.ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: android.graphics.Outline) {
-                    outline.setOval(0, 0, view.width, view.height)
-                }
-            }
-            clipToOutline = true
+            applyDragIconShape(this, settings.recentAppsTaskbarIconShape)
         }
         dragIconView = icon
 
@@ -2285,6 +2293,37 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             dragOverlayView = null
             dragIconView = null
         }
+    }
+
+    private fun applyDragIconShape(
+        icon: ImageView,
+        shapeMode: SettingsManager.RecentAppsTaskbarIconShape
+    ) {
+        icon.outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: android.graphics.Outline) {
+                val width = view.width
+                val height = view.height
+                if (width <= 0 || height <= 0) return
+
+                when (shapeMode) {
+                    SettingsManager.RecentAppsTaskbarIconShape.CIRCLE -> {
+                        outline.setOval(0, 0, width, height)
+                    }
+                    SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> {
+                        outline.setRect(0, 0, width, height)
+                    }
+                    SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> {
+                        val radius = minOf(width, height) * 0.38f
+                        outline.setRoundRect(0, 0, width, height, radius)
+                    }
+                    SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> {
+                        val radius = minOf(width, height) * 0.22f
+                        outline.setRoundRect(0, 0, width, height, radius)
+                    }
+                }
+            }
+        }
+        icon.clipToOutline = true
     }
 
     /**
@@ -2371,12 +2410,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 recentAppsManager = RecentAppsManager(context, recentAppsListener)
                 recentAppsTaskbar = RecentAppsTaskbar(context, taskbarListener).apply {
                     splitScreenEnabled = settings.splitScreenTaskbarEnabled
+                    iconShape = settings.recentAppsTaskbarIconShape
                 }
                 recentAppsManager?.setLauncherPackages(cachedLauncherPackages)
                 recentAppsManager?.loadInitialRecentApps()
             } else {
                 // 설정 변경 시 분할화면 플래그 업데이트
                 recentAppsTaskbar?.splitScreenEnabled = settings.splitScreenTaskbarEnabled
+                recentAppsTaskbar?.iconShape = settings.recentAppsTaskbarIconShape
             }
         } else {
             recentAppsManager?.clear()
@@ -2410,6 +2451,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         updateNavBarBackground()
+        syncTaskbarVisibility(animate = false)
         buttonManager.updatePanelButtonState(isPanelOpen())
     }
 
