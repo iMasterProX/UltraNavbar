@@ -16,6 +16,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
+import android.view.animation.PathInterpolator
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -41,6 +42,14 @@ class NavbarAppsPanel(
         const val PANEL_CORNER_RADIUS_DP = 16f
         const val LABEL_TEXT_SIZE_SP = 11f
         const val PANEL_MAX_WIDTH_DP = 250
+        private const val PANEL_SHOW_DURATION_MS = 220L
+        private const val PANEL_HIDE_DURATION_MS = 220L
+        private const val PANEL_ENTER_TRANSLATION_X_DP = 8f
+        private const val PANEL_EXIT_TRANSLATION_X_DP = 10f
+        private const val PANEL_ENTER_TRANSLATION_DP = 14f
+        private const val PANEL_EXIT_TRANSLATION_DP = 10f
+        private const val PANEL_ENTER_START_SCALE = 1f
+        private const val PANEL_EXIT_END_SCALE = 1f
     }
 
     interface PanelActionListener {
@@ -57,8 +66,18 @@ class NavbarAppsPanel(
 
     private var panelView: View? = null
     private var backdropView: View? = null
+    private var closingPanelView: View? = null
+    private var closingBackdropView: View? = null
+    private var cachedPanelView: View? = null
+    private var cachedBackdropView: View? = null
+    private var cachedPanelStateKey: String = ""
     private var isVisible = false
     private var isDragActive = false
+    private var panelAnimationGeneration = 0
+    private var lastPanelShownOnLeft = false
+
+    private val panelShowInterpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
+    private val panelHideInterpolator = PathInterpolator(0.4f, 0f, 1f, 1f)
 
     fun show(anchorX: Int, anchorY: Int, isSwapped: Boolean = false) {
         if (isVisible) {
@@ -68,20 +87,45 @@ class NavbarAppsPanel(
 
         // 혹시 남아있는 이전 패널 즉시 정리
         panelView?.let {
-            try { windowManager.removeView(it) } catch (_: Exception) {}
+            try { windowManager.removeViewImmediate(it) } catch (_: Exception) {}
             panelView = null
         }
         backdropView?.let {
-            try { windowManager.removeView(it) } catch (_: Exception) {}
+            try { windowManager.removeViewImmediate(it) } catch (_: Exception) {}
             backdropView = null
+        }
+        closingPanelView?.let {
+            try { windowManager.removeViewImmediate(it) } catch (_: Exception) {}
+            closingPanelView = null
+        }
+        closingBackdropView?.let {
+            try { windowManager.removeViewImmediate(it) } catch (_: Exception) {}
+            closingBackdropView = null
         }
 
         val settings = SettingsManager.getInstance(context)
         val items = settings.navbarAppsItems
+        val panelStateKey = buildPanelStateKey(items, settings)
 
         createBackdrop()
 
-        val panel = createPanelView(items)
+        val reusable = cachedPanelView
+        val canReuse =
+            reusable != null &&
+                cachedPanelStateKey == panelStateKey
+
+        val panel = if (canReuse) {
+            resetPanelVisualState(reusable!!)
+            reusable
+        } else {
+            reusable?.let {
+                removeViewSafely(it, immediate = true)
+            }
+            createPanelView(items).also {
+                cachedPanelView = it
+                cachedPanelStateKey = panelStateKey
+            }
+        }
         panelView = panel
 
         val panelWidthPx = context.dpToPx(PANEL_MAX_WIDTH_DP)
@@ -100,12 +144,40 @@ class NavbarAppsPanel(
         }
 
         try {
-            windowManager.addView(panel, params)
+            if (panel.isAttachedToWindow) {
+                windowManager.updateViewLayout(panel, params)
+            } else {
+                windowManager.addView(panel, params)
+            }
+            panel.visibility = View.VISIBLE
             isVisible = true
-            Log.d(TAG, "show() opened panel")
+            lastPanelShownOnLeft = isSwapped
+            startShowAnimation(panel, backdropView, isSwapped)
+            Log.d(TAG, "show() opened panel (reused=$canReuse)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to show panel", e)
         }
+    }
+
+    private fun buildPanelStateKey(
+        items: List<String>,
+        settings: SettingsManager
+    ): String {
+        val darkModeKey = if (isDarkMode()) "dark" else "light"
+        val iconShapeKey = settings.recentAppsTaskbarIconShape.name
+        return items.joinToString(
+            separator = "|",
+            prefix = "$darkModeKey|$iconShapeKey|"
+        )
+    }
+
+    private fun resetPanelVisualState(panel: View) {
+        panel.animate().cancel()
+        panel.alpha = 1f
+        panel.scaleX = 1f
+        panel.scaleY = 1f
+        panel.translationX = 0f
+        panel.translationY = 0f
     }
 
     fun hide(immediate: Boolean = false, reason: String = "unspecified") {
@@ -123,19 +195,127 @@ class NavbarAppsPanel(
         panelView = null
         backdropView = null
 
-        removeViewSafely(panel)
-        removeViewSafely(backdrop)
-        Log.d(TAG, "hide() complete (reason=$reason)")
+        if (immediate) {
+            panelAnimationGeneration++
+            panel?.animate()?.cancel()
+            backdrop?.animate()?.cancel()
+            closingPanelView?.animate()?.cancel()
+            closingBackdropView?.animate()?.cancel()
+            removeViewSafely(panel, immediate = true)
+            removeViewSafely(backdrop, immediate = true)
+            removeViewSafely(closingPanelView, immediate = true)
+            removeViewSafely(closingBackdropView, immediate = true)
+            removeViewSafely(cachedPanelView, immediate = true)
+            removeViewSafely(cachedBackdropView, immediate = true)
+            closingPanelView = null
+            closingBackdropView = null
+            cachedPanelView = null
+            cachedBackdropView = null
+            cachedPanelStateKey = ""
+            Log.d(TAG, "hide() complete immediate (reason=$reason)")
+            return
+        }
+
+        startHideAnimation(panel, backdrop, reason)
+    }
+
+    private fun startShowAnimation(panel: View, backdrop: View?, isSwapped: Boolean) {
+        panelAnimationGeneration++
+        val enterTranslationX =
+            if (isSwapped) -context.dpToPx(PANEL_ENTER_TRANSLATION_X_DP).toFloat()
+            else context.dpToPx(PANEL_ENTER_TRANSLATION_X_DP).toFloat()
+        val enterTranslation = context.dpToPx(PANEL_ENTER_TRANSLATION_DP).toFloat()
+
+        panel.alpha = 0f
+        panel.scaleX = PANEL_ENTER_START_SCALE
+        panel.scaleY = PANEL_ENTER_START_SCALE
+        panel.translationX = enterTranslationX
+        panel.translationY = enterTranslation
+
+        backdrop?.alpha = 0f
+
+        panel.animate().cancel()
+        panel.animate()
+            .alpha(1f)
+            .translationX(0f)
+            .translationY(0f)
+            .setDuration(PANEL_SHOW_DURATION_MS)
+            .setInterpolator(panelShowInterpolator)
+            .start()
+
+        backdrop?.animate()?.cancel()
+        backdrop?.animate()
+            ?.alpha(1f)
+            ?.setDuration(PANEL_SHOW_DURATION_MS)
+            ?.setInterpolator(panelShowInterpolator)
+            ?.start()
+    }
+
+    private fun startHideAnimation(panel: View?, backdrop: View?, reason: String) {
+        if (panel == null) {
+            removeViewSafely(backdrop)
+            Log.d(TAG, "hide() complete (panel null, reason=$reason)")
+            return
+        }
+
+        panelAnimationGeneration++
+        closingPanelView = panel
+        closingBackdropView = backdrop
+        val isSwapped = lastPanelShownOnLeft
+        val exitTranslationX =
+            if (isSwapped) -context.dpToPx(PANEL_EXIT_TRANSLATION_X_DP).toFloat()
+            else context.dpToPx(PANEL_EXIT_TRANSLATION_X_DP).toFloat()
+        val exitTranslation = context.dpToPx(PANEL_EXIT_TRANSLATION_DP).toFloat()
+
+        panel.pivotX = if (isSwapped) 0f else panel.width.toFloat()
+        panel.pivotY = panel.height.toFloat()
+
+        panel.animate().cancel()
+        backdrop?.animate()?.cancel()
+
+        panel.animate()
+            .alpha(0f)
+            .scaleX(PANEL_EXIT_END_SCALE)
+            .scaleY(PANEL_EXIT_END_SCALE)
+            .translationX(exitTranslationX)
+            .translationY(exitTranslation)
+            .setDuration(PANEL_HIDE_DURATION_MS)
+            .setInterpolator(panelHideInterpolator)
+            .withEndAction {
+                panel.alpha = 0f
+                backdrop?.alpha = 0f
+                panel.visibility = View.INVISIBLE
+                backdrop?.visibility = View.INVISIBLE
+                resetPanelVisualState(panel)
+                if (closingPanelView === panel) {
+                    closingPanelView = null
+                }
+                if (closingBackdropView === backdrop) {
+                    closingBackdropView = null
+                }
+                Log.d(TAG, "hide() complete (reason=$reason)")
+            }
+            .start()
+
+        backdrop?.animate()
+            ?.alpha(0f)
+            ?.setDuration(PANEL_HIDE_DURATION_MS)
+            ?.setInterpolator(panelHideInterpolator)
+            ?.start()
     }
 
     /**
      * WindowManager에서 안전하게 뷰 제거
      */
-    private fun removeViewSafely(view: View?) {
+    private fun removeViewSafely(view: View?, immediate: Boolean = false) {
         view ?: return
         try {
             if (view.isAttachedToWindow) {
-                windowManager.removeView(view)
+                if (immediate) {
+                    windowManager.removeViewImmediate(view)
+                } else {
+                    windowManager.removeView(view)
+                }
             }
         } catch (_: Exception) {}
     }
@@ -155,7 +335,7 @@ class NavbarAppsPanel(
     fun finishDrag() {
         if (isDragActive) {
             isDragActive = false
-            hide(reason = "finish_drag")
+            hide(immediate = true, reason = "finish_drag")
         }
     }
 
@@ -163,7 +343,7 @@ class NavbarAppsPanel(
 
     @SuppressLint("ClickableViewAccessibility")
     private fun createBackdrop() {
-        val backdrop = View(context).apply {
+        val backdrop = cachedBackdropView ?: View(context).apply {
             setBackgroundColor(Color.TRANSPARENT)
             setOnTouchListener { _, event ->
                 when (event.actionMasked) {
@@ -178,7 +358,10 @@ class NavbarAppsPanel(
                     else -> true
                 }
             }
+        }.also {
+            cachedBackdropView = it
         }
+        backdrop.visibility = View.VISIBLE
         backdropView = backdrop
 
         val params = WindowManager.LayoutParams().apply {
@@ -192,7 +375,11 @@ class NavbarAppsPanel(
         }
 
         try {
-            windowManager.addView(backdrop, params)
+            if (backdrop.isAttachedToWindow) {
+                windowManager.updateViewLayout(backdrop, params)
+            } else {
+                windowManager.addView(backdrop, params)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create backdrop", e)
         }
