@@ -11,13 +11,20 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.TransitionDrawable
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import android.view.ContextThemeWrapper
 import android.view.Gravity
 
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.PathInterpolator
+import androidx.core.graphics.ColorUtils
+import com.google.android.material.R as MaterialR
+import com.google.android.material.color.DynamicColors
+import com.google.android.material.color.MaterialColors
+import com.minsoo.ultranavbar.R as AppR
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.util.ImageCropUtil
 
@@ -34,7 +41,14 @@ class BackgroundManager(
 ) {
     companion object {
         private const val TAG = "BackgroundManager"
-        private const val UNIFIED_DEFAULT_BG_COLOR = 0xFF535257.toInt()
+        // Material3 동적 색상 팔레트를 가져오지 못할 때 폴백
+        private const val UNIFIED_DEFAULT_BG_COLOR = 0xFF000000.toInt()
+        private const val MATERIAL3_NEUTRAL_PREFIX = "system_neutral1"
+        private const val MATERIAL3_ACCENT_PREFIX = "system_accent1"
+        private const val DAY_MID_BLEND_RATIO = 0.55f
+        private const val NIGHT_MID_BLEND_RATIO = 0.55f
+        private const val DAY_ACCENT_BLEND_RATIO = 0.2f
+        private const val NIGHT_ACCENT_BLEND_RATIO = 0.18f
     }
 
     private val settings: SettingsManager = SettingsManager.getInstance(context)
@@ -59,6 +73,8 @@ class BackgroundManager(
     val currentButtonColor: Int get() = _currentButtonColor
 
     private var currentOrientation: Int = Configuration.ORIENTATION_UNDEFINED
+    private var lastLoggedUnifiedColor: Int = Int.MIN_VALUE
+    private var lastLoggedUnifiedSource: String = ""
 
     private var lastAppliedUseCustom: Boolean = false
     private var transitionSourceUseCustom: Boolean = false
@@ -80,6 +96,11 @@ class BackgroundManager(
         fun onButtonColorChanged(color: Int)
         fun onBackgroundApplied(drawable: Drawable)
     }
+
+    private data class ResolvedUnifiedColor(
+        val color: Int,
+        val source: String
+    )
 
     // ===== 초기화 =====
 
@@ -287,7 +308,17 @@ class BackgroundManager(
 
     fun getDefaultBackgroundColor(): Int {
         if (settings.unifiedNormalBgColorEnabled) {
-            return UNIFIED_DEFAULT_BG_COLOR
+            val resolved = resolveUnifiedMaterial3Color()
+            if (resolved.color != lastLoggedUnifiedColor || resolved.source != lastLoggedUnifiedSource) {
+                lastLoggedUnifiedColor = resolved.color
+                lastLoggedUnifiedSource = resolved.source
+                Log.d(
+                    TAG,
+                    "Unified material color: #${Integer.toHexString(resolved.color)} " +
+                        "(dark=$_isDarkMode, source=${resolved.source})"
+                )
+            }
+            return resolved.color
         }
 
         // 실제 시스템 다크 모드 상태를 직접 확인
@@ -300,12 +331,173 @@ class BackgroundManager(
      */
     fun getDefaultButtonColor(): Int {
         if (settings.unifiedNormalBgColorEnabled) {
-            return Color.WHITE
+            val unifiedColor = resolveUnifiedMaterial3Color().color
+            return if (isColorLight(unifiedColor)) Color.BLACK else Color.WHITE
         }
 
         // 실제 시스템 다크 모드 상태를 직접 확인
         syncDarkModeState()
         return if (_isDarkMode) Color.WHITE else Color.DKGRAY
+    }
+
+    private fun resolveUnifiedMaterial3Color(): ResolvedUnifiedColor {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return ResolvedUnifiedColor(UNIFIED_DEFAULT_BG_COLOR, "legacy_fallback")
+        }
+
+        syncDarkModeState()
+
+        resolveUnifiedColorFromMaterialTheme()?.let {
+            return ResolvedUnifiedColor(it, "material_theme")
+        }
+
+        val neutralPalette = loadMaterial3PaletteSorted(MATERIAL3_NEUTRAL_PREFIX)
+        val accentPalette = loadMaterial3PaletteSorted(MATERIAL3_ACCENT_PREFIX)
+
+        if (neutralPalette.isEmpty() && accentPalette.isEmpty()) {
+            return ResolvedUnifiedColor(UNIFIED_DEFAULT_BG_COLOR, "hard_fallback")
+        }
+
+        val resolvedColor = if (_isDarkMode) {
+            resolveUnifiedNightColor(neutralPalette, accentPalette)
+        } else {
+            resolveUnifiedDayColor(neutralPalette, accentPalette)
+        }
+
+        return ResolvedUnifiedColor(resolvedColor, "system_palette")
+    }
+
+    private fun resolveUnifiedColorFromMaterialTheme(): Int? {
+        return try {
+            val baseThemedContext = ContextThemeWrapper(context, AppR.style.Theme_UltraNavbar)
+            val themedContext = DynamicColors.wrapContextIfAvailable(baseThemedContext)
+
+            val surface = MaterialColors.getColor(
+                themedContext,
+                MaterialR.attr.colorSurface,
+                UNIFIED_DEFAULT_BG_COLOR
+            )
+            val surfaceVariant = MaterialColors.getColor(
+                themedContext,
+                MaterialR.attr.colorSurfaceVariant,
+                surface
+            )
+            val background = MaterialColors.getColor(
+                themedContext,
+                android.R.attr.colorBackground,
+                surface
+            )
+            val primaryContainer = MaterialColors.getColor(
+                themedContext,
+                MaterialR.attr.colorPrimaryContainer,
+                surfaceVariant
+            )
+            val secondaryContainer = MaterialColors.getColor(
+                themedContext,
+                MaterialR.attr.colorSecondaryContainer,
+                surfaceVariant
+            )
+
+            val base = ColorUtils.blendARGB(surface, surfaceVariant, 0.5f)
+            val brightest = listOf(surface, background, primaryContainer, secondaryContainer)
+                .maxByOrNull { calculateLuminance(it) } ?: base
+            val darkest = listOf(surface, background, surfaceVariant, secondaryContainer, primaryContainer)
+                .minByOrNull { calculateLuminance(it) } ?: base
+
+            val midpoint = if (_isDarkMode) {
+                ColorUtils.blendARGB(base, darkest, NIGHT_MID_BLEND_RATIO)
+            } else {
+                ColorUtils.blendARGB(base, brightest, DAY_MID_BLEND_RATIO)
+            }
+
+            val accentRepresentative = if (_isDarkMode) secondaryContainer else primaryContainer
+            val accentBlendRatio = if (_isDarkMode) NIGHT_ACCENT_BLEND_RATIO else DAY_ACCENT_BLEND_RATIO
+
+            ColorUtils.blendARGB(midpoint, accentRepresentative, accentBlendRatio)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun resolveUnifiedDayColor(neutralPalette: List<Int>, accentPalette: List<Int>): Int {
+        val dayBase = when {
+            neutralPalette.isNotEmpty() -> midpointColorByLuminance(neutralPalette, towardBright = true)
+            accentPalette.isNotEmpty() -> midpointColorByLuminance(accentPalette, towardBright = true)
+            else -> UNIFIED_DEFAULT_BG_COLOR
+        }
+
+        if (accentPalette.isEmpty()) return dayBase
+
+        val dayAccentRepresentative = midpointColorByLuminance(accentPalette, towardBright = true)
+        return ColorUtils.blendARGB(dayBase, dayAccentRepresentative, DAY_ACCENT_BLEND_RATIO)
+    }
+
+    private fun resolveUnifiedNightColor(neutralPalette: List<Int>, accentPalette: List<Int>): Int {
+        val nightBase = when {
+            neutralPalette.isNotEmpty() -> midpointColorByLuminance(neutralPalette, towardBright = false)
+            accentPalette.isNotEmpty() -> midpointColorByLuminance(accentPalette, towardBright = false)
+            else -> UNIFIED_DEFAULT_BG_COLOR
+        }
+
+        if (accentPalette.isEmpty()) return nightBase
+
+        val nightAccentRepresentative = midpointColorByLuminance(accentPalette, towardBright = false)
+        return ColorUtils.blendARGB(nightBase, nightAccentRepresentative, NIGHT_ACCENT_BLEND_RATIO)
+    }
+
+    private fun midpointColorByLuminance(palette: List<Int>, towardBright: Boolean): Int {
+        if (palette.isEmpty()) return UNIFIED_DEFAULT_BG_COLOR
+
+        val midIndex = palette.size / 2
+        val edgeIndex = if (towardBright) {
+            palette.lastIndex
+        } else {
+            0
+        }
+
+        val midBlendRatio = if (towardBright) DAY_MID_BLEND_RATIO else NIGHT_MID_BLEND_RATIO
+
+        return ColorUtils.blendARGB(palette[midIndex], palette[edgeIndex], midBlendRatio)
+    }
+
+    private fun loadMaterial3PaletteSorted(prefix: String): List<Int> {
+        val palette = linkedSetOf<Int>()
+        for (name in buildToneResourceNames(prefix)) {
+            val resId = context.resources.getIdentifier(name, "color", "android")
+            if (resId == 0) continue
+            try {
+                palette += context.getColor(resId)
+            } catch (_: Exception) {
+                // ignore and continue with available tones
+            }
+        }
+
+        return palette.sortedBy { color ->
+            calculateLuminance(color)
+        }
+    }
+
+    private fun buildToneResourceNames(prefix: String): List<String> {
+        val names = linkedSetOf<String>()
+
+        // Pixel/Monet 계열(0~100 톤 표기)
+        for (tone in 0..100 step 10) {
+            names += "${prefix}_$tone"
+        }
+
+        // OEM/프레임워크 호환(0~1000 톤 표기)
+        for (tone in 0..1000 step 100) {
+            names += "${prefix}_$tone"
+        }
+
+        return names.toList()
+    }
+
+    private fun calculateLuminance(color: Int): Double {
+        val r = Color.red(color)
+        val g = Color.green(color)
+        val b = Color.blue(color)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
     }
 
     /**

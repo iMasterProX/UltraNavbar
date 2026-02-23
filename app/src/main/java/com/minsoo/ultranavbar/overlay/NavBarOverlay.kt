@@ -58,6 +58,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     companion object {
         private const val TAG = "NavBarOverlay"
         private const val APP_DRAWER_CLOSE_LAUNCH_GUARD_MS = 600L
+        private const val GOOGLE_QUICKSEARCHBOX_PACKAGE = "com.google.android.googlequicksearchbox"
     }
 
     private val context: Context = service
@@ -96,6 +97,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     // 시스템 상태
     private var currentPackage: String = ""
+    private var currentForegroundClassName: String = ""
     private var isOnHomeScreen = false
     private var isRecentsVisible = false
     private var isAppDrawerOpen = false
@@ -1778,15 +1780,32 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         updateNavBarBackground()
     }
 
-    fun setForegroundPackage(packageName: String) {
-        if (currentPackage == packageName) return
-        currentPackage = packageName
-        Log.d(TAG, "Foreground package changed: $packageName")
-        updateNavBarBackground()
-        recentAppsManager?.onForegroundAppChanged(packageName)
+    fun setForegroundPackage(packageName: String, className: String = "") {
+        val normalizedClass = className.trim()
+        val packageChanged = currentPackage != packageName
+        val classChanged = currentForegroundClassName != normalizedClass
 
-        // 포그라운드 패키지 변동(IME/런처/앱 전환) 후 진입 애니메이션 우선
-        syncTaskbarVisibility(animate = true)
+        if (!packageChanged && !classChanged) return
+
+        if (packageChanged) {
+            currentPackage = packageName
+            Log.d(TAG, "Foreground package changed: $packageName")
+            updateNavBarBackground()
+
+            // 포그라운드 패키지 변동(IME/런처/앱 전환) 후 진입 애니메이션 우선
+            syncTaskbarVisibility(animate = true)
+        }
+
+        currentForegroundClassName = normalizedClass
+
+        if (packageChanged || packageName == GOOGLE_QUICKSEARCHBOX_PACKAGE) {
+            recentAppsManager?.onForegroundAppChanged(
+                packageName = packageName,
+                className = normalizedClass,
+                isOnHomeScreen = isOnHomeScreen,
+                isRecentsVisible = isRecentsVisible
+            )
+        }
     }
 
     private fun shouldShowTaskbar(): Boolean {

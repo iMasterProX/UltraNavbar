@@ -47,6 +47,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         private const val DISABLED_HOME_RECOVERY_WINDOW_MS = 5000L
         private const val SPLIT_FOREGROUND_STALE_MS = 2500L
         private const val EMPTY_SPLIT_EXIT_MS = 5000L
+        private const val GOOGLE_QUICKSEARCHBOX_PACKAGE = "com.google.android.googlequicksearchbox"
 
         // 방향 고정 브로드캐스트 액션
         const val ACTION_APPLY_ORIENTATION_LOCK = "com.minsoo.ultranavbar.ACTION_APPLY_ORIENTATION_LOCK"
@@ -879,6 +880,9 @@ class NavBarAccessibilityService : AccessibilityService() {
                 currentClassName = normalizedClass
                 currentClassNameAt = now
             }
+            if (packageName == GOOGLE_QUICKSEARCHBOX_PACKAGE) {
+                overlay?.setForegroundPackage(packageName, className ?: "")
+            }
             return false
         }
 
@@ -915,7 +919,7 @@ class NavBarAccessibilityService : AccessibilityService() {
             lastDisabledAppHideAt = 0L
         }
 
-        overlay?.setForegroundPackage(packageName)
+        overlay?.setForegroundPackage(packageName, className ?: "")
         return true
     }
 

@@ -67,7 +67,7 @@
     <string name="home_bg_enable">Enable custom background</string>
     <string name="home_bg_enable_summary">Use a cropped screenshot as the bar background on the home screen.</string>
     <string name="unified_normal_bg_color_title">Unified Normal Background Color</string>
-    <string name="unified_normal_bg_color_summary">Fixes the normal background color of the custom navbar to Android 12L default gray (#535257) regardless of day/night mode.</string>
+    <string name="unified_normal_bg_color_summary">Uses the same Material 3 dynamic tone family shown in app settings, with Android 12 navigation tone guidance: a representative color between middle and bright tones in daytime, and between middle and dark tones in night mode.</string>
     <string name="home_bg_button_color">Home background button color</string>
     <string name="home_bg_button_color_summary">Choose button color for the home background (ignores dark mode).</string>
     <string name="home_bg_button_color_auto">Auto</string>

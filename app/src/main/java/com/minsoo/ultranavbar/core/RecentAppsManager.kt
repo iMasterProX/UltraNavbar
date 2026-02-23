@@ -26,6 +26,7 @@ class RecentAppsManager(
         const val MAX_RECENT_APPS = 7
         private const val PREFS_NAME = "recent_apps_prefs"
         private const val KEY_RECENT_APPS = "recent_apps_list"
+        private const val GOOGLE_QUICKSEARCHBOX_PACKAGE = "com.google.android.googlequicksearchbox"
     }
 
     /**
@@ -110,9 +111,34 @@ class RecentAppsManager(
     /**
      * 포그라운드 앱 변경 시 호출
      */
-    fun onForegroundAppChanged(packageName: String) {
+    fun onForegroundAppChanged(
+        packageName: String,
+        className: String? = null,
+        isOnHomeScreen: Boolean = false,
+        isRecentsVisible: Boolean = false
+    ) {
+        if (packageName == GOOGLE_QUICKSEARCHBOX_PACKAGE) {
+            val isMainSurface = isGoogleMainAppSurface(className)
+
+            if (!isMainSurface) {
+                if (
+                    isOnHomeScreen &&
+                    !isRecentsVisible &&
+                    isGoogleLauncherCompanionSurface(className)
+                ) {
+                    Log.d(TAG, "Excluded Google launcher companion on home: class=${className ?: ""}")
+                    removePackage(packageName)
+                    return
+                }
+
+                Log.d(TAG, "Ignored ambiguous Google surface outside home: class=${className ?: ""}")
+                return
+            }
+        }
+
         if (isExcluded(packageName)) {
             Log.d(TAG, "Excluded package: $packageName")
+            removePackage(packageName)
             return
         }
 
@@ -155,6 +181,46 @@ class RecentAppsManager(
         Log.d(TAG, "Cleared recent apps")
     }
 
+    private fun isGoogleMainAppSurface(className: String?): Boolean {
+        val cls = className?.trim().orEmpty()
+        if (cls.isBlank()) return false
+
+        if (cls.equals("com.google.android.apps.search.googleapp.activity.GoogleAppActivity", ignoreCase = true)) {
+            return true
+        }
+
+        val simpleName = cls.substringAfterLast('.')
+        if (simpleName.equals("GoogleAppActivity", ignoreCase = true)) return true
+
+        return cls.contains("googleapp.activity", ignoreCase = true) &&
+            !simpleName.contains("SearchLauncher", ignoreCase = true) &&
+            !simpleName.contains("LauncherClient", ignoreCase = true) &&
+            !simpleName.contains("Discover", ignoreCase = true)
+    }
+
+    private fun isGoogleLauncherCompanionSurface(className: String?): Boolean {
+        val cls = className?.trim().orEmpty()
+        if (cls.isBlank()) return false
+
+        val simpleName = cls.substringAfterLast('.')
+        return simpleName.contains("SearchLauncher", ignoreCase = true) ||
+            simpleName.contains("LauncherClient", ignoreCase = true) ||
+            simpleName.contains("Discover", ignoreCase = true)
+    }
+
+    /**
+     * 특정 패키지를 최근 앱 목록에서 제거
+     */
+    fun removePackage(packageName: String) {
+        if (packageName.isBlank()) return
+        val removed = recentApps.removeAll { it.packageName == packageName }
+        if (!removed) return
+
+        Log.d(TAG, "Removed app from recent list: $packageName")
+        listener.onRecentAppsChanged(recentApps.toList())
+        saveRecentApps()
+    }
+
     /**
      * 제외 패키지 목록 구성
      */
@@ -164,6 +230,12 @@ class RecentAppsManager(
         excludedPackages.add(context.packageName) // 자기 자신
         excludedPackages.addAll(launcherPackages)
         excludedPackages.addAll(settings.disabledApps)
+
+        val removedExcluded = recentApps.removeAll { app -> isExcluded(app.packageName) }
+        if (removedExcluded) {
+            listener.onRecentAppsChanged(recentApps.toList())
+            saveRecentApps()
+        }
 
         Log.d(TAG, "Excluded packages: $excludedPackages")
     }
@@ -177,6 +249,11 @@ class RecentAppsManager(
 
         // 런처블 activity가 없는 시스템 전용 패키지 제외
         return packageManager.getLaunchIntentForPackage(packageName) == null
+    }
+
+    private fun isExcludedFromInitialLoad(packageName: String): Boolean {
+        if (packageName == GOOGLE_QUICKSEARCHBOX_PACKAGE) return true
+        return isExcluded(packageName)
     }
 
     /**
@@ -251,7 +328,7 @@ class RecentAppsManager(
                 .sortedByDescending { it.lastTimeUsed }
                 .map { it.packageName }
                 .distinct()
-                .filter { !isExcluded(it) }
+                .filter { !isExcludedFromInitialLoad(it) }
                 .take(maxRecentAppsCount())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to query usage stats", e)
@@ -277,7 +354,7 @@ class RecentAppsManager(
         if (joinedString.isEmpty()) return emptyList()
 
         return joinedString.split(",")
-            .filter { it.isNotEmpty() && !isExcluded(it) }
+            .filter { it.isNotEmpty() && !isExcludedFromInitialLoad(it) }
             .take(maxRecentAppsCount())
     }
 
