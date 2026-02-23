@@ -13,13 +13,18 @@ object Constants {
         const val NAV_BUTTON_SIZE_DP = 48
         const val BUTTON_SPACING_DP = 8
         const val NAV_BAR_PADDING_DP = 16
+        const val NAV_BUTTON_SPACING_12L_RATIO = 0.66f
+        const val NAV_BUTTON_TOUCH_WIDTH_12L_RATIO = 0.78f
+        const val NAV_BUTTON_MIN_TOUCH_WIDTH_12L_DP = 28
+        const val NAV_BUTTON_RIPPLE_CORNER_12L_DP = 10
+        const val NAV_GROUP_EDGE_INSET_12L_DP = 28
         const val SWIPE_THRESHOLD_DP = 30
         const val DEFAULT_HOTSPOT_HEIGHT_DP = 24
         const val MIN_IME_HEIGHT_DP = 80
         const val MIN_NAV_BAR_HEIGHT_DP = 40
         const val CROP_HEIGHT_PX = 72
-        const val TASKBAR_ICON_SIZE_DP = 36
-        const val TASKBAR_ICON_SPACING_DP = 22
+        const val TASKBAR_ICON_SIZE_DP = 32
+        const val TASKBAR_ICON_SPACING_DP = 20
     }
 
     // ===== 타이밍 관련 (ms) =====

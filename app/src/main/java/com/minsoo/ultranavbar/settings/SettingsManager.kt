@@ -27,6 +27,7 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_HOTSPOT_ENABLED = "hotspot_enabled"
         private const val KEY_HOTSPOT_HEIGHT = "hotspot_height"
         private const val KEY_HOME_BG_ENABLED = "home_bg_enabled"
+        private const val KEY_UNIFIED_NORMAL_BG_COLOR_ENABLED = "unified_normal_bg_color_enabled"
         private const val KEY_HOME_BG_BUTTON_COLOR_MODE = "home_bg_button_color_mode"
         private const val KEY_IGNORE_STYLUS = "ignore_stylus"
         private const val KEY_LONG_PRESS_ACTION = "long_press_action"
@@ -74,6 +75,9 @@ class SettingsManager private constructor(context: Context) {
 
         // Experimental: Coordinate Auto Touch
         private const val KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED = "touch_point_experimental_enabled"
+
+        // Experimental: Android 12L style navbar layout tuning
+        private const val KEY_ANDROID12L_NAVBAR_LAYOUT_TUNING_ENABLED = "android12l_navbar_layout_tuning_enabled"
 
         // Wacom Pen Settings
         private const val KEY_PEN_POINTER_ENABLED = "pen_pointer_enabled"
@@ -139,6 +143,13 @@ class SettingsManager private constructor(context: Context) {
     var homeBgEnabled: Boolean
         get() = prefs.getBoolean(KEY_HOME_BG_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_HOME_BG_ENABLED, value).apply()
+
+    var unifiedNormalBgColorEnabled: Boolean
+        get() = prefs.getBoolean(KEY_UNIFIED_NORMAL_BG_COLOR_ENABLED, false) || android12lNavbarLayoutTuningEnabled
+        set(value) {
+            if (!value && android12lNavbarLayoutTuningEnabled) return
+            prefs.edit().putBoolean(KEY_UNIFIED_NORMAL_BG_COLOR_ENABLED, value).apply()
+        }
 
     var homeBgButtonColorMode: HomeBgButtonColorMode
         get() {
@@ -245,8 +256,11 @@ class SettingsManager private constructor(context: Context) {
 
     // 최근 앱 작업 표시줄
     var recentAppsTaskbarEnabled: Boolean
-        get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, true)
-        set(value) = prefs.edit().putBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, value).apply()
+        get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, true) || android12lNavbarLayoutTuningEnabled
+        set(value) {
+            if (!value && android12lNavbarLayoutTuningEnabled) return
+            prefs.edit().putBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, value).apply()
+        }
 
     var recentAppsTaskbarIconShape: RecentAppsTaskbarIconShape
         get() {
@@ -279,6 +293,19 @@ class SettingsManager private constructor(context: Context) {
     var touchPointExperimentalEnabled: Boolean
         get() = prefs.getBoolean(KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED, value).apply()
+
+    // 안드로이드 12L 스타일 네비바 구성 조절 (실험적)
+    var android12lNavbarLayoutTuningEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ANDROID12L_NAVBAR_LAYOUT_TUNING_ENABLED, false)
+        set(value) {
+            prefs.edit().apply {
+                putBoolean(KEY_ANDROID12L_NAVBAR_LAYOUT_TUNING_ENABLED, value)
+                if (value) {
+                    putBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, true)
+                    putBoolean(KEY_UNIFIED_NORMAL_BG_COLOR_ENABLED, true)
+                }
+            }.apply()
+        }
 
     // Wacom 펜 포인터 표시
     var penPointerEnabled: Boolean

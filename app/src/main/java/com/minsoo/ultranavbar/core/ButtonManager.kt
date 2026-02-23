@@ -74,24 +74,28 @@ class ButtonManager(
         action: NavAction,
         iconResId: Int,
         sizePx: Int,
-        initialColor: Int
+        initialColor: Int,
+        touchWidthPx: Int = sizePx,
+        rippleCornerRadiusPx: Float = sizePx / 2f
     ): ImageButton {
         currentColor = initialColor
 
         return ImageButton(context).apply {
-            layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
+            layoutParams = LinearLayout.LayoutParams(touchWidthPx, sizePx)
 
             // 리플 효과 설정 - Android 12 스타일 회색 (다크/라이트 모드 모두 보임)
             val rippleColor = ColorStateList.valueOf(0x33808080) // 20% 불투명 회색
             val maskDrawable = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = sizePx / 2f
+                cornerRadius = rippleCornerRadiusPx.coerceAtLeast(0f)
                 setColor(Color.GRAY)
             }
             background = RippleDrawable(rippleColor, null, maskDrawable)
 
             elevation = context.dpToPx(4).toFloat()
             stateListAnimator = null
+            setMinimumWidth(0)
+            setMinimumHeight(0)
 
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             setPadding(0, 0, 0, 0)

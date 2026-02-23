@@ -33,6 +33,7 @@ import com.minsoo.ultranavbar.util.ImageCropUtil
 class NavBarSettingsFragment : Fragment() {
 
     private lateinit var settings: SettingsManager
+    private var isProgrammaticSwitchUpdate = false
 
     // 네비게이션 바 활성화
     private lateinit var switchNavbarEnabled: SwitchMaterial
@@ -71,6 +72,7 @@ class NavBarSettingsFragment : Fragment() {
     private lateinit var btnHomeBgColorAuto: MaterialButton
     private lateinit var btnHomeBgColorWhite: MaterialButton
     private lateinit var btnHomeBgColorBlack: MaterialButton
+    private lateinit var switchUnifiedNormalBgColor: SwitchMaterial
 
     // 다크 모드 배경 관련
     private lateinit var switchHomeBgDark: SwitchMaterial
@@ -222,6 +224,7 @@ class NavBarSettingsFragment : Fragment() {
         btnHomeBgColorAuto = view.findViewById(R.id.btnHomeBgColorAuto)
         btnHomeBgColorWhite = view.findViewById(R.id.btnHomeBgColorWhite)
         btnHomeBgColorBlack = view.findViewById(R.id.btnHomeBgColorBlack)
+        switchUnifiedNormalBgColor = view.findViewById(R.id.switchUnifiedNormalBgColor)
 
         // 가로 이미지 선택 버튼
         view.findViewById<MaterialButton>(R.id.btnSelectLandscape).setOnClickListener {
@@ -282,6 +285,7 @@ class NavBarSettingsFragment : Fragment() {
 
         // 홈 배경 설정 로드
         switchHomeBg.isChecked = settings.homeBgEnabled
+        switchUnifiedNormalBgColor.isChecked = settings.unifiedNormalBgColorEnabled
         updateHomeBgButtonColorUi(settings.homeBgButtonColorMode)
         setHomeBgButtonColorControlsEnabled(settings.homeBgEnabled)
 
@@ -353,9 +357,27 @@ class NavBarSettingsFragment : Fragment() {
 
         // 최근 앱 작업 표시줄
         switchRecentAppsTaskbar.setOnCheckedChangeListener { _, isChecked ->
+            if (isProgrammaticSwitchUpdate) return@setOnCheckedChangeListener
+
+            val before = settings.recentAppsTaskbarEnabled
             settings.recentAppsTaskbarEnabled = isChecked
-            setRecentAppsTaskbarControlsEnabled(isChecked)
-            notifySettingsChanged()
+            val applied = settings.recentAppsTaskbarEnabled
+
+            if (applied != isChecked) {
+                isProgrammaticSwitchUpdate = true
+                switchRecentAppsTaskbar.isChecked = applied
+                isProgrammaticSwitchUpdate = false
+                Toast.makeText(
+                    requireContext(),
+                    getString(R.string.android12l_navbar_layout_dependency_locked),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            setRecentAppsTaskbarControlsEnabled(applied)
+            if (before != applied) {
+                notifySettingsChanged()
+            }
         }
 
         switchRecentAppsTaskbarShowOnHome.setOnCheckedChangeListener { _, isChecked ->
@@ -407,6 +429,29 @@ class NavBarSettingsFragment : Fragment() {
             settings.homeBgEnabled = isChecked
             notifySettingsChanged()
             setHomeBgButtonColorControlsEnabled(isChecked)
+        }
+
+        switchUnifiedNormalBgColor.setOnCheckedChangeListener { _, isChecked ->
+            if (isProgrammaticSwitchUpdate) return@setOnCheckedChangeListener
+
+            val before = settings.unifiedNormalBgColorEnabled
+            settings.unifiedNormalBgColorEnabled = isChecked
+            val applied = settings.unifiedNormalBgColorEnabled
+
+            if (applied != isChecked) {
+                isProgrammaticSwitchUpdate = true
+                switchUnifiedNormalBgColor.isChecked = applied
+                isProgrammaticSwitchUpdate = false
+                Toast.makeText(
+                    requireContext(),
+                    getString(R.string.android12l_navbar_layout_dependency_locked),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            if (before != applied) {
+                notifySettingsChanged()
+            }
         }
 
         toggleHomeBgButtonColor.addOnButtonCheckedListener { _, checkedId, isChecked ->

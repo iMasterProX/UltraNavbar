@@ -66,6 +66,8 @@
     <string name="home_bg_settings">Home screen background</string>
     <string name="home_bg_enable">Enable custom background</string>
     <string name="home_bg_enable_summary">Use a cropped screenshot as the bar background on the home screen.</string>
+    <string name="unified_normal_bg_color_title">Unified Normal Background Color</string>
+    <string name="unified_normal_bg_color_summary">Fixes the normal background color of the custom navbar to Android 12L default gray (#535257) regardless of day/night mode.</string>
     <string name="home_bg_button_color">Home background button color</string>
     <string name="home_bg_button_color_summary">Choose button color for the home background (ignores dark mode).</string>
     <string name="home_bg_button_color_auto">Auto</string>
@@ -472,6 +474,9 @@
     <!-- Experimental Features -->
     <string name="experimental_features_title">⚠️ Experimental Features</string>
     <string name="experimental_features_warning">These features are experimental and may not work properly. They may cause unexpected behavior, crashes, or other issues. Use at your own risk.</string>
+    <string name="android12l_navbar_layout_tuning_title">Adjust Navbar to Android 12L Style</string>
+    <string name="android12l_navbar_layout_tuning_summary">Adjusts navbar button positions and arrangement to match Android 12L style. Recent Apps Taskbar toggle and unified normal gray background toggle are enabled together as required.</string>
+    <string name="android12l_navbar_layout_dependency_locked">This option stays enabled while Android 12L navbar tuning is active.</string>
     <string name="split_screen_taskbar_title">Split Screen via Taskbar &amp; App Favorites</string>
     <string name="split_screen_taskbar_summary">Drag an app icon from the taskbar or App Favorites panel to add it to split screen (right side in landscape, bottom in portrait). Split-screen drag is disabled on the home screen.</string>
     <string name="touch_point_experimental_title">Auto Touch (Coordinate)</string>

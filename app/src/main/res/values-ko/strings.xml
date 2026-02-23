@@ -66,6 +66,8 @@
     <string name="home_bg_settings">홈 화면 배경</string>
     <string name="home_bg_enable">커스텀 배경 사용</string>
     <string name="home_bg_enable_summary">홈 화면에서 네비게이션 바에 배경 이미지를 사용합니다.</string>
+    <string name="unified_normal_bg_color_title">일반배경 색상 통일</string>
+    <string name="unified_normal_bg_color_summary">안드로이드12L 기준 기본 색상인 회색(#535257)로 밤낮 상관없이 커스텀네비바의 일반배경을 이 색상으로 고정합니다.</string>
     <string name="home_bg_button_color">홈 배경 버튼 색상</string>
     <string name="home_bg_button_color_summary">홈 배경에서의 버튼 색상을 선택합니다 (다크 모드 무시).</string>
     <string name="home_bg_button_color_auto">자동</string>
@@ -152,6 +154,9 @@
     <!-- Experimental Features -->
     <string name="experimental_features_title">⚠️ 실험적 기능</string>
     <string name="experimental_features_warning">이 기능들은 실험적이며 정상적으로 동작하지 않을 수 있습니다. 예기치 않은 동작, 충돌 등의 문제가 발생할 수 있으니 주의해서 사용하세요.</string>
+    <string name="android12l_navbar_layout_tuning_title">안드로이드12L 스타일로 네비바 구성 조절</string>
+    <string name="android12l_navbar_layout_tuning_summary">안드로이드12L 형태의 네비게이션 바 구성에 맞게 네비바 버튼들의 위치와 구성을 조절합니다. 최근 앱 작업표시줄 토글과 일반배경 회색 전환 토글이 필수로 같이 켜집니다.</string>
+    <string name="android12l_navbar_layout_dependency_locked">안드로이드12L 스타일 조절이 켜져 있어 이 옵션은 자동으로 켜진 상태를 유지합니다.</string>
     <string name="split_screen_taskbar_title">작업 표시줄 및 앱 즐겨찾기 분할화면 지원</string>
     <string name="split_screen_taskbar_summary">작업 표시줄이나 앱 즐겨찾기 패널에서 앱 아이콘을 드래그하여 분할 화면으로 추가합니다 (가로는 오른쪽, 세로는 아래). 홈 화면에서는 분할화면 드래그가 비활성화됩니다.</string>
     <string name="touch_point_experimental_title">자동 터치 (좌표 기반)</string>

@@ -31,6 +31,7 @@ class WindowAnalyzer(
 ) {
     companion object {
         private const val TAG = "WindowAnalyzer"
+        private const val GOOGLE_QUICKSEARCHBOX_PACKAGE = "com.google.android.googlequicksearchbox"
     }
 
     private data class NavBarInsets(
@@ -225,25 +226,106 @@ class WindowAnalyzer(
         return windowManager.currentWindowMetrics.bounds
     }
 
-    // ===== 앱 서랍 감지 =====
+    // ===== 런처 오버레이(앱 서랍/위젯/옵션/Discover) 감지 =====
 
     /**
-     * 앱 서랍(App Drawer)이 열려있는지 확인
-     * QuickStep 런처의 뷰 ID를 통해 감지
-     * @param rootNode 활성 윈도우의 루트 노드
-     * @return 앱 서랍 열림 여부
+     * 런처의 상단 오버레이 상태(앱 서랍/위젯 패널/홈 옵션 팝업/Discover 패널) 감지.
+     * rootInActiveWindow가 아닌 다른 윈도우에서 열리는 경우도 있어
+     * 현재 루트 + 전체 윈도우를 함께 확인한다.
      */
-    fun isAppDrawerOpen(rootNode: android.view.accessibility.AccessibilityNodeInfo?): Boolean {
+    fun analyzeLauncherOverlayState(
+        windows: List<AccessibilityWindowInfo>,
+        rootNode: AccessibilityNodeInfo?
+    ): Boolean {
+        val launcherVisible = hasLauncherLikeWindow(windows, rootNode)
+
+        if (isLauncherOverlayOpen(rootNode)) return true
+        if (isDiscoverOverlayOpen(rootNode, launcherVisible)) return true
+
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val root = try { window.root } catch (e: Exception) { null } ?: continue
+            try {
+                val pkg = root.packageName?.toString() ?: continue
+                val className = root.className?.toString() ?: ""
+                if (isLauncherPackage(pkg)) {
+                    if (isLauncherOverlayOpen(root)) return true
+                    continue
+                }
+                if (isDiscoverOverlaySurface(pkg, className, launcherVisible)) return true
+            } finally {
+                root.recycle()
+            }
+        }
+
+        return false
+    }
+
+    private fun hasLauncherLikeWindow(
+        windows: List<AccessibilityWindowInfo>,
+        rootNode: AccessibilityNodeInfo?
+    ): Boolean {
+        val rootPkg = rootNode?.packageName?.toString()
+        val rootClass = rootNode?.className?.toString() ?: ""
+        if (!rootPkg.isNullOrEmpty() && (isLauncherPackage(rootPkg) || isRecentsClassName(rootClass))) {
+            return true
+        }
+
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val root = try { window.root } catch (e: Exception) { null } ?: continue
+            try {
+                val pkg = root.packageName?.toString() ?: continue
+                val className = root.className?.toString() ?: ""
+                if (isLauncherPackage(pkg) || isRecentsClassName(className)) {
+                    return true
+                }
+            } finally {
+                root.recycle()
+            }
+        }
+
+        return false
+    }
+
+    private fun isDiscoverOverlayOpen(
+        rootNode: AccessibilityNodeInfo?,
+        launcherVisible: Boolean
+    ): Boolean {
+        rootNode ?: return false
+        val pkg = rootNode.packageName?.toString() ?: return false
+        val className = rootNode.className?.toString() ?: ""
+        return isDiscoverOverlaySurface(pkg, className, launcherVisible)
+    }
+
+    /**
+     * 하위 호환용: 기존 호출부는 런처 오버레이 감지로 대체
+     */
+    fun isAppDrawerOpen(rootNode: AccessibilityNodeInfo?): Boolean {
+        return isLauncherOverlayOpen(rootNode)
+    }
+
+    private fun isLauncherOverlayOpen(rootNode: AccessibilityNodeInfo?): Boolean {
         rootNode ?: return false
 
-        // QuickStep 런처 및 Nova Launcher 앱 서랍 뷰 ID
         val targetIds = listOf(
-            // QuickStep
+            // QuickStep / Launcher3 - app drawer
             "com.android.launcher3:id/apps_view",
             "com.android.launcher3:id/apps_list_view",
+            "com.android.launcher3:id/all_apps_container_view",
+            "com.android.launcher3:id/all_apps_header",
+            "com.android.launcher3:id/search_container_all_apps",
+            // QuickStep / Launcher3 - widgets / home options
+            "com.android.launcher3:id/widgets_full_sheet",
+            "com.android.launcher3:id/widgets_list_view",
+            "com.android.launcher3:id/widgets_search_bar",
+            "com.android.launcher3:id/options_menu",
+            "com.android.launcher3:id/popup_container",
             // Nova Launcher
             "com.teslacoilsw.launcher:id/apps_view",
-            "com.teslacoilsw.launcher:id/apps_list_view"
+            "com.teslacoilsw.launcher:id/apps_list_view",
+            "com.teslacoilsw.launcher:id/widgets_panel",
+            "com.teslacoilsw.launcher:id/popup_container"
         )
 
         for (id in targetIds) {
@@ -259,7 +341,38 @@ class WindowAnalyzer(
                 if (found) return true
             }
         }
+
+        val className = rootNode.className?.toString() ?: ""
+        val simpleName = className.substringAfterLast('.')
+        if (simpleName.contains("AllApps", ignoreCase = true) ||
+            simpleName.contains("Widget", ignoreCase = true) ||
+            simpleName.contains("Popup", ignoreCase = true)
+        ) {
+            return true
+        }
+
         return false
+    }
+
+    private fun isDiscoverOverlaySurface(
+        packageName: String,
+        className: String,
+        launcherVisible: Boolean
+    ): Boolean {
+        if (packageName != GOOGLE_QUICKSEARCHBOX_PACKAGE) return false
+        if (!launcherVisible) return false
+        if (isLauncherCompanionSurface(packageName, className)) return true
+        return isGoogleAppDiscoverActivity(className)
+    }
+
+    private fun isGoogleAppDiscoverActivity(className: String): Boolean {
+        if (className.isBlank()) return false
+        if (className.equals("com.google.android.apps.search.googleapp.activity.GoogleAppActivity", ignoreCase = true)) {
+            return true
+        }
+        val simpleName = className.substringAfterLast('.')
+        return simpleName.equals("GoogleAppActivity", ignoreCase = true) ||
+            simpleName.contains("Discover", ignoreCase = true)
     }
 
 
@@ -660,6 +773,16 @@ class WindowAnalyzer(
         windows: List<AccessibilityWindowInfo>,
         selfPackage: String
     ): Boolean {
+        val launcherVisible = windows.any { window ->
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) return@any false
+            val root = try { window.root } catch (e: Exception) { null }
+            val pkg = root?.packageName?.toString()
+            val className = root?.className?.toString()
+            root?.recycle()
+            if (pkg.isNullOrEmpty()) return@any false
+            isLauncherPackage(pkg) || isRecentsClassName(className ?: "")
+        }
+
         var hasUnknownAppWindow = false
         for (window in windows) {
             if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
@@ -681,10 +804,78 @@ class WindowAnalyzer(
                 continue
             }
             if (pkg == selfPackage) continue
+            if (isDiscoverOverlaySurface(pkg, className ?: "", launcherVisible)) continue
             if (isLauncherPackage(pkg) || isRecentsClassName(className ?: "")) continue
             return true
         }
         return hasUnknownAppWindow
+    }
+
+    private fun isLauncherCompanionSurface(packageName: String, className: String): Boolean {
+        if (packageName != GOOGLE_QUICKSEARCHBOX_PACKAGE) return false
+        val simpleName = className.substringAfterLast('.')
+        return className.isBlank() ||
+            className == "android.widget.FrameLayout" ||
+            simpleName.contains("SearchLauncher", ignoreCase = true) ||
+            simpleName.contains("LauncherClient", ignoreCase = true)
+    }
+
+    /**
+     * QuickStep/Launcher3에서 Discover 패널 전환 중 발생하는
+     * googlequicksearchbox 표면을 실제 앱 실행으로 간주하지 않도록 런처 패키지로 보정.
+     */
+    fun remapLauncherCompanionPackage(
+        packageName: String,
+        className: String,
+        windows: List<AccessibilityWindowInfo>,
+        selfPackage: String
+    ): String? {
+        val launcherVisible = hasLauncherLikeWindow(windows, rootNode = null)
+        if (!isDiscoverOverlaySurface(packageName, className, launcherVisible)) {
+            if (packageName == GOOGLE_QUICKSEARCHBOX_PACKAGE) {
+                Log.d(TAG, "Skip companion remap: class=$className, launcherVisible=$launcherVisible")
+            }
+            return null
+        }
+
+        var hasForeignNonLauncherWindow = false
+        val topWindow = getTopApplicationWindow(windows)
+        var launcherPackageCandidate: String? =
+            topWindow?.packageName?.takeIf { isLauncherPackage(it) }
+
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val root = try { window.root } catch (e: Exception) { null }
+            val pkg = root?.packageName?.toString()
+            val cls = root?.className?.toString()
+            root?.recycle()
+
+            if (pkg.isNullOrEmpty()) continue
+            if (pkg == selfPackage || pkg == "com.android.systemui") continue
+
+            if (isDiscoverOverlaySurface(pkg, cls ?: "", launcherVisible)) continue
+
+            val launcherLike = isLauncherPackage(pkg) || isRecentsClassName(cls ?: "")
+            if (launcherLike) {
+                if (launcherPackageCandidate == null && isLauncherPackage(pkg)) {
+                    launcherPackageCandidate = pkg
+                }
+                continue
+            }
+
+            hasForeignNonLauncherWindow = true
+            break
+        }
+
+        if (hasForeignNonLauncherWindow) {
+            Log.d(
+                TAG,
+                "Skip companion remap: foreignWindow=$hasForeignNonLauncherWindow"
+            )
+            return null
+        }
+
+        return launcherPackageCandidate ?: launcherPackages.firstOrNull()
     }
 
     // ===== 홈/최근 앱 감지 =====

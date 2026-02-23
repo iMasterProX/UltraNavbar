@@ -34,6 +34,7 @@ class BackgroundManager(
 ) {
     companion object {
         private const val TAG = "BackgroundManager"
+        private const val UNIFIED_DEFAULT_BG_COLOR = 0xFF535257.toInt()
     }
 
     private val settings: SettingsManager = SettingsManager.getInstance(context)
@@ -285,6 +286,10 @@ class BackgroundManager(
     }
 
     fun getDefaultBackgroundColor(): Int {
+        if (settings.unifiedNormalBgColorEnabled) {
+            return UNIFIED_DEFAULT_BG_COLOR
+        }
+
         // 실제 시스템 다크 모드 상태를 직접 확인
         syncDarkModeState()
         return if (_isDarkMode) Color.BLACK else Color.WHITE
@@ -294,6 +299,10 @@ class BackgroundManager(
      * 다크 모드에 따른 기본 버튼 색상
      */
     fun getDefaultButtonColor(): Int {
+        if (settings.unifiedNormalBgColorEnabled) {
+            return Color.WHITE
+        }
+
         // 실제 시스템 다크 모드 상태를 직접 확인
         syncDarkModeState()
         return if (_isDarkMode) Color.WHITE else Color.DKGRAY

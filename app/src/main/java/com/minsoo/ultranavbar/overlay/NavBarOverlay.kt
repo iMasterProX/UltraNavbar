@@ -57,6 +57,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     companion object {
         private const val TAG = "NavBarOverlay"
+        private const val APP_DRAWER_CLOSE_LAUNCH_GUARD_MS = 600L
     }
 
     private val context: Context = service
@@ -573,8 +574,45 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun createNavBar() {
         val barHeightPx = getSystemNavigationBarHeightPx()
         val buttonSizePx = context.dpToPx(Constants.Dimension.NAV_BUTTON_SIZE_DP)
-        val buttonSpacingPx = context.dpToPx(Constants.Dimension.BUTTON_SPACING_DP)
+        val useAndroid12lLayoutTuning = settings.android12lNavbarLayoutTuningEnabled
+        val buttonTouchWidthPx = if (useAndroid12lLayoutTuning) {
+            (buttonSizePx * Constants.Dimension.NAV_BUTTON_TOUCH_WIDTH_12L_RATIO)
+                .toInt()
+                .coerceAtLeast(context.dpToPx(Constants.Dimension.NAV_BUTTON_MIN_TOUCH_WIDTH_12L_DP))
+        } else {
+            buttonSizePx
+        }
+        val buttonRippleCornerRadiusPx = if (useAndroid12lLayoutTuning) {
+            context.dpToPx(Constants.Dimension.NAV_BUTTON_RIPPLE_CORNER_12L_DP).toFloat()
+        } else {
+            buttonSizePx / 2f
+        }
+        val buttonSpacingPx = if (useAndroid12lLayoutTuning) {
+            val compactSpacingDp =
+                Constants.Dimension.BUTTON_SPACING_DP * Constants.Dimension.NAV_BUTTON_SPACING_12L_RATIO
+            context.dpToPx(compactSpacingDp).coerceAtLeast(1)
+        } else {
+            context.dpToPx(Constants.Dimension.BUTTON_SPACING_DP)
+        }
         val paddingPx = context.dpToPx(Constants.Dimension.NAV_BAR_PADDING_DP)
+        val edgeInsetPx = if (useAndroid12lLayoutTuning) {
+            context.dpToPx(Constants.Dimension.NAV_GROUP_EDGE_INSET_12L_DP)
+        } else {
+            0
+        }
+        val edgeInsetCompensationPx = if (useAndroid12lLayoutTuning) {
+            ((buttonSizePx - buttonTouchWidthPx) / 2).coerceAtLeast(0)
+        } else {
+            0
+        }
+        val effectiveEdgeInsetPx = edgeInsetPx + edgeInsetCompensationPx
+
+        if (useAndroid12lLayoutTuning) {
+            Log.d(
+                TAG,
+                "12L layout metrics: touchWidth=$buttonTouchWidthPx, spacing=$buttonSpacingPx, edgeInset=$effectiveEdgeInsetPx"
+            )
+        }
 
         val defaultBgColor = backgroundManager.getDefaultBackgroundColor()
         val initialButtonColor = backgroundManager.currentButtonColor
@@ -615,16 +653,27 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             gravity = Gravity.CENTER_VERTICAL
         }
 
+        fun createButton(action: NavAction, iconResId: Int): ImageButton {
+            return buttonManager.createNavButton(
+                action = action,
+                iconResId = iconResId,
+                sizePx = buttonSizePx,
+                initialColor = initialButtonColor,
+                touchWidthPx = buttonTouchWidthPx,
+                rippleCornerRadiusPx = buttonRippleCornerRadiusPx
+            )
+        }
+
         navGroup.addView(
-            buttonManager.createNavButton(NavAction.BACK, R.drawable.ic_sysbar_back, buttonSizePx, initialButtonColor)
+            createButton(NavAction.BACK, R.drawable.ic_sysbar_back)
         )
         buttonManager.addSpacerToGroup(navGroup, buttonSpacingPx)
         navGroup.addView(
-            buttonManager.createNavButton(NavAction.HOME, R.drawable.ic_sysbar_home, buttonSizePx, initialButtonColor)
+            createButton(NavAction.HOME, R.drawable.ic_sysbar_home)
         )
         buttonManager.addSpacerToGroup(navGroup, buttonSpacingPx)
         navGroup.addView(
-            buttonManager.createNavButton(NavAction.RECENTS, R.drawable.ic_sysbar_recent, buttonSizePx, initialButtonColor)
+            createButton(NavAction.RECENTS, R.drawable.ic_sysbar_recent)
         )
 
         // Extra buttons group: Screenshot / NavbarApps / Notifications
@@ -636,28 +685,28 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (isSwapped) {
             // When swapped to left: Notifications, NavbarApps, Screenshot (innermost = right)
             extraGroup.addView(
-                buttonManager.createNavButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel, buttonSizePx, initialButtonColor)
+                createButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel)
             )
             buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
             extraGroup.addView(
-                buttonManager.createNavButton(NavAction.NAVBAR_APPS, R.drawable.ic_sysbar_apps, buttonSizePx, initialButtonColor)
+                createButton(NavAction.NAVBAR_APPS, R.drawable.ic_sysbar_apps)
             )
             buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
             extraGroup.addView(
-                buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
+                createButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture)
             )
         } else {
             // Default order: Screenshot (innermost = left), NavbarApps, Notifications
             extraGroup.addView(
-                buttonManager.createNavButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture, buttonSizePx, initialButtonColor)
+                createButton(NavAction.TAKE_SCREENSHOT, R.drawable.ic_sysbar_capture)
             )
             buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
             extraGroup.addView(
-                buttonManager.createNavButton(NavAction.NAVBAR_APPS, R.drawable.ic_sysbar_apps, buttonSizePx, initialButtonColor)
+                createButton(NavAction.NAVBAR_APPS, R.drawable.ic_sysbar_apps)
             )
             buttonManager.addSpacerToGroup(extraGroup, buttonSpacingPx)
             extraGroup.addView(
-                buttonManager.createNavButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel, buttonSizePx, initialButtonColor)
+                createButton(NavAction.NOTIFICATIONS, R.drawable.ic_sysbar_panel)
             )
         }
 
@@ -674,6 +723,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             RelativeLayout.LayoutParams.MATCH_PARENT
         ).apply {
             addRule(RelativeLayout.ALIGN_PARENT_START)
+            marginStart = effectiveEdgeInsetPx
         }
         bar.addView(leftGroup, leftParams)
 
@@ -682,6 +732,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             RelativeLayout.LayoutParams.MATCH_PARENT
         ).apply {
             addRule(RelativeLayout.ALIGN_PARENT_END)
+            marginEnd = effectiveEdgeInsetPx
         }
         bar.addView(rightGroup, rightParams)
 
@@ -1516,9 +1567,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
-    private fun startHomeExitSuppression() {
+    private fun startHomeExitSuppression(durationMs: Long = Constants.Timing.HOME_STATE_DEBOUNCE_MS) {
         val now = SystemClock.elapsedRealtime()
-        val nextUntil = now + Constants.Timing.HOME_STATE_DEBOUNCE_MS
+        val nextUntil = now + durationMs
         if (nextUntil > homeExitSuppressUntil) {
             homeExitSuppressUntil = nextUntil
         }
@@ -1715,8 +1766,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     fun setAppDrawerState(isOpen: Boolean) {
         if (isAppDrawerOpen == isOpen) return
+        val wasOpen = isAppDrawerOpen
         isAppDrawerOpen = isOpen
         Log.d(TAG, "App Drawer state changed: $isOpen")
+
+        if (wasOpen && !isOpen && isOnHomeScreen) {
+            startHomeExitSuppression(APP_DRAWER_CLOSE_LAUNCH_GUARD_MS)
+            Log.d(TAG, "App drawer close launch guard: ${APP_DRAWER_CLOSE_LAUNCH_GUARD_MS}ms")
+        }
+
         updateNavBarBackground()
     }
 
