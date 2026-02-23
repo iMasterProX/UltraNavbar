@@ -3,6 +3,7 @@ package com.minsoo.ultranavbar.core
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.app.UiModeManager
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -49,6 +50,13 @@ class BackgroundManager(
         private const val NIGHT_MID_BLEND_RATIO = 0.55f
         private const val DAY_ACCENT_BLEND_RATIO = 0.2f
         private const val NIGHT_ACCENT_BLEND_RATIO = 0.18f
+        private const val DAY_NAVBAR_MIN_LIGHTNESS = 0.84f
+        private const val DAY_NAVBAR_MAX_LIGHTNESS = 0.96f
+        private const val NIGHT_NAVBAR_MIN_LIGHTNESS = 0.14f
+        private const val NIGHT_NAVBAR_MAX_LIGHTNESS = 0.26f
+        private const val DAY_NAVBAR_MAX_SATURATION = 0.26f
+        private const val NIGHT_NAVBAR_MAX_SATURATION = 0.24f
+        private const val SOFT_DARK_BUTTON_COLOR = 0xFF6B6B6B.toInt()
     }
 
     private val settings: SettingsManager = SettingsManager.getInstance(context)
@@ -297,7 +305,7 @@ class BackgroundManager(
      * @return 변경되었으면 true
      */
     fun updateDarkMode(): Boolean {
-        val newDarkMode = isSystemDarkMode()
+        val newDarkMode = isEffectiveDarkMode()
         if (_isDarkMode != newDarkMode) {
             _isDarkMode = newDarkMode
             Log.d(TAG, "Dark mode changed: $_isDarkMode")
@@ -332,7 +340,7 @@ class BackgroundManager(
     fun getDefaultButtonColor(): Int {
         if (settings.unifiedNormalBgColorEnabled) {
             val unifiedColor = resolveUnifiedMaterial3Color().color
-            return if (isColorLight(unifiedColor)) Color.BLACK else Color.WHITE
+            return if (isColorLight(unifiedColor)) SOFT_DARK_BUTTON_COLOR else Color.WHITE
         }
 
         // 실제 시스템 다크 모드 상태를 직접 확인
@@ -348,7 +356,8 @@ class BackgroundManager(
         syncDarkModeState()
 
         resolveUnifiedColorFromMaterialTheme()?.let {
-            return ResolvedUnifiedColor(it, "material_theme")
+            val adjusted = fitToAndroid12NavBarRange(it, _isDarkMode)
+            return ResolvedUnifiedColor(adjusted, "material_theme")
         }
 
         val neutralPalette = loadMaterial3PaletteSorted(MATERIAL3_NEUTRAL_PREFIX)
@@ -364,7 +373,9 @@ class BackgroundManager(
             resolveUnifiedDayColor(neutralPalette, accentPalette)
         }
 
-        return ResolvedUnifiedColor(resolvedColor, "system_palette")
+        val adjustedColor = fitToAndroid12NavBarRange(resolvedColor, _isDarkMode)
+
+        return ResolvedUnifiedColor(adjustedColor, "system_palette")
     }
 
     private fun resolveUnifiedColorFromMaterialTheme(): Int? {
@@ -404,19 +415,36 @@ class BackgroundManager(
             val darkest = listOf(surface, background, surfaceVariant, secondaryContainer, primaryContainer)
                 .minByOrNull { calculateLuminance(it) } ?: base
 
-            val midpoint = if (_isDarkMode) {
+            val useDarkTone = _isDarkMode
+
+            val midpoint = if (useDarkTone) {
                 ColorUtils.blendARGB(base, darkest, NIGHT_MID_BLEND_RATIO)
             } else {
                 ColorUtils.blendARGB(base, brightest, DAY_MID_BLEND_RATIO)
             }
 
-            val accentRepresentative = if (_isDarkMode) secondaryContainer else primaryContainer
-            val accentBlendRatio = if (_isDarkMode) NIGHT_ACCENT_BLEND_RATIO else DAY_ACCENT_BLEND_RATIO
+            val accentRepresentative = if (useDarkTone) secondaryContainer else primaryContainer
+            val accentBlendRatio = if (useDarkTone) NIGHT_ACCENT_BLEND_RATIO else DAY_ACCENT_BLEND_RATIO
 
             ColorUtils.blendARGB(midpoint, accentRepresentative, accentBlendRatio)
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun fitToAndroid12NavBarRange(color: Int, darkMode: Boolean): Int {
+        val hsl = FloatArray(3)
+        ColorUtils.colorToHSL(color, hsl)
+
+        if (darkMode) {
+            hsl[2] = hsl[2].coerceIn(NIGHT_NAVBAR_MIN_LIGHTNESS, NIGHT_NAVBAR_MAX_LIGHTNESS)
+            hsl[1] = hsl[1].coerceAtMost(NIGHT_NAVBAR_MAX_SATURATION)
+        } else {
+            hsl[2] = hsl[2].coerceIn(DAY_NAVBAR_MIN_LIGHTNESS, DAY_NAVBAR_MAX_LIGHTNESS)
+            hsl[1] = hsl[1].coerceAtMost(DAY_NAVBAR_MAX_SATURATION)
+        }
+
+        return ColorUtils.HSLToColor(hsl)
     }
 
     private fun resolveUnifiedDayColor(neutralPalette: List<Int>, accentPalette: List<Int>): Int {
@@ -504,11 +532,21 @@ class BackgroundManager(
      * 캐시된 다크 모드 상태를 실제 시스템 상태와 동기화
      */
     private fun syncDarkModeState() {
-        val actualDarkMode = isSystemDarkMode()
+        val actualDarkMode = isEffectiveDarkMode()
         if (_isDarkMode != actualDarkMode) {
             Log.d(TAG, "Dark mode state synced: $actualDarkMode")
             _isDarkMode = actualDarkMode
         }
+    }
+
+    private fun isEffectiveDarkMode(): Boolean {
+        val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+        val configured = when (uiModeManager?.nightMode) {
+            UiModeManager.MODE_NIGHT_YES -> true
+            UiModeManager.MODE_NIGHT_NO -> false
+            else -> null
+        }
+        return configured ?: isSystemDarkMode()
     }
 
     /**
@@ -545,7 +583,7 @@ class BackgroundManager(
 
         val avgLuminance = if (sampleCount > 0) totalLuminance / sampleCount else Constants.Threshold.BRIGHTNESS_THRESHOLD
 
-        return if (avgLuminance > Constants.Threshold.BRIGHTNESS_THRESHOLD) Color.BLACK else Color.WHITE
+        return if (avgLuminance > Constants.Threshold.BRIGHTNESS_THRESHOLD) SOFT_DARK_BUTTON_COLOR else Color.WHITE
     }
 
     private fun resolveHomeBackgroundButtonColor(bitmap: Bitmap?, defaultBgColor: Int): Int {
@@ -554,11 +592,11 @@ class BackgroundManager(
                 if (bitmap != null) {
                     calculateButtonColorForBitmap(bitmap)
                 } else {
-                    if (isColorLight(defaultBgColor)) Color.BLACK else Color.WHITE
+                    if (isColorLight(defaultBgColor)) SOFT_DARK_BUTTON_COLOR else Color.WHITE
                 }
             }
             SettingsManager.HomeBgButtonColorMode.WHITE -> Color.WHITE
-            SettingsManager.HomeBgButtonColorMode.BLACK -> Color.BLACK
+            SettingsManager.HomeBgButtonColorMode.BLACK -> SOFT_DARK_BUTTON_COLOR
         }
     }
 
@@ -649,6 +687,7 @@ class BackgroundManager(
             Color.WHITE -> "WHITE"
             Color.BLACK -> "BLACK"
             Color.DKGRAY -> "DARK_GRAY"
+            SOFT_DARK_BUTTON_COLOR -> "SOFT_DARK(#6B6B6B)"
             else -> "0x${Integer.toHexString(color)}"
         }
     }

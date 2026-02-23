@@ -67,7 +67,7 @@
     <string name="home_bg_enable">커스텀 배경 사용</string>
     <string name="home_bg_enable_summary">홈 화면에서 네비게이션 바에 배경 이미지를 사용합니다.</string>
     <string name="unified_normal_bg_color_title">일반배경 색상 통일</string>
-    <string name="unified_normal_bg_color_summary">앱 설정에서 보이는 머터리얼3 동적 색상 톤과 안드로이드12 네비게이션 바 톤 기준을 함께 반영합니다. 낮에는 중간톤과 밝은톤 사이의 대표 색상을, 밤에는 중간톤과 어두운톤 사이의 대표 색상을 일반배경으로 고정합니다.</string>
+    <string name="unified_normal_bg_color_summary">앱 설정에서 보이는 머터리얼3 동적 색상 톤을 기반으로, 안드로이드12L 표준 네비게이션 바 색상 범위에 맞춰 적용합니다. 낮에는 중간톤과 밝은톤 사이의 대표 색상을, 밤에는 중간톤과 어두운톤 사이의 대표 색상을 일반배경으로 고정합니다.</string>
     <string name="home_bg_button_color">홈 배경 버튼 색상</string>
     <string name="home_bg_button_color_summary">홈 배경에서의 버튼 색상을 선택합니다 (다크 모드 무시).</string>
     <string name="home_bg_button_color_auto">자동</string>
