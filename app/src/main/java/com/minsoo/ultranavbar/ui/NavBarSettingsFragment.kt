@@ -33,13 +33,16 @@ import com.minsoo.ultranavbar.util.ImageCropUtil
 class NavBarSettingsFragment : Fragment() {
 
     private lateinit var settings: SettingsManager
-    private var isProgrammaticSwitchUpdate = false
 
     // 네비게이션 바 활성화
     private lateinit var switchNavbarEnabled: SwitchMaterial
 
     // 최근 앱 작업 표시줄
     private lateinit var switchRecentAppsTaskbar: SwitchMaterial
+    private lateinit var toggleTaskbarMode: MaterialButtonToggleGroup
+    private lateinit var btnTaskbarModeRecentApps: MaterialButton
+    private lateinit var btnTaskbarModeCustomApps: MaterialButton
+    private lateinit var btnManageTaskbarCustomApps: MaterialButton
     private lateinit var switchRecentAppsTaskbarShowOnHome: SwitchMaterial
     private lateinit var toggleRecentAppsIconShape: MaterialButtonToggleGroup
     private lateinit var btnTaskbarShapeCircle: MaterialButton
@@ -51,6 +54,7 @@ class NavBarSettingsFragment : Fragment() {
 
     // 버튼 배치 반전 (Android 12L 스타일)
     private lateinit var switchNavButtonsSwap: SwitchMaterial
+    private lateinit var switchAndroid12lNavbarLayoutTuning: SwitchMaterial
 
 
     // 롱프레스 설정
@@ -166,6 +170,17 @@ class NavBarSettingsFragment : Fragment() {
 
         // 최근 앱 작업 표시줄 스위치
         switchRecentAppsTaskbar = view.findViewById(R.id.switchRecentAppsTaskbar)
+        toggleTaskbarMode = view.findViewById(R.id.toggleTaskbarMode)
+        btnTaskbarModeRecentApps = view.findViewById(R.id.btnTaskbarModeRecentApps)
+        btnTaskbarModeCustomApps = view.findViewById(R.id.btnTaskbarModeCustomApps)
+        btnManageTaskbarCustomApps = view.findViewById<MaterialButton>(R.id.btnManageTaskbarCustomApps).apply {
+            setOnClickListener {
+                val intent = Intent(requireContext(), AppListActivity::class.java).apply {
+                    putExtra(AppListActivity.EXTRA_SELECTION_MODE, AppListActivity.MODE_TASKBAR_CUSTOM_APPS)
+                }
+                startActivity(intent)
+            }
+        }
         switchRecentAppsTaskbarShowOnHome = view.findViewById(R.id.switchRecentAppsTaskbarShowOnHome)
         toggleRecentAppsIconShape = view.findViewById(R.id.toggleRecentAppsIconShape)
         btnTaskbarShapeCircle = view.findViewById(R.id.btnTaskbarShapeCircle)
@@ -177,6 +192,7 @@ class NavBarSettingsFragment : Fragment() {
 
         // 버튼 배치 반전 스위치
         switchNavButtonsSwap = view.findViewById(R.id.switchNavButtonsSwap)
+        switchAndroid12lNavbarLayoutTuning = view.findViewById(R.id.switchAndroid12lNavbarLayoutTuning)
 
 
         // 롱프레스 설정
@@ -270,14 +286,17 @@ class NavBarSettingsFragment : Fragment() {
 
         // 최근 앱 작업 표시줄 상태 로드
         switchRecentAppsTaskbar.isChecked = settings.recentAppsTaskbarEnabled
+        updateTaskbarModeUi(settings.taskbarMode)
         switchRecentAppsTaskbarShowOnHome.isChecked = settings.recentAppsTaskbarShowOnHome
         updateRecentAppsIconShapeUi(settings.recentAppsTaskbarIconShape)
         sliderRecentAppsIconCount.value = settings.recentAppsTaskbarIconCount.toFloat()
         updateRecentAppsIconCountValueText(settings.recentAppsTaskbarIconCount)
         setRecentAppsTaskbarControlsEnabled(settings.recentAppsTaskbarEnabled)
+        syncTaskbarCustomManageVisibility(settings.taskbarMode, settings.recentAppsTaskbarEnabled)
 
         // 버튼 배치 반전 상태 로드
         switchNavButtonsSwap.isChecked = settings.navButtonsSwapped
+        switchAndroid12lNavbarLayoutTuning.isChecked = settings.android12lNavbarLayoutTuningEnabled
 
 
         // 재호출 설정 로드
@@ -318,6 +337,9 @@ class NavBarSettingsFragment : Fragment() {
     }
 
     private fun setRecentAppsTaskbarControlsEnabled(enabled: Boolean) {
+        toggleTaskbarMode.isEnabled = enabled
+        btnTaskbarModeRecentApps.isEnabled = enabled
+        btnTaskbarModeCustomApps.isEnabled = enabled
         switchRecentAppsTaskbarShowOnHome.isEnabled = enabled
         toggleRecentAppsIconShape.isEnabled = enabled
         btnTaskbarShapeCircle.isEnabled = enabled
@@ -325,7 +347,24 @@ class NavBarSettingsFragment : Fragment() {
         btnTaskbarShapeSquircle.isEnabled = enabled
         btnTaskbarShapeRoundedRect.isEnabled = enabled
         sliderRecentAppsIconCount.isEnabled = enabled
+        btnManageTaskbarCustomApps.isEnabled = enabled
         txtRecentAppsIconCountValue.alpha = if (enabled) 1f else 0.5f
+    }
+
+    private fun updateTaskbarModeUi(mode: SettingsManager.TaskbarMode) {
+        val targetId = when (mode) {
+            SettingsManager.TaskbarMode.RECENT_APPS -> R.id.btnTaskbarModeRecentApps
+            SettingsManager.TaskbarMode.CUSTOM_APPS -> R.id.btnTaskbarModeCustomApps
+        }
+        if (toggleTaskbarMode.checkedButtonId != targetId) {
+            toggleTaskbarMode.check(targetId)
+        }
+    }
+
+    private fun syncTaskbarCustomManageVisibility(mode: SettingsManager.TaskbarMode, taskbarEnabled: Boolean) {
+        val isCustomMode = mode == SettingsManager.TaskbarMode.CUSTOM_APPS
+        btnManageTaskbarCustomApps.visibility = if (isCustomMode) View.VISIBLE else View.GONE
+        btnManageTaskbarCustomApps.alpha = if (taskbarEnabled) 1f else 0.5f
     }
 
     private fun updateRecentAppsIconCountValueText(count: Int) {
@@ -357,25 +396,28 @@ class NavBarSettingsFragment : Fragment() {
 
         // 최근 앱 작업 표시줄
         switchRecentAppsTaskbar.setOnCheckedChangeListener { _, isChecked ->
-            if (isProgrammaticSwitchUpdate) return@setOnCheckedChangeListener
-
             val before = settings.recentAppsTaskbarEnabled
             settings.recentAppsTaskbarEnabled = isChecked
-            val applied = settings.recentAppsTaskbarEnabled
+            setRecentAppsTaskbarControlsEnabled(settings.recentAppsTaskbarEnabled)
+            syncTaskbarCustomManageVisibility(settings.taskbarMode, settings.recentAppsTaskbarEnabled)
+            if (before != settings.recentAppsTaskbarEnabled) {
+                notifySettingsChanged()
+            }
+        }
 
-            if (applied != isChecked) {
-                isProgrammaticSwitchUpdate = true
-                switchRecentAppsTaskbar.isChecked = applied
-                isProgrammaticSwitchUpdate = false
-                Toast.makeText(
-                    requireContext(),
-                    getString(R.string.android12l_navbar_layout_dependency_locked),
-                    Toast.LENGTH_SHORT
-                ).show()
+        toggleTaskbarMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+
+            val mode = when (checkedId) {
+                R.id.btnTaskbarModeRecentApps -> SettingsManager.TaskbarMode.RECENT_APPS
+                R.id.btnTaskbarModeCustomApps -> SettingsManager.TaskbarMode.CUSTOM_APPS
+                else -> return@addOnButtonCheckedListener
             }
 
-            setRecentAppsTaskbarControlsEnabled(applied)
-            if (before != applied) {
+            syncTaskbarCustomManageVisibility(mode, settings.recentAppsTaskbarEnabled)
+
+            if (settings.taskbarMode != mode) {
+                settings.taskbarMode = mode
                 notifySettingsChanged()
             }
         }
@@ -417,6 +459,14 @@ class NavBarSettingsFragment : Fragment() {
             notifySettingsChanged()
         }
 
+        switchAndroid12lNavbarLayoutTuning.setOnCheckedChangeListener { _, isChecked ->
+            val before = settings.android12lNavbarLayoutTuningEnabled
+            settings.android12lNavbarLayoutTuningEnabled = isChecked
+            if (before != settings.android12lNavbarLayoutTuningEnabled) {
+                notifySettingsChanged()
+            }
+        }
+
 
         // 재호출 핫스팟
         switchHotspot.setOnCheckedChangeListener { _, isChecked ->
@@ -432,24 +482,9 @@ class NavBarSettingsFragment : Fragment() {
         }
 
         switchUnifiedNormalBgColor.setOnCheckedChangeListener { _, isChecked ->
-            if (isProgrammaticSwitchUpdate) return@setOnCheckedChangeListener
-
             val before = settings.unifiedNormalBgColorEnabled
             settings.unifiedNormalBgColorEnabled = isChecked
-            val applied = settings.unifiedNormalBgColorEnabled
-
-            if (applied != isChecked) {
-                isProgrammaticSwitchUpdate = true
-                switchUnifiedNormalBgColor.isChecked = applied
-                isProgrammaticSwitchUpdate = false
-                Toast.makeText(
-                    requireContext(),
-                    getString(R.string.android12l_navbar_layout_dependency_locked),
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-
-            if (before != applied) {
+            if (before != settings.unifiedNormalBgColorEnabled) {
                 notifySettingsChanged()
             }
         }

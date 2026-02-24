@@ -58,6 +58,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     companion object {
         private const val TAG = "NavBarOverlay"
         private const val APP_DRAWER_CLOSE_LAUNCH_GUARD_MS = 600L
+        private const val RECENTS_TRANSITION_GUARD_MS = 900L
+        private const val HOME_BUTTON_PREVIEW_GUARD_MS = 1200L
+        private const val HOME_APP_FOREGROUND_GRACE_MS = 1200L
         private const val GOOGLE_QUICKSEARCHBOX_PACKAGE = "com.google.android.googlequicksearchbox"
     }
 
@@ -101,12 +104,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var isOnHomeScreen = false
     private var isRecentsVisible = false
     private var isAppDrawerOpen = false
+    private var isLauncherIconDragActive = false
     private var isImeVisible = false
     private var isNotificationPanelOpen = false
     private var isQuickSettingsOpen = false
     private var isPanelButtonOpen = false
     private var isHomeExitPending = false
     private var homeExitSuppressUntil: Long = 0L
+    private var recentsTransitionGuardUntil: Long = 0L
+    private var homeButtonPreviewUntil: Long = 0L
+    private var lastNonLauncherForegroundAt: Long = 0L
     private var homeExitSuppressTask: Runnable? = null
 
     // 다크 모드 전환 추적
@@ -442,6 +449,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private val recentAppsListener = object : RecentAppsManager.RecentAppsChangeListener {
         override fun onRecentAppsChanged(apps: List<RecentAppsManager.RecentAppInfo>) {
+            if (settings.taskbarMode != SettingsManager.TaskbarMode.RECENT_APPS) {
+                return
+            }
             handler.post {
                 val displayedApps = apps.take(settings.recentAppsTaskbarIconCount.coerceIn(3, 7))
                 recentAppsTaskbar?.updateApps(displayedApps)
@@ -509,10 +519,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         gestureHandler = GestureHandler(context, gestureListener)
 
         if (settings.recentAppsTaskbarEnabled) {
-            recentAppsManager = RecentAppsManager(context, recentAppsListener)
             recentAppsTaskbar = RecentAppsTaskbar(context, taskbarListener).apply {
                 splitScreenEnabled = settings.splitScreenTaskbarEnabled
                 iconShape = settings.recentAppsTaskbarIconShape
+            }
+            if (!isCustomTaskbarMode()) {
+                recentAppsManager = RecentAppsManager(context, recentAppsListener)
             }
         }
 
@@ -754,6 +766,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 if (!shouldShowTaskbar()) {
                     centerView.visibility = View.GONE
                 }
+
+                updateTaskbarContentForCurrentMode(animate = false)
             }
         }
 
@@ -1286,6 +1300,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     fun setHomeScreenState(onHome: Boolean) {
         if (onHome) {
+            clearHomeButtonPreviewHint()
+            lastNonLauncherForegroundAt = 0L
             pendingHomeState?.let { handler.removeCallbacks(it) }
             pendingHomeState = null
             val wasHomeExitPending = isHomeExitPending
@@ -1305,6 +1321,17 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 // 언락 페이드 중에는 배경 전환하지 않음 (언락 완료 후 자동 업데이트)
                 if (isUnlockPending || isUnlockFadeRunning || isUnlockFadeSuppressed) {
                     Log.d(TAG, "Home entry during unlock fade - skipping background transition")
+                    return
+                }
+
+                val shouldUseCustom = shouldUseCustomBackground()
+                val alreadyCustomStable =
+                    shouldUseCustom &&
+                        backgroundManager.wasLastAppliedCustom() &&
+                        !backgroundManager.isTransitioningFromCustomToDefault()
+                if (alreadyCustomStable) {
+                    ensureVisualStateSync()
+                    Log.d(TAG, "Home entry background already custom - skip redundant fade")
                     return
                 }
 
@@ -1335,6 +1362,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return
         }
 
+        clearHomeButtonPreviewHint()
         if (!isOnHomeScreen) return
         pendingHomeState?.let { handler.removeCallbacks(it) }
         val task = Runnable {
@@ -1715,6 +1743,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     fun setRecentsState(isRecents: Boolean) {
         if (isRecents) {
+            clearHomeButtonPreviewHint()
+            startRecentsTransitionGuard()
             if (isRecentsVisible) return
             pendingRecentsState?.let { handler.removeCallbacks(it) }
             pendingRecentsState = null
@@ -1780,6 +1810,18 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         updateNavBarBackground()
     }
 
+    fun setLauncherIconDragState(active: Boolean) {
+        if (isLauncherIconDragActive == active) return
+        isLauncherIconDragActive = active
+        Log.d(TAG, "Launcher icon drag state changed: $active")
+
+        if (active) {
+            clearHomeButtonPreviewHint()
+        }
+
+        updateNavBarBackground()
+    }
+
     fun setForegroundPackage(packageName: String, className: String = "") {
         val normalizedClass = className.trim()
         val packageChanged = currentPackage != packageName
@@ -1789,6 +1831,19 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         if (packageChanged) {
             currentPackage = packageName
+            val nonLauncherForeground =
+                packageName.isNotEmpty() &&
+                    packageName != context.packageName &&
+                    packageName != "com.android.systemui" &&
+                    !service.isLauncherPackageForOverlay(packageName)
+            if (nonLauncherForeground) {
+                lastNonLauncherForegroundAt = SystemClock.elapsedRealtime()
+                abortHomeEntryTransitionForLaunchHint(
+                    packageName = packageName,
+                    className = normalizedClass,
+                    source = "foreground"
+                )
+            }
             Log.d(TAG, "Foreground package changed: $packageName")
             updateNavBarBackground()
 
@@ -1805,6 +1860,50 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 isOnHomeScreen = isOnHomeScreen,
                 isRecentsVisible = isRecentsVisible
             )
+        }
+    }
+
+    private fun isCustomTaskbarMode(): Boolean {
+        return settings.taskbarMode == SettingsManager.TaskbarMode.CUSTOM_APPS
+    }
+
+    private fun loadCustomTaskbarApps(): List<RecentAppsManager.RecentAppInfo> {
+        val pm = context.packageManager
+        return settings.taskbarCustomAppsItems
+            .asSequence()
+            .filter { !it.startsWith("shortcut:") }
+            .mapNotNull { packageName ->
+                try {
+                    val appInfo = pm.getApplicationInfo(packageName, 0)
+                    val icon = pm.getApplicationIcon(appInfo)
+                    val label = pm.getApplicationLabel(appInfo)
+                    RecentAppsManager.RecentAppInfo(packageName, icon, label, isResizeable = true)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            .take(settings.recentAppsTaskbarIconCount.coerceIn(3, 7))
+            .toList()
+    }
+
+    private fun updateTaskbarContentForCurrentMode(animate: Boolean) {
+        if (!settings.recentAppsTaskbarEnabled) {
+            hideTaskbarImmediate()
+            return
+        }
+
+        val displayedApps = if (isCustomTaskbarMode()) {
+            loadCustomTaskbarApps()
+        } else {
+            recentAppsManager?.getRecentApps()?.take(settings.recentAppsTaskbarIconCount.coerceIn(3, 7)) ?: emptyList()
+        }
+
+        recentAppsTaskbar?.updateApps(displayedApps)
+
+        if (displayedApps.isNotEmpty()) {
+            syncTaskbarVisibility(animate = animate)
+        } else {
+            hideTaskbarImmediate()
         }
     }
 
@@ -1977,7 +2076,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             // forceUpdate로 배경 강제 적용 (dedup 우회)
             val bar = navBarView ?: return
-            val shouldUseCustom = shouldUseCustomBackground()
+            val stableHomeCustom =
+                isOnHomeScreen &&
+                    !isRecentsVisible &&
+                    !isHomeExitPending &&
+                    !isAppDrawerOpen &&
+                    !isLauncherIconDragActive &&
+                    !isPanelOpen() &&
+                    !isImeVisible
+            val shouldUseCustom = if (stableHomeCustom) true else shouldUseCustomBackground()
             backgroundManager.applyBackground(
                 bar, shouldUseCustom,
                 forceUpdate = true,
@@ -2007,7 +2114,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private fun shouldUseCustomBackground(): Boolean {
         val now = SystemClock.elapsedRealtime()
-        if (isHomeExitPending || now < homeExitSuppressUntil) {
+
+        if (isLauncherIconDragActive) {
             return false
         }
 
@@ -2018,9 +2126,44 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             currentPackage.isNotEmpty() &&
             currentPackage != context.packageName &&
             currentPackage != "com.android.systemui" &&
+            !isGoogleLauncherCompanionForeground() &&
+            (now - lastNonLauncherForegroundAt) < HOME_APP_FOREGROUND_GRACE_MS &&
             !service.isLauncherPackageForOverlay(currentPackage)
         if (appForegroundWhileHome) {
             return false
+        }
+
+        if (
+            now < homeButtonPreviewUntil &&
+            !isRecentsVisible &&
+            !isAppDrawerOpen &&
+            !isPanelOpen() &&
+            !isImeVisible
+        ) {
+            return true
+        }
+
+        if (isHomeExitPending || now < homeExitSuppressUntil) {
+            return false
+        }
+        if (now < recentsTransitionGuardUntil) {
+            val launcherForegroundLike =
+                currentPackage.isEmpty() ||
+                    service.isLauncherPackageForOverlay(currentPackage) ||
+                    isGoogleLauncherCompanionForeground()
+            val stableHomeDuringGuard =
+                isOnHomeScreen &&
+                    !isRecentsVisible &&
+                    !isHomeExitPending &&
+                    !isAppDrawerOpen &&
+                    !isLauncherIconDragActive &&
+                    !isPanelOpen() &&
+                    !isImeVisible &&
+                    launcherForegroundLike
+            if (!stableHomeDuringGuard) {
+                return false
+            }
+            Log.d(TAG, "Bypass recents guard on stable home")
         }
 
         return backgroundManager.shouldUseCustomBackground(
@@ -2031,6 +2174,22 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             isImeVisible = isImeVisible,
             currentPackage = currentPackage
         )
+    }
+
+    private fun isGoogleLauncherCompanionForeground(): Boolean {
+        if (currentPackage != GOOGLE_QUICKSEARCHBOX_PACKAGE) return false
+
+        val cls = currentForegroundClassName.trim()
+        if (cls.isBlank()) return true
+        if (cls == "android.widget.FrameLayout") return true
+        if (cls == "android.widget.LinearLayout") return true
+        if (cls == "android.widget.ScrollView") return true
+        if (cls.startsWith("android.view.")) return true
+
+        val simpleName = cls.substringAfterLast('.')
+        return simpleName.contains("SearchLauncher", ignoreCase = true) ||
+            simpleName.contains("LauncherClient", ignoreCase = true) ||
+            simpleName.contains("Discover", ignoreCase = true)
     }
 
     private fun resolveUnlockUseCustom(): Boolean {
@@ -2075,15 +2234,26 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         val shouldUseCustom = shouldUseCustomBackground()
+        val immediateDefaultForAppLaunch =
+            !shouldUseCustom &&
+                currentPackage.isNotEmpty() &&
+                currentPackage != context.packageName &&
+                currentPackage != "com.android.systemui" &&
+                !service.isLauncherPackageForOverlay(currentPackage)
         if (backgroundManager.isTransitionInProgress() &&
             backgroundManager.wasLastAppliedCustom() != shouldUseCustom
         ) {
             // 진행 중인 트랜지션을 중단하고 올바른 상태로 전환
-            // 홈 화면에서는 부드러운 전환을 위해 애니메이션 사용
-            applyBackgroundImmediate(shouldUseCustom, animate = isOnHomeScreen)
+            // 앱 런치/로딩 시작 구간은 즉시 일반배경으로 전환해 잔상 방지
+            val forceAnimate = isOnHomeScreen && !immediateDefaultForAppLaunch
+            applyBackgroundImmediate(shouldUseCustom, animate = forceAnimate)
             return
         }
-        backgroundManager.applyBackground(bar, shouldUseCustom)
+        backgroundManager.applyBackground(
+            bar,
+            shouldUseCustom,
+            animate = !immediateDefaultForAppLaunch
+        )
 
         if (!shouldUseCustom) {
             backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
@@ -2138,6 +2308,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             toggleNavbarAppsPanel()
             return
         }
+        if (action == NavAction.RECENTS) {
+            startRecentsTransitionGuard()
+        }
         if (action == NavAction.NOTIFICATIONS) {
             when {
                 isQuickSettingsOpen -> {
@@ -2154,7 +2327,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 }
             }
         } else {
-            service.executeAction(action)
+            if (action == NavAction.HOME) {
+                startHomeButtonPreviewTransition()
+            }
+
+            val executed = service.executeAction(action)
+            if (!executed && action == NavAction.HOME) {
+                clearHomeButtonPreviewHint()
+                updateNavBarBackground()
+            }
         }
     }
 
@@ -2381,6 +2562,57 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
     }
 
+    private fun startRecentsTransitionGuard(durationMs: Long = RECENTS_TRANSITION_GUARD_MS) {
+        val now = SystemClock.elapsedRealtime()
+        val nextUntil = now + durationMs
+        if (nextUntil > recentsTransitionGuardUntil) {
+            recentsTransitionGuardUntil = nextUntil
+        }
+        updateNavBarBackground()
+        Log.d(TAG, "Recents transition guard: ${durationMs}ms")
+    }
+
+    private fun startHomeButtonPreviewTransition(durationMs: Long = HOME_BUTTON_PREVIEW_GUARD_MS) {
+        if (isOnHomeScreen) return
+        if (!settings.homeBgEnabled) return
+        if (isRecentsVisible || isAppDrawerOpen || isPanelOpen() || isImeVisible) return
+        if (isUnlockPending || isUnlockFadeRunning || isUnlockFadeSuppressed) return
+
+        val now = SystemClock.elapsedRealtime()
+        val nextUntil = now + durationMs
+        if (nextUntil > homeButtonPreviewUntil) {
+            homeButtonPreviewUntil = nextUntil
+        }
+
+        cancelHideAnimationOnly()
+        applyBackgroundImmediate(useCustom = true, animate = true)
+        Log.d(TAG, "Home button preview transition: ${durationMs}ms")
+    }
+
+    fun startBackExitHomePreviewTransition(durationMs: Long = HOME_BUTTON_PREVIEW_GUARD_MS) {
+        startHomeButtonPreviewTransition(durationMs)
+    }
+
+    fun abortHomeEntryTransitionForLaunchHint(
+        packageName: String,
+        className: String,
+        source: String
+    ) {
+        if (!isOnHomeScreen || isRecentsVisible) return
+        if (isAppDrawerOpen || isPanelOpen() || isImeVisible) return
+        if (!backgroundManager.isTransitionInProgress()) return
+        if (!backgroundManager.wasLastAppliedCustom()) return
+
+        clearHomeButtonPreviewHint()
+        applyBackgroundImmediate(useCustom = false, animate = false)
+        Log.d(TAG, "Abort home-entry transition for app launch hint ($source): $packageName/$className")
+    }
+
+    private fun clearHomeButtonPreviewHint() {
+        if (homeButtonPreviewUntil == 0L) return
+        homeButtonPreviewUntil = 0L
+    }
+
     private fun applyDragIconShape(
         icon: ImageView,
         shapeMode: SettingsManager.RecentAppsTaskbarIconShape
@@ -2490,20 +2722,23 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         backgroundManager.cancelBackgroundTransition()
         backgroundManager.loadBackgroundBitmaps(forceReload = true)
 
-        // Recent apps 컴포넌트 초기화 (createNavBar 전에 해야 centerGroup 생성됨)
+        // Taskbar 컴포넌트 초기화 (createNavBar 전에 해야 centerGroup 생성됨)
         if (settings.recentAppsTaskbarEnabled) {
-            if (recentAppsManager == null) {
-                recentAppsManager = RecentAppsManager(context, recentAppsListener)
-                recentAppsTaskbar = RecentAppsTaskbar(context, taskbarListener).apply {
-                    splitScreenEnabled = settings.splitScreenTaskbarEnabled
-                    iconShape = settings.recentAppsTaskbarIconShape
+            if (recentAppsTaskbar == null) {
+                recentAppsTaskbar = RecentAppsTaskbar(context, taskbarListener)
+            }
+            recentAppsTaskbar?.splitScreenEnabled = settings.splitScreenTaskbarEnabled
+            recentAppsTaskbar?.iconShape = settings.recentAppsTaskbarIconShape
+
+            if (isCustomTaskbarMode()) {
+                recentAppsManager?.clear()
+                recentAppsManager = null
+            } else {
+                if (recentAppsManager == null) {
+                    recentAppsManager = RecentAppsManager(context, recentAppsListener)
                 }
                 recentAppsManager?.setLauncherPackages(cachedLauncherPackages)
                 recentAppsManager?.loadInitialRecentApps()
-            } else {
-                // 설정 변경 시 분할화면 플래그 업데이트
-                recentAppsTaskbar?.splitScreenEnabled = settings.splitScreenTaskbarEnabled
-                recentAppsTaskbar?.iconShape = settings.recentAppsTaskbarIconShape
             }
         } else {
             recentAppsManager?.clear()
@@ -2522,14 +2757,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             createNavBar()
             createHotspot()
 
-            // 최근 앱 목록 복원 (createNavBar가 새 centerGroup을 만들었으므로)
             if (settings.recentAppsTaskbarEnabled) {
-                recentAppsManager?.getRecentApps()?.let { apps ->
-                    val displayedApps = apps.take(settings.recentAppsTaskbarIconCount.coerceIn(3, 7))
-                    if (displayedApps.isNotEmpty()) {
-                        recentAppsTaskbar?.updateApps(displayedApps)
-                    }
-                }
+                updateTaskbarContentForCurrentMode(animate = false)
             }
 
             val params = createLayoutParams()

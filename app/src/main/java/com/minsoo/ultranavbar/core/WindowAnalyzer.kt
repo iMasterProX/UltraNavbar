@@ -217,6 +217,36 @@ class WindowAnalyzer(
         return findTopApplicationWindow(windows)
     }
 
+    fun getTopNonLauncherApplicationWindow(
+        windows: List<AccessibilityWindowInfo>,
+        selfPackage: String
+    ): TopAppWindow? {
+        var best: TopAppWindow? = null
+
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+
+            val root = try { window.root } catch (e: Exception) { null } ?: continue
+            try {
+                val packageName = root.packageName?.toString() ?: continue
+                if (packageName == selfPackage || packageName == "com.android.systemui") continue
+
+                val className = root.className?.toString() ?: ""
+                if (isLauncherPackage(packageName) || isRecentsClassName(className)) continue
+                if (isLauncherCompanionSurface(packageName, className)) continue
+
+                val layer = window.layer
+                if (best == null || layer > best.layer) {
+                    best = TopAppWindow(packageName, className, layer)
+                }
+            } finally {
+                root.recycle()
+            }
+        }
+
+        return best
+    }
+
 // ===== 화면 정보 =====
 
     /**
@@ -226,10 +256,10 @@ class WindowAnalyzer(
         return windowManager.currentWindowMetrics.bounds
     }
 
-    // ===== 런처 오버레이(앱 서랍/위젯/옵션/Discover) 감지 =====
+    // ===== 런처 오버레이(앱 서랍/위젯 시트/Discover) 감지 =====
 
     /**
-     * 런처의 상단 오버레이 상태(앱 서랍/위젯 패널/홈 옵션 팝업/Discover 패널) 감지.
+     * 런처의 상단 오버레이 상태(앱 서랍/위젯 시트/Discover 패널) 감지.
      * rootInActiveWindow가 아닌 다른 윈도우에서 열리는 경우도 있어
      * 현재 루트 + 전체 윈도우를 함께 확인한다.
      */
@@ -238,12 +268,24 @@ class WindowAnalyzer(
         rootNode: AccessibilityNodeInfo?
     ): Boolean {
         val launcherVisible = hasLauncherLikeWindow(windows, rootNode)
+        val screenBounds = getScreenBounds()
 
         if (isLauncherOverlayOpen(rootNode)) return true
         if (isDiscoverOverlayOpen(rootNode, launcherVisible)) return true
 
         for (window in windows) {
             if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val windowTitle = try { window.title?.toString().orEmpty() } catch (e: Exception) { "" }
+            if (windowTitle.contains("widget", ignoreCase = true)) {
+                val bounds = Rect()
+                val isLargeSheet = try {
+                    window.getBoundsInScreen(bounds)
+                    bounds.height() >= (screenBounds.height() * 0.45f).toInt()
+                } catch (e: Exception) {
+                    false
+                }
+                if (isLargeSheet) return true
+            }
             val root = try { window.root } catch (e: Exception) { null } ?: continue
             try {
                 val pkg = root.packageName?.toString() ?: continue
@@ -255,6 +297,70 @@ class WindowAnalyzer(
                 if (isDiscoverOverlaySurface(pkg, className, launcherVisible)) return true
             } finally {
                 root.recycle()
+            }
+        }
+
+        return false
+    }
+
+    fun analyzeLauncherIconDragState(
+        windows: List<AccessibilityWindowInfo>,
+        rootNode: AccessibilityNodeInfo?
+    ): Boolean {
+        if (!hasLauncherLikeWindow(windows, rootNode)) return false
+
+        val dragTargetIds = listOf(
+            "com.android.launcher3:id/drop_target_bar",
+            "com.android.launcher3:id/action_drop_target",
+            "com.android.launcher3:id/delete_target_text",
+            "com.android.launcher3:id/uninstall_target_text",
+            "com.android.launcher3:id/info_target_text"
+        )
+
+        val rootPkg = rootNode?.packageName?.toString()
+        val rootClass = rootNode?.className?.toString().orEmpty()
+        if (!rootPkg.isNullOrEmpty() && isLauncherPackage(rootPkg) && !isRecentsClassName(rootClass)) {
+            if (hasVisibleNodeByIds(rootNode, dragTargetIds)) {
+                return true
+            }
+        }
+
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val root = try { window.root } catch (e: Exception) { null } ?: continue
+            try {
+                val pkg = root.packageName?.toString() ?: continue
+                val className = root.className?.toString() ?: ""
+                if (!isLauncherPackage(pkg) || isRecentsClassName(className)) continue
+
+                if (hasVisibleNodeByIds(root, dragTargetIds)) {
+                    return true
+                }
+            } finally {
+                root.recycle()
+            }
+        }
+
+        return false
+    }
+
+    private fun hasVisibleNodeByIds(
+        rootNode: AccessibilityNodeInfo?,
+        ids: List<String>
+    ): Boolean {
+        rootNode ?: return false
+
+        for (id in ids) {
+            val nodes = try { rootNode.findAccessibilityNodeInfosByViewId(id) } catch (e: Exception) { null }
+            if (!nodes.isNullOrEmpty()) {
+                var found = false
+                for (node in nodes) {
+                    if (!found && node.isVisibleToUser) {
+                        found = true
+                    }
+                    node.recycle()
+                }
+                if (found) return true
             }
         }
 
@@ -315,17 +421,19 @@ class WindowAnalyzer(
             "com.android.launcher3:id/all_apps_container_view",
             "com.android.launcher3:id/all_apps_header",
             "com.android.launcher3:id/search_container_all_apps",
-            // QuickStep / Launcher3 - widgets / home options
+            // QuickStep / Launcher3 - widgets full sheet
             "com.android.launcher3:id/widgets_full_sheet",
             "com.android.launcher3:id/widgets_list_view",
             "com.android.launcher3:id/widgets_search_bar",
-            "com.android.launcher3:id/options_menu",
-            "com.android.launcher3:id/popup_container",
+            "com.android.launcher3:id/widgets_recycler_view",
+            "com.android.launcher3:id/widget_list_view",
+            "com.android.launcher3:id/widget_picker_container",
+            "com.android.launcher3:id/widgets_bottom_sheet",
+            "com.android.launcher3:id/widget_cell",
             // Nova Launcher
             "com.teslacoilsw.launcher:id/apps_view",
             "com.teslacoilsw.launcher:id/apps_list_view",
-            "com.teslacoilsw.launcher:id/widgets_panel",
-            "com.teslacoilsw.launcher:id/popup_container"
+            "com.teslacoilsw.launcher:id/widgets_panel"
         )
 
         for (id in targetIds) {
@@ -346,7 +454,8 @@ class WindowAnalyzer(
         val simpleName = className.substringAfterLast('.')
         if (simpleName.contains("AllApps", ignoreCase = true) ||
             simpleName.contains("Widget", ignoreCase = true) ||
-            simpleName.contains("Popup", ignoreCase = true)
+            simpleName.contains("WidgetSheet", ignoreCase = true) ||
+            simpleName.contains("WidgetPicker", ignoreCase = true)
         ) {
             return true
         }
@@ -773,17 +882,28 @@ class WindowAnalyzer(
         windows: List<AccessibilityWindowInfo>,
         selfPackage: String
     ): Boolean {
-        val launcherVisible = windows.any { window ->
-            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) return@any false
+        var launcherVisible = false
+        var launcherTopLayer = Int.MIN_VALUE
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
             val root = try { window.root } catch (e: Exception) { null }
             val pkg = root?.packageName?.toString()
             val className = root?.className?.toString()
             root?.recycle()
-            if (pkg.isNullOrEmpty()) return@any false
-            isLauncherPackage(pkg) || isRecentsClassName(className ?: "")
+            if (pkg.isNullOrEmpty()) continue
+            if (isLauncherPackage(pkg) || isRecentsClassName(className ?: "")) {
+                launcherVisible = true
+                if (window.layer > launcherTopLayer) {
+                    launcherTopLayer = window.layer
+                }
+            }
         }
 
-        var hasUnknownAppWindow = false
+        val screenBounds = getScreenBounds()
+        val minUnknownWindowArea =
+            (screenBounds.width().toLong() * screenBounds.height().toLong() * 0.2f).toLong()
+
+        var hasUnknownForegroundWindow = false
         for (window in windows) {
             if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
             val bounds = Rect()
@@ -800,15 +920,20 @@ class WindowAnalyzer(
             root?.recycle()
 
             if (pkg == null) {
-                hasUnknownAppWindow = true
+                val area = bounds.width().toLong() * bounds.height().toLong()
+                val unknownCouldBeForeground = !launcherVisible || window.layer > launcherTopLayer
+                if (unknownCouldBeForeground && area >= minUnknownWindowArea) {
+                    hasUnknownForegroundWindow = true
+                }
                 continue
             }
             if (pkg == selfPackage) continue
             if (isDiscoverOverlaySurface(pkg, className ?: "", launcherVisible)) continue
             if (isLauncherPackage(pkg) || isRecentsClassName(className ?: "")) continue
+            if (launcherVisible && window.layer <= launcherTopLayer) continue
             return true
         }
-        return hasUnknownAppWindow
+        return hasUnknownForegroundWindow
     }
 
     private fun isLauncherCompanionSurface(packageName: String, className: String): Boolean {

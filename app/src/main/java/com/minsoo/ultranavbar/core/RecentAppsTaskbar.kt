@@ -75,6 +75,7 @@ class RecentAppsTaskbar(
         val group = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.MATCH_PARENT

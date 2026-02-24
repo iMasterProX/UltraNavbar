@@ -17,7 +17,6 @@ import com.minsoo.ultranavbar.settings.SettingsManager
 class ExperimentalFeaturesFragment : Fragment() {
 
     private lateinit var settings: SettingsManager
-    private lateinit var switchAndroid12lNavbarLayoutTuning: SwitchMaterial
     private lateinit var switchSplitScreenTaskbar: SwitchMaterial
     private lateinit var switchTouchPointExperimental: SwitchMaterial
 
@@ -39,23 +38,16 @@ class ExperimentalFeaturesFragment : Fragment() {
     }
 
     private fun initViews(view: View) {
-        switchAndroid12lNavbarLayoutTuning = view.findViewById(R.id.switchAndroid12lNavbarLayoutTuning)
         switchSplitScreenTaskbar = view.findViewById(R.id.switchSplitScreenTaskbar)
         switchTouchPointExperimental = view.findViewById(R.id.switchTouchPointExperimental)
     }
 
     private fun loadSettings() {
-        switchAndroid12lNavbarLayoutTuning.isChecked = settings.android12lNavbarLayoutTuningEnabled
         switchSplitScreenTaskbar.isChecked = settings.splitScreenTaskbarEnabled
         switchTouchPointExperimental.isChecked = settings.touchPointExperimentalEnabled
     }
 
     private fun setupListeners() {
-        switchAndroid12lNavbarLayoutTuning.setOnCheckedChangeListener { _, isChecked ->
-            settings.android12lNavbarLayoutTuningEnabled = isChecked
-            notifySettingsChanged()
-        }
-
         switchSplitScreenTaskbar.setOnCheckedChangeListener { _, isChecked ->
             settings.splitScreenTaskbarEnabled = isChecked
             notifySettingsChanged()

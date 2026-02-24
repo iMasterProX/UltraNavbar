@@ -16,11 +16,11 @@ class AppListAdapter(
 ) : RecyclerView.Adapter<AppListAdapter.ViewHolder>() {
 
     private var apps: List<AppListActivity.AppInfo> = emptyList()
-    private var selectedPackages: MutableSet<String> = mutableSetOf()
+    private var selectedPackages: LinkedHashSet<String> = linkedSetOf()
 
     fun submitList(apps: List<AppListActivity.AppInfo>, selected: Set<String>) {
         this.apps = apps
-        this.selectedPackages = selected.toMutableSet()
+        this.selectedPackages = LinkedHashSet(selected)
         notifyDataSetChanged()
     }
 

@@ -18,6 +18,11 @@ class SettingsManager private constructor(context: Context) {
         ROUNDED_RECT
     }
 
+    enum class TaskbarMode {
+        RECENT_APPS,
+        CUSTOM_APPS
+    }
+
     companion object {
         private const val PREF_NAME = "UltraNavbarSettings"
         const val CROP_HEIGHT_PX = 72 // 배경 크롭 높이 (px)
@@ -66,6 +71,7 @@ class SettingsManager private constructor(context: Context) {
 
         // Recent Apps Taskbar
         private const val KEY_RECENT_APPS_TASKBAR_ENABLED = "recent_apps_taskbar_enabled"
+        private const val KEY_TASKBAR_MODE = "taskbar_mode"
         private const val KEY_RECENT_APPS_TASKBAR_ICON_SHAPE = "recent_apps_taskbar_icon_shape"
         private const val KEY_RECENT_APPS_TASKBAR_ICON_COUNT = "recent_apps_taskbar_icon_count"
         private const val KEY_RECENT_APPS_TASKBAR_SHOW_ON_HOME = "recent_apps_taskbar_show_on_home"
@@ -76,7 +82,7 @@ class SettingsManager private constructor(context: Context) {
         // Experimental: Coordinate Auto Touch
         private const val KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED = "touch_point_experimental_enabled"
 
-        // Experimental: Android 12L style navbar layout tuning
+        // Android 12L style navbar layout tuning
         private const val KEY_ANDROID12L_NAVBAR_LAYOUT_TUNING_ENABLED = "android12l_navbar_layout_tuning_enabled"
 
         // Wacom Pen Settings
@@ -103,6 +109,7 @@ class SettingsManager private constructor(context: Context) {
 
         // NavbarApps
         private const val KEY_NAVBAR_APPS_ITEMS = "navbar_apps_items"
+        private const val KEY_TASKBAR_CUSTOM_APPS_ITEMS = "taskbar_custom_apps_items"
 
         // 노드 선택 설정 (접근성 노드 기반 - 권장)
         private const val KEY_PEN_A_NODE_ID = "pen_a_node_id"
@@ -145,11 +152,8 @@ class SettingsManager private constructor(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_HOME_BG_ENABLED, value).apply()
 
     var unifiedNormalBgColorEnabled: Boolean
-        get() = prefs.getBoolean(KEY_UNIFIED_NORMAL_BG_COLOR_ENABLED, false) || android12lNavbarLayoutTuningEnabled
-        set(value) {
-            if (!value && android12lNavbarLayoutTuningEnabled) return
-            prefs.edit().putBoolean(KEY_UNIFIED_NORMAL_BG_COLOR_ENABLED, value).apply()
-        }
+        get() = prefs.getBoolean(KEY_UNIFIED_NORMAL_BG_COLOR_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_UNIFIED_NORMAL_BG_COLOR_ENABLED, value).apply()
 
     var homeBgButtonColorMode: HomeBgButtonColorMode
         get() {
@@ -256,11 +260,22 @@ class SettingsManager private constructor(context: Context) {
 
     // 최근 앱 작업 표시줄
     var recentAppsTaskbarEnabled: Boolean
-        get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, true) || android12lNavbarLayoutTuningEnabled
-        set(value) {
-            if (!value && android12lNavbarLayoutTuningEnabled) return
-            prefs.edit().putBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, value).apply()
+        get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, value).apply()
+
+    var taskbarMode: TaskbarMode
+        get() {
+            val stored = prefs.getString(
+                KEY_TASKBAR_MODE,
+                TaskbarMode.RECENT_APPS.name
+            ) ?: TaskbarMode.RECENT_APPS.name
+            return try {
+                TaskbarMode.valueOf(stored)
+            } catch (e: IllegalArgumentException) {
+                TaskbarMode.RECENT_APPS
+            }
         }
+        set(value) = prefs.edit().putString(KEY_TASKBAR_MODE, value.name).apply()
 
     var recentAppsTaskbarIconShape: RecentAppsTaskbarIconShape
         get() {
@@ -294,18 +309,10 @@ class SettingsManager private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED, value).apply()
 
-    // 안드로이드 12L 스타일 네비바 구성 조절 (실험적)
+    // 안드로이드 12L 스타일 네비바 구성 조절
     var android12lNavbarLayoutTuningEnabled: Boolean
         get() = prefs.getBoolean(KEY_ANDROID12L_NAVBAR_LAYOUT_TUNING_ENABLED, false)
-        set(value) {
-            prefs.edit().apply {
-                putBoolean(KEY_ANDROID12L_NAVBAR_LAYOUT_TUNING_ENABLED, value)
-                if (value) {
-                    putBoolean(KEY_RECENT_APPS_TASKBAR_ENABLED, true)
-                    putBoolean(KEY_UNIFIED_NORMAL_BG_COLOR_ENABLED, true)
-                }
-            }.apply()
-        }
+        set(value) = prefs.edit().putBoolean(KEY_ANDROID12L_NAVBAR_LAYOUT_TUNING_ENABLED, value).apply()
 
     // Wacom 펜 포인터 표시
     var penPointerEnabled: Boolean
@@ -488,4 +495,12 @@ class SettingsManager private constructor(context: Context) {
             return if (joined.isEmpty()) emptyList() else joined.split("|||")
         }
         set(value) = prefs.edit().putString(KEY_NAVBAR_APPS_ITEMS, value.joinToString("|||")).apply()
+
+    // 작업 표시줄 사용자 지정 앱 목록 (순서 보존)
+    var taskbarCustomAppsItems: List<String>
+        get() {
+            val joined = prefs.getString(KEY_TASKBAR_CUSTOM_APPS_ITEMS, null) ?: return emptyList()
+            return if (joined.isEmpty()) emptyList() else joined.split("|||")
+        }
+        set(value) = prefs.edit().putString(KEY_TASKBAR_CUSTOM_APPS_ITEMS, value.joinToString("|||")).apply()
 }

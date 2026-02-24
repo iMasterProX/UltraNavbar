@@ -42,6 +42,10 @@ class NavBarAccessibilityService : AccessibilityService() {
         private const val HOME_RECENT_APP_SUPPRESS_MS = 550L
         private const val HOME_ACTION_STALE_NON_LAUNCHER_MS = 1500L
         private const val HOME_ACTION_OVERLAY_GUARD_MS = 700L
+        private const val HOME_ACTION_FAST_HOME_ENTRY_MS = 1300L
+        private const val BACK_EXIT_PREVIEW_PROBE_INTERVAL_MS = 80L
+        private const val BACK_EXIT_PREVIEW_PROBE_ATTEMPTS = 4
+        private const val HOME_ENTRY_STALE_APP_EVENT_GUARD_MS = 1100L
         private const val RECENTS_EVENT_FALSE_DEBOUNCE_MS = 420L
         private const val ORIENTATION_CHANGE_STABILIZE_MS = 500L  // 화면 회전 후 안정화 시간
         private const val DISABLED_HOME_RECOVERY_WINDOW_MS = 5000L
@@ -79,6 +83,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isOnHomeScreen: Boolean = false
     private var isRecentsVisible: Boolean = false
     private var isAppDrawerOpen: Boolean = false
+    private var isLauncherIconDragActive: Boolean = false
     private var isNotificationPanelOpen: Boolean = false
     private var isQuickSettingsOpen: Boolean = false
     private var isWallpaperPreviewVisible: Boolean = false
@@ -102,6 +107,8 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
+    private var pendingHomeReturnProbe: Runnable? = null
+    private var pendingBackExitPreviewProbe: Runnable? = null
     private var fullscreenPoll: Runnable? = null
     private var unlockFadeRunnable: Runnable? = null
     private var batteryMonitorRunnable: Runnable? = null
@@ -364,6 +371,12 @@ class NavBarAccessibilityService : AccessibilityService() {
         pendingStateCheck?.let { handler.removeCallbacks(it) }
         pendingStateCheck = null
 
+        pendingHomeReturnProbe?.let { handler.removeCallbacks(it) }
+        pendingHomeReturnProbe = null
+
+        pendingBackExitPreviewProbe?.let { handler.removeCallbacks(it) }
+        pendingBackExitPreviewProbe = null
+
         unlockFadeRunnable?.let { handler.removeCallbacks(it) }
         unlockFadeRunnable = null
 
@@ -455,11 +468,17 @@ class NavBarAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
                 handleNotificationStateChanged(event)
             }
-            AccessibilityEvent.TYPE_WINDOWS_CHANGED,
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                handleWindowsLaunchHint()
+                scheduleStateCheck()
+            }
             AccessibilityEvent.TYPE_VIEW_FOCUSED,
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> {
+                scheduleStateCheck()
+            }
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                handleNonLauncherContentLaunchHint(event)
                 scheduleStateCheck()
             }
         }
@@ -482,6 +501,173 @@ class NavBarAccessibilityService : AccessibilityService() {
             event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED) {
             lastImeEventAt = now
         }
+    }
+
+    private fun handleNonLauncherContentLaunchHint(event: AccessibilityEvent) {
+        if (!isOnHomeScreen || isRecentsVisible) return
+        if (isNotificationPanelOpen || isQuickSettingsOpen || isImeVisible) return
+
+        val packageName = event.packageName?.toString() ?: return
+        val className = event.className?.toString().orEmpty()
+
+        if (isImePackageOrWindow(packageName, className)) return
+        if (isLauncherLikeHintClass(className)) return
+
+        if (packageName == this.packageName || packageName == "com.android.systemui") return
+        if (windowAnalyzer.isLauncherPackage(packageName)) return
+        if (packageName == GOOGLE_QUICKSEARCHBOX_PACKAGE) return
+
+        val elapsedFromHomeAction = SystemClock.elapsedRealtime() - lastHomeActionAt
+        if (
+            packageName == lastHomeActionSourcePackage &&
+            elapsedFromHomeAction in 0 until HOME_ACTION_OVERLAY_GUARD_MS
+        ) {
+            return
+        }
+
+        val genericClassSignal =
+            className.isBlank() ||
+                className == "android.view.View" ||
+                className == "android.view.ViewGroup" ||
+                className == "android.widget.FrameLayout"
+        val classLooksActivity = className.startsWith(packageName)
+
+        if (!genericClassSignal && !classLooksActivity) return
+
+        val windowList = windows.toList()
+        val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
+            windowList,
+            this.packageName
+        )
+
+        maybeAbortHomeEntryTransitionForLaunchHint(
+            packageName = packageName,
+            className = className,
+            windowList = windowList,
+            root = rootInActiveWindow,
+            source = "event_content_hint"
+        )
+
+        if (
+            handleImmediateAppLaunchTransition(
+                packageName = packageName,
+                className = className,
+                hasVisibleNonLauncherApp = hasVisibleNonLauncherApp,
+                windowList = windowList,
+                root = rootInActiveWindow,
+                source = "event_content_hint"
+            )
+        ) {
+            Log.d(TAG, "Content launch hint accepted: pkg=$packageName, class=$className")
+        }
+    }
+
+    private fun handleWindowsLaunchHint() {
+        if (!isOnHomeScreen || isRecentsVisible) return
+        if (isNotificationPanelOpen || isQuickSettingsOpen || isImeVisible) return
+
+        val windowList = windows.toList()
+        val topWindow = windowAnalyzer.getTopApplicationWindow(windowList) ?: return
+        val packageName = topWindow.packageName
+        val className = topWindow.className
+
+        if (packageName.isEmpty()) return
+        if (isImePackageOrWindow(packageName, className)) return
+        if (isLauncherLikeHintClass(className)) return
+        if (packageName == this.packageName || packageName == "com.android.systemui") return
+        if (windowAnalyzer.isLauncherPackage(packageName)) return
+        if (packageName == GOOGLE_QUICKSEARCHBOX_PACKAGE && isGoogleLauncherCompanionClass(className)) return
+
+        val elapsedFromHomeAction = SystemClock.elapsedRealtime() - lastHomeActionAt
+        if (
+            packageName == lastHomeActionSourcePackage &&
+            elapsedFromHomeAction in 0 until HOME_ACTION_OVERLAY_GUARD_MS
+        ) {
+            return
+        }
+
+        val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
+            windowList,
+            this.packageName
+        )
+
+        maybeAbortHomeEntryTransitionForLaunchHint(
+            packageName = packageName,
+            className = className,
+            windowList = windowList,
+            root = rootInActiveWindow,
+            source = "windows_hint"
+        )
+
+        if (
+            handleImmediateAppLaunchTransition(
+                packageName = packageName,
+                className = className,
+                hasVisibleNonLauncherApp = hasVisibleNonLauncherApp,
+                windowList = windowList,
+                root = rootInActiveWindow,
+                source = "windows_hint"
+            )
+        ) {
+            Log.d(TAG, "Windows launch hint accepted: pkg=$packageName, class=$className")
+        }
+    }
+
+    private fun isImePackageOrWindow(packageName: String, className: String): Boolean {
+        val normalizedPackage = packageName.trim()
+        val normalizedClass = className.trim()
+
+        if (normalizedPackage.contains("inputmethod", ignoreCase = true)) return true
+        if (normalizedPackage.contains("keyboard", ignoreCase = true)) return true
+        if (normalizedPackage.contains("latin", ignoreCase = true)) return true
+
+        if (normalizedClass.contains("SoftInputWindow", ignoreCase = true)) return true
+        if (normalizedClass.contains("InputMethod", ignoreCase = true)) return true
+
+        return false
+    }
+
+    private fun isLauncherLikeHintClass(className: String): Boolean {
+        val normalizedClass = className.trim()
+        if (normalizedClass.isBlank()) return false
+        if (normalizedClass.startsWith("com.android.launcher3")) return true
+        if (normalizedClass.startsWith("com.google.android.apps.nexuslauncher")) return true
+        val simpleName = normalizedClass.substringAfterLast('.')
+        return simpleName.contains("SearchLauncher", ignoreCase = true) ||
+            simpleName.contains("LauncherClient", ignoreCase = true) ||
+            simpleName.contains("Discover", ignoreCase = true)
+    }
+
+    private fun maybeAbortHomeEntryTransitionForLaunchHint(
+        packageName: String,
+        className: String,
+        windowList: List<AccessibilityWindowInfo>,
+        root: AccessibilityNodeInfo?,
+        source: String
+    ) {
+        if (!isOnHomeScreen || isRecentsVisible) return
+        if (isNotificationPanelOpen || isQuickSettingsOpen || isImeVisible) return
+        if (packageName.isEmpty()) return
+        if (packageName == this.packageName || packageName == "com.android.systemui") return
+        if (isImePackageOrWindow(packageName, className)) return
+        if (windowAnalyzer.isLauncherPackage(packageName)) return
+        if (packageName == GOOGLE_QUICKSEARCHBOX_PACKAGE && isGoogleLauncherCompanionClass(className)) return
+
+        val elapsedFromHomeAction = SystemClock.elapsedRealtime() - lastHomeActionAt
+        if (
+            packageName == lastHomeActionSourcePackage &&
+                elapsedFromHomeAction in 0 until HOME_ACTION_STALE_NON_LAUNCHER_MS
+        ) {
+            return
+        }
+
+        if (shouldIgnoreStaleAppEventNearHomeEntry(packageName, className, windowList, root)) return
+
+        overlay?.abortHomeEntryTransitionForLaunchHint(
+            packageName = packageName,
+            className = className,
+            source = source
+        )
     }
 
     private fun handleNotificationStateChanged(event: AccessibilityEvent) {
@@ -580,6 +766,61 @@ class NavBarAccessibilityService : AccessibilityService() {
             remappedLauncherCompanion = true
         }
 
+        val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
+            windowList,
+            this.packageName
+        )
+        maybeAbortHomeEntryTransitionForLaunchHint(
+            packageName = packageName,
+            className = className,
+            windowList = windowList,
+            root = rootInActiveWindow,
+            source = "event_state"
+        )
+        val (launchFastPackage, launchFastClass) = resolveImmediateLaunchCandidate(
+            packageName = packageName,
+            className = className,
+            windowList = windowList,
+            hasVisibleNonLauncherApp = hasVisibleNonLauncherApp
+        )
+
+        if (
+            handleImmediateAppLaunchTransition(
+                packageName = launchFastPackage,
+                className = launchFastClass,
+                hasVisibleNonLauncherApp = hasVisibleNonLauncherApp,
+                windowList = windowList,
+                root = rootInActiveWindow,
+                source = "event"
+            )
+        ) {
+            return
+        }
+
+        if (
+            handleImmediateHomeEntryTransition(
+                packageName = packageName,
+                className = className,
+                windowList = windowList,
+                root = rootInActiveWindow,
+                source = "event"
+            )
+        ) {
+            return
+        }
+
+        if (shouldIgnoreGoogleCompanionNearHome(packageName, className, windowList, rootInActiveWindow)) {
+            Log.d(TAG, "Ignore Google companion near home (event): class=$className")
+            syncLauncherOverlayState(windowList, rootInActiveWindow, "event_google_guard")
+            return
+        }
+
+        if (shouldIgnoreStaleAppEventNearHomeEntry(packageName, className, windowList, rootInActiveWindow)) {
+            Log.d(TAG, "Ignore stale non-launcher near home entry (event): $packageName")
+            syncLauncherOverlayState(windowList, rootInActiveWindow, "event_stale_app")
+            return
+        }
+
         if (shouldIgnoreStaleNonLauncherAfterHome(packageName)) {
             Log.d(TAG, "Ignore stale non-launcher after HOME (event): $packageName")
             syncLauncherOverlayState(windowList, rootInActiveWindow, "event_stale")
@@ -587,17 +828,24 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
 
         markNonLauncherEvent(packageName, className)
-
-        val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
-            windowList,
-            this.packageName
-        )
         if (hasVisibleNonLauncherApp) {
             lastNonLauncherEventAt = SystemClock.elapsedRealtime()
         }
 
         val suppressHomeForRecentApp = shouldSuppressHomeForRecentApp()
         val isLauncherPackage = windowAnalyzer.isLauncherPackage(packageName)
+        val preferLauncherHomeEntry = shouldPreferLauncherHomeEntry(
+            isLauncherPackage = isLauncherPackage,
+            hasVisibleNonLauncherApp = hasVisibleNonLauncherApp,
+            recentsVisible = isRecentsVisible
+        )
+        val effectiveHasVisibleNonLauncherApp =
+            if (preferLauncherHomeEntry) {
+                Log.d(TAG, "Prefer launcher home entry despite residual non-launcher window (event)")
+                false
+            } else {
+                hasVisibleNonLauncherApp
+            }
         val suppressCompanionForegroundUpdate =
             remappedLauncherCompanion &&
                 suppressHomeForRecentApp &&
@@ -608,14 +856,28 @@ class NavBarAccessibilityService : AccessibilityService() {
             isLauncherPackage &&
                 !isOnHomeScreen &&
                 !isRecentsVisible &&
-                hasVisibleNonLauncherApp &&
+                effectiveHasVisibleNonLauncherApp &&
                 suppressHomeForRecentApp
+        val launcherForegroundStabilizationElapsed =
+            getLauncherForegroundSuppressElapsedDuringHomeExitStabilization(
+                isLauncherPackage = isLauncherPackage,
+                recentsVisible = isRecentsVisible
+            )
+        val suppressLauncherForegroundDuringHomeExitStabilization =
+            launcherForegroundStabilizationElapsed != null
 
         val packageChanged = if (suppressCompanionForegroundUpdate) {
             Log.d(TAG, "Skip launcher companion foreground update during app launch transition")
             false
         } else if (suppressLauncherForegroundUpdate) {
             Log.d(TAG, "Skip launcher foreground update while non-launcher window is still visible (event)")
+            false
+        } else if (suppressLauncherForegroundDuringHomeExitStabilization) {
+            Log.d(
+                TAG,
+                "Skip launcher foreground update during home-exit stabilization " +
+                    "(event, ${launcherForegroundStabilizationElapsed}ms < ${HOME_EXIT_STABILIZE_MS}ms)"
+            )
             false
         } else {
             updateForegroundPackage(packageName, "event", className)
@@ -629,14 +891,14 @@ class NavBarAccessibilityService : AccessibilityService() {
             suppressHomeForRecentApp && (isOnHomeScreen || remappedLauncherCompanion)
         val newOnHomeScreen = isLauncherPackage &&
             !isRecentsVisible &&
-            !hasVisibleNonLauncherApp &&
+            !effectiveHasVisibleNonLauncherApp &&
             !hasNonLauncherForeground &&
             !shouldSuppressHome
 
         // 이미 홈 화면이고 런처 이벤트인 경우, 잔류 앱 윈도우로 인한 잘못된 홈 이탈 방지
         if (!newOnHomeScreen && isOnHomeScreen && isLauncherPackage && !isRecentsVisible) {
             Log.d(TAG, "Home exit from event suppressed (launcher event, " +
-                    "hasNonLauncherApp=$hasVisibleNonLauncherApp, suppressHome=$shouldSuppressHome, " +
+                    "hasNonLauncherApp=$effectiveHasVisibleNonLauncherApp, suppressHome=$shouldSuppressHome, " +
                     "remappedCompanion=$remappedLauncherCompanion)")
         } else {
             val homeStateSource =
@@ -705,10 +967,28 @@ class NavBarAccessibilityService : AccessibilityService() {
                 Log.d(TAG, "App Drawer state ($source): $isAppDrawerOpen")
                 overlay?.setAppDrawerState(isAppDrawerOpen)
             }
-        } else if (isAppDrawerOpen) {
-            isAppDrawerOpen = false
-            Log.d(TAG, "App Drawer state ($source): false")
-            overlay?.setAppDrawerState(false)
+
+            val iconDragActive =
+                !hasVisibleNonLauncherApp &&
+                    !appDrawerOpen &&
+                    windowAnalyzer.analyzeLauncherIconDragState(windowList, root)
+
+            if (isLauncherIconDragActive != iconDragActive) {
+                isLauncherIconDragActive = iconDragActive
+                Log.d(TAG, "Launcher icon drag state ($source): $isLauncherIconDragActive")
+                overlay?.setLauncherIconDragState(isLauncherIconDragActive)
+            }
+        } else {
+            if (isAppDrawerOpen) {
+                isAppDrawerOpen = false
+                Log.d(TAG, "App Drawer state ($source): false")
+                overlay?.setAppDrawerState(false)
+            }
+            if (isLauncherIconDragActive) {
+                isLauncherIconDragActive = false
+                Log.d(TAG, "Launcher icon drag state ($source): false")
+                overlay?.setLauncherIconDragState(false)
+            }
         }
     }
 
@@ -865,11 +1145,262 @@ class NavBarAccessibilityService : AccessibilityService() {
         return elapsed in 0 until HOME_ACTION_STALE_NON_LAUNCHER_MS
     }
 
+    private fun shouldIgnoreGoogleCompanionNearHome(
+        packageName: String,
+        className: String,
+        windowList: List<AccessibilityWindowInfo>,
+        root: AccessibilityNodeInfo?
+    ): Boolean {
+        if (packageName != GOOGLE_QUICKSEARCHBOX_PACKAGE) return false
+        if (!isOnHomeScreen || isRecentsVisible) return false
+        if (!isGoogleLauncherCompanionClass(className)) return false
+
+        val hasVisibleNonLauncherApp =
+            windowAnalyzer.hasVisibleNonLauncherAppWindow(windowList, this.packageName)
+        if (hasVisibleNonLauncherApp) return false
+
+        val now = SystemClock.elapsedRealtime()
+        val homeEntryElapsed = now - lastHomeEntryAt
+        val nearHomeEntry =
+            homeEntryElapsed in 0 until HOME_RECENT_APP_SUPPRESS_MS && shouldSuppressHomeForRecentApp()
+
+        val homeActionElapsed = now - lastHomeActionAt
+        val nearHomeAction =
+            lastHomeActionSourcePackage.isNotEmpty() &&
+                homeActionElapsed in 0 until HOME_ACTION_OVERLAY_GUARD_MS
+
+        if (!nearHomeEntry && !nearHomeAction) return false
+
+        // 홈 진입 직후 런처 companion 노이즈를 앱 전환으로 오인하지 않도록 무시
+        return true
+    }
+
+    private fun isGoogleLauncherCompanionClass(className: String): Boolean {
+        val cls = className.trim()
+        if (cls.isBlank()) return true
+        if (cls == "android.widget.FrameLayout") return true
+        if (cls == "android.widget.LinearLayout") return true
+        if (cls == "android.widget.ScrollView") return true
+        if (cls.startsWith("android.view.")) return true
+
+        val simpleName = cls.substringAfterLast('.')
+        return simpleName.contains("SearchLauncher", ignoreCase = true) ||
+            simpleName.contains("LauncherClient", ignoreCase = true) ||
+            simpleName.contains("Discover", ignoreCase = true)
+    }
+
+    private fun shouldIgnoreStaleAppEventNearHomeEntry(
+        packageName: String,
+        className: String,
+        windowList: List<AccessibilityWindowInfo>,
+        root: AccessibilityNodeInfo?
+    ): Boolean {
+        if (!isOnHomeScreen || isRecentsVisible) return false
+        if (packageName.isEmpty()) return false
+        if (packageName == this.packageName || packageName == "com.android.systemui") return false
+        if (windowAnalyzer.isLauncherPackage(packageName)) return false
+
+        val hasVisibleNonLauncherApp =
+            windowAnalyzer.hasVisibleNonLauncherAppWindow(windowList, this.packageName)
+        if (hasVisibleNonLauncherApp) return false
+
+        val normalizedClass = className.trim()
+        val genericClassSignal =
+            normalizedClass.isBlank() ||
+                normalizedClass == "android.view.View" ||
+                normalizedClass == "android.view.ViewGroup" ||
+                normalizedClass == "android.widget.FrameLayout"
+        if (!genericClassSignal) return false
+
+        val entryElapsed = SystemClock.elapsedRealtime() - lastHomeEntryAt
+        if (entryElapsed !in 0 until HOME_ENTRY_STALE_APP_EVENT_GUARD_MS) return false
+        if (packageName != lastNonLauncherPackage) return false
+
+        val topWindow = windowAnalyzer.getTopApplicationWindow(windowList)
+        val topPackage = topWindow?.packageName ?: root?.packageName?.toString().orEmpty()
+        val topClass = topWindow?.className ?: root?.className?.toString().orEmpty()
+
+        val topLauncherLike = windowAnalyzer.isLauncherPackage(topPackage) ||
+            (topPackage == GOOGLE_QUICKSEARCHBOX_PACKAGE && isGoogleLauncherCompanionClass(topClass))
+
+        return topLauncherLike
+    }
+
+    private fun resolveImmediateLaunchCandidate(
+        packageName: String,
+        className: String,
+        windowList: List<AccessibilityWindowInfo>,
+        hasVisibleNonLauncherApp: Boolean
+    ): Pair<String, String> {
+        if (!hasVisibleNonLauncherApp) return packageName to className
+        if (packageName != GOOGLE_QUICKSEARCHBOX_PACKAGE) return packageName to className
+        if (!isGoogleLauncherCompanionClass(className)) return packageName to className
+
+        val topNonLauncher = windowAnalyzer.getTopNonLauncherApplicationWindow(
+            windows = windowList,
+            selfPackage = this.packageName
+        ) ?: return packageName to className
+
+        Log.d(
+            TAG,
+            "Launch fast candidate remap: $packageName/$className -> ${topNonLauncher.packageName}/${topNonLauncher.className}"
+        )
+        return topNonLauncher.packageName to topNonLauncher.className
+    }
+
+    private fun handleImmediateAppLaunchTransition(
+        packageName: String,
+        className: String,
+        hasVisibleNonLauncherApp: Boolean,
+        windowList: List<AccessibilityWindowInfo>,
+        root: AccessibilityNodeInfo?,
+        source: String
+    ): Boolean {
+        if (!isOnHomeScreen || isRecentsVisible) return false
+        if (packageName.isEmpty()) return false
+        if (packageName == this.packageName || packageName == "com.android.systemui") return false
+        if (isImePackageOrWindow(packageName, className)) return false
+        if (windowAnalyzer.isLauncherPackage(packageName)) return false
+        if (packageName == GOOGLE_QUICKSEARCHBOX_PACKAGE && isGoogleLauncherCompanionClass(className)) return false
+
+        val normalizedClass = className.trim()
+        val classLooksActivity =
+            normalizedClass.isNotBlank() &&
+                normalizedClass != "android.view.View" &&
+                normalizedClass != "android.view.ViewGroup" &&
+                normalizedClass != "android.widget.FrameLayout" &&
+                normalizedClass.startsWith(packageName)
+
+        val genericClassSignal =
+            normalizedClass.isBlank() ||
+                normalizedClass == "android.view.View" ||
+                normalizedClass == "android.view.ViewGroup" ||
+                normalizedClass == "android.widget.FrameLayout"
+
+        val staleNearHomeEntry =
+            shouldIgnoreStaleAppEventNearHomeEntry(packageName, className, windowList, root)
+        val recentHomeActionElapsed = SystemClock.elapsedRealtime() - lastHomeActionAt
+        val likelyStaleFromLastHomeSource =
+            packageName == lastHomeActionSourcePackage &&
+                recentHomeActionElapsed in 0 until HOME_ACTION_STALE_NON_LAUNCHER_MS
+        val genericLaunchSignal =
+            genericClassSignal && !staleNearHomeEntry && !likelyStaleFromLastHomeSource
+
+        if (!classLooksActivity && !hasVisibleNonLauncherApp && !genericLaunchSignal) return false
+
+        markNonLauncherEvent(packageName, className)
+
+        val packageChanged = updateForegroundPackage(packageName, "${source}_launch_fast", className)
+        updateHomeScreenState(false, "${source}_launch_fast")
+        syncLauncherOverlayState(windowList, root, "${source}_launch_fast")
+
+        if (packageChanged) {
+            if (source == "event") {
+                handler.post {
+                    checkFullscreenState()
+                    updateOverlayVisibility()
+                }
+            } else {
+                updateOverlayVisibility()
+            }
+        }
+
+        Log.d(TAG, "Immediate app launch transition ($source): $packageName")
+        return true
+    }
+
+    private fun handleImmediateHomeEntryTransition(
+        packageName: String,
+        className: String,
+        windowList: List<AccessibilityWindowInfo>,
+        root: AccessibilityNodeInfo?,
+        source: String
+    ): Boolean {
+        if (isOnHomeScreen || isRecentsVisible) return false
+
+        val isLauncherCompanion =
+            packageName == GOOGLE_QUICKSEARCHBOX_PACKAGE &&
+                isGoogleLauncherCompanionClass(className)
+        val launcherLikePackage = windowAnalyzer.isLauncherPackage(packageName) || isLauncherCompanion
+        if (!launcherLikePackage) return false
+
+        val elapsed = SystemClock.elapsedRealtime() - lastHomeActionAt
+        if (elapsed !in 0 until HOME_ACTION_FAST_HOME_ENTRY_MS) return false
+        if (lastHomeActionSourcePackage.isEmpty()) return false
+
+        val normalizedClass = className.trim()
+        val launcherClassLike =
+            normalizedClass.isBlank() ||
+                normalizedClass.contains("SearchLauncher", ignoreCase = true) ||
+                normalizedClass.contains("Launcher", ignoreCase = true) ||
+                normalizedClass.startsWith("com.android.launcher3")
+        if (!launcherClassLike) return false
+
+        val effectivePackage =
+            if (isLauncherCompanion && !windowAnalyzer.isLauncherPackage(packageName)) {
+                windowAnalyzer.getLauncherPackages().firstOrNull() ?: packageName
+            } else {
+                packageName
+            }
+
+        val packageChanged = updateForegroundPackage(effectivePackage, "${source}_home_fast", className)
+        updateHomeScreenState(true, "${source}_home_fast")
+        syncLauncherOverlayState(windowList, root, "${source}_home_fast")
+
+        if (packageChanged) {
+            if (source == "event") {
+                handler.post {
+                    checkFullscreenState()
+                    updateOverlayVisibility()
+                }
+            } else {
+                updateOverlayVisibility()
+            }
+        }
+
+        Log.d(TAG, "Immediate home entry transition ($source): $effectivePackage")
+        return true
+    }
+
+    private fun shouldPreferLauncherHomeEntry(
+        isLauncherPackage: Boolean,
+        hasVisibleNonLauncherApp: Boolean,
+        recentsVisible: Boolean
+    ): Boolean {
+        if (!isLauncherPackage) return false
+        if (isOnHomeScreen || recentsVisible) return false
+        if (!hasVisibleNonLauncherApp) return false
+
+        val elapsed = SystemClock.elapsedRealtime() - lastHomeActionAt
+        if (elapsed !in 0 until HOME_ACTION_FAST_HOME_ENTRY_MS) return false
+
+        // HOME 버튼 직후 런처가 올라오면 잔류 앱 윈도우보다 홈 진입을 우선한다.
+        return true
+    }
+
+    private fun getLauncherForegroundSuppressElapsedDuringHomeExitStabilization(
+        isLauncherPackage: Boolean,
+        recentsVisible: Boolean
+    ): Long? {
+        if (!isLauncherPackage) return null
+        if (isOnHomeScreen || recentsVisible) return null
+        if (currentPackage.isEmpty() || windowAnalyzer.isLauncherPackage(currentPackage)) return null
+
+        val elapsed = SystemClock.elapsedRealtime() - lastHomeExitAt
+        if (elapsed !in 0 until HOME_EXIT_STABILIZE_MS) return null
+
+        return elapsed
+    }
+
     private fun updateForegroundPackage(
         packageName: String,
         source: String,
         className: String? = null
     ): Boolean {
+        if (isImePackageOrWindow(packageName, className.orEmpty())) {
+            return false
+        }
+
         val now = SystemClock.elapsedRealtime()
         val normalizedClass = className?.takeIf { it.isNotBlank() }?.let {
             if (it.startsWith(".")) packageName + it else it
@@ -1367,6 +1898,61 @@ class NavBarAccessibilityService : AccessibilityService() {
             remappedLauncherCompanion = true
         }
 
+        val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
+            windowList,
+            this.packageName
+        )
+        maybeAbortHomeEntryTransitionForLaunchHint(
+            packageName = packageName,
+            className = className,
+            windowList = windowList,
+            root = root,
+            source = "windows_state"
+        )
+        val (launchFastPackage, launchFastClass) = resolveImmediateLaunchCandidate(
+            packageName = packageName,
+            className = className,
+            windowList = windowList,
+            hasVisibleNonLauncherApp = hasVisibleNonLauncherApp
+        )
+
+        if (
+            handleImmediateAppLaunchTransition(
+                packageName = launchFastPackage,
+                className = launchFastClass,
+                hasVisibleNonLauncherApp = hasVisibleNonLauncherApp,
+                windowList = windowList,
+                root = root,
+                source = "windows"
+            )
+        ) {
+            return
+        }
+
+        if (
+            handleImmediateHomeEntryTransition(
+                packageName = packageName,
+                className = className,
+                windowList = windowList,
+                root = root,
+                source = "windows"
+            )
+        ) {
+            return
+        }
+
+        if (shouldIgnoreGoogleCompanionNearHome(packageName, className, windowList, root)) {
+            Log.d(TAG, "Ignore Google companion near home (windows): class=$className")
+            syncLauncherOverlayState(windowList, root, "windows_google_guard")
+            return
+        }
+
+        if (shouldIgnoreStaleAppEventNearHomeEntry(packageName, className, windowList, root)) {
+            Log.d(TAG, "Ignore stale non-launcher near home entry (windows): $packageName")
+            syncLauncherOverlayState(windowList, root, "windows_stale_app")
+            return
+        }
+
         if (shouldIgnoreStaleNonLauncherAfterHome(packageName)) {
             Log.d(TAG, "Ignore stale non-launcher after HOME (windows): $packageName")
             syncLauncherOverlayState(windowList, root, "windows_stale")
@@ -1374,17 +1960,24 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
 
         markNonLauncherEvent(packageName, className)
-
-        val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
-            windowList,
-            this.packageName
-        )
         if (hasVisibleNonLauncherApp) {
             lastNonLauncherEventAt = SystemClock.elapsedRealtime()
         }
 
         val suppressHomeForRecentApp = shouldSuppressHomeForRecentApp()
         val isLauncherPackage = windowAnalyzer.isLauncherPackage(packageName)
+        val preferLauncherHomeEntry = shouldPreferLauncherHomeEntry(
+            isLauncherPackage = isLauncherPackage,
+            hasVisibleNonLauncherApp = hasVisibleNonLauncherApp,
+            recentsVisible = recentsVisible
+        )
+        val effectiveHasVisibleNonLauncherApp =
+            if (preferLauncherHomeEntry) {
+                Log.d(TAG, "Prefer launcher home entry despite residual non-launcher window (windows)")
+                false
+            } else {
+                hasVisibleNonLauncherApp
+            }
         val suppressCompanionForegroundUpdate =
             remappedLauncherCompanion &&
                 suppressHomeForRecentApp &&
@@ -1395,14 +1988,28 @@ class NavBarAccessibilityService : AccessibilityService() {
             isLauncherPackage &&
                 !isOnHomeScreen &&
                 !recentsVisible &&
-                hasVisibleNonLauncherApp &&
+                effectiveHasVisibleNonLauncherApp &&
                 suppressHomeForRecentApp
+        val launcherForegroundStabilizationElapsed =
+            getLauncherForegroundSuppressElapsedDuringHomeExitStabilization(
+                isLauncherPackage = isLauncherPackage,
+                recentsVisible = recentsVisible
+            )
+        val suppressLauncherForegroundDuringHomeExitStabilization =
+            launcherForegroundStabilizationElapsed != null
 
         val packageChanged = if (suppressCompanionForegroundUpdate) {
             Log.d(TAG, "Skip launcher companion foreground update during app launch transition (windows)")
             false
         } else if (suppressLauncherForegroundUpdate) {
             Log.d(TAG, "Skip launcher foreground update while non-launcher window is still visible (windows)")
+            false
+        } else if (suppressLauncherForegroundDuringHomeExitStabilization) {
+            Log.d(
+                TAG,
+                "Skip launcher foreground update during home-exit stabilization " +
+                    "(windows, ${launcherForegroundStabilizationElapsed}ms < ${HOME_EXIT_STABILIZE_MS}ms)"
+            )
             false
         } else {
             updateForegroundPackage(packageName, "windows", className)
@@ -1415,7 +2022,7 @@ class NavBarAccessibilityService : AccessibilityService() {
             suppressHomeForRecentApp && (isOnHomeScreen || remappedLauncherCompanion)
         val newOnHomeScreen = isLauncherPackage &&
             !recentsVisible &&
-            !hasVisibleNonLauncherApp &&
+            !effectiveHasVisibleNonLauncherApp &&
             !hasNonLauncherForeground &&
             !shouldSuppressHome
 
@@ -1424,7 +2031,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         // 잘못된 홈 이탈 방지 (플레이스토어 등 일부 앱은 홈 전환 후에도 윈도우가 잔류할 수 있음)
         if (!newOnHomeScreen && isOnHomeScreen && isLauncherPackage && !recentsVisible) {
             Log.d(TAG, "Home exit from windows suppressed (launcher is top, " +
-                    "hasNonLauncherApp=$hasVisibleNonLauncherApp, suppressHome=$shouldSuppressHome, " +
+                    "hasNonLauncherApp=$effectiveHasVisibleNonLauncherApp, suppressHome=$shouldSuppressHome, " +
                     "remappedCompanion=$remappedLauncherCompanion)")
         } else {
             val homeStateSource =
@@ -1610,6 +2217,7 @@ class NavBarAccessibilityService : AccessibilityService() {
                     it.isNotEmpty() &&
                         it != this.packageName &&
                         it != "com.android.systemui" &&
+                        !isImePackageOrWindow(it, currentClassName) &&
                         !windowAnalyzer.isLauncherPackage(it)
                 } ?: lastNonLauncherPackage
             Log.d(
@@ -1620,7 +2228,107 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         val actionId = action.globalActionId ?: return false
         Log.d(TAG, "Executing action: ${action.name} (id=$actionId)")
-        return performGlobalAction(actionId)
+        val executed = performGlobalAction(actionId)
+        if (executed && action == NavAction.HOME) {
+            scheduleHomeReturnProbe()
+        }
+        if (executed && action == NavAction.BACK) {
+            maybeStartBackExitHomePreview()
+        }
+        return executed
+    }
+
+    private fun maybeStartBackExitHomePreview() {
+        if (isOnHomeScreen || isRecentsVisible) return
+
+        val packageName = currentPackage
+        if (packageName.isEmpty()) return
+        if (packageName == this.packageName || packageName == "com.android.systemui") return
+        if (windowAnalyzer.isLauncherPackage(packageName)) return
+
+        pendingBackExitPreviewProbe?.let { handler.removeCallbacks(it) }
+
+        val sourcePackage = packageName
+        var attempts = 0
+        val probe = object : Runnable {
+            override fun run() {
+                if (instance == null) {
+                    pendingBackExitPreviewProbe = null
+                    return
+                }
+
+                val windowList = windows.toList()
+                val root = rootInActiveWindow
+                val recentsVisible = windowAnalyzer.analyzeRecentsState(windowList, root)
+                if (recentsVisible) {
+                    pendingBackExitPreviewProbe = null
+                    return
+                }
+
+                val topWindow = windowAnalyzer.getTopApplicationWindow(windowList)
+                val topPackage = topWindow?.packageName ?: root?.packageName?.toString().orEmpty()
+                val topClass = topWindow?.className ?: root?.className?.toString().orEmpty()
+                val launcherLikeTop =
+                    windowAnalyzer.isLauncherPackage(topPackage) ||
+                        (topPackage == GOOGLE_QUICKSEARCHBOX_PACKAGE && isGoogleLauncherCompanionClass(topClass))
+                val hasVisibleNonLauncherApp =
+                    windowAnalyzer.hasVisibleNonLauncherAppWindow(windowList, this@NavBarAccessibilityService.packageName)
+
+                if (launcherLikeTop && !hasVisibleNonLauncherApp) {
+                    overlay?.startBackExitHomePreviewTransition()
+                    Log.d(TAG, "Back-exit home preview trigger(single_back_probe): from=$sourcePackage -> top=$topPackage/$topClass")
+                    pendingBackExitPreviewProbe = null
+                    return
+                }
+
+                val shouldStop =
+                    topPackage.isNotEmpty() &&
+                        topPackage != sourcePackage &&
+                        !windowAnalyzer.isLauncherPackage(topPackage)
+                if (shouldStop || attempts >= BACK_EXIT_PREVIEW_PROBE_ATTEMPTS - 1) {
+                    pendingBackExitPreviewProbe = null
+                    return
+                }
+
+                attempts++
+                handler.postDelayed(this, BACK_EXIT_PREVIEW_PROBE_INTERVAL_MS)
+            }
+        }
+
+        pendingBackExitPreviewProbe = probe
+        handler.postDelayed(probe, BACK_EXIT_PREVIEW_PROBE_INTERVAL_MS)
+    }
+
+    private fun scheduleHomeReturnProbe() {
+        pendingHomeReturnProbe?.let { handler.removeCallbacks(it) }
+
+        var attempts = 0
+        val probe = object : Runnable {
+            override fun run() {
+                if (instance == null) {
+                    pendingHomeReturnProbe = null
+                    return
+                }
+
+                val elapsed = SystemClock.elapsedRealtime() - lastHomeActionAt
+                if (isOnHomeScreen || elapsed > HOME_ACTION_FAST_HOME_ENTRY_MS) {
+                    pendingHomeReturnProbe = null
+                    return
+                }
+
+                updateHomeAndRecentsFromWindows()
+
+                attempts++
+                if (!isOnHomeScreen && attempts < 6) {
+                    handler.postDelayed(this, 90L)
+                } else {
+                    pendingHomeReturnProbe = null
+                }
+            }
+        }
+
+        pendingHomeReturnProbe = probe
+        handler.postDelayed(probe, 40L)
     }
 
     private fun executeAssistAction(): Boolean {

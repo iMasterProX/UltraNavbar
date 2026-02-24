@@ -20,6 +20,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.core.NavbarAppsPanel
+import com.minsoo.ultranavbar.core.RecentAppsManager
 import com.minsoo.ultranavbar.settings.SettingsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,6 +36,7 @@ class AppListActivity : AppCompatActivity() {
         const val MODE_DISABLED_APPS = "disabled_apps"
         const val MODE_SHORTCUT_DISABLED_APPS = "shortcut_disabled_apps"
         const val MODE_NAVBAR_APPS = "navbar_apps"
+        const val MODE_TASKBAR_CUSTOM_APPS = "taskbar_custom_apps"
     }
 
     private lateinit var settings: SettingsManager
@@ -45,7 +47,7 @@ class AppListActivity : AppCompatActivity() {
     private lateinit var btnSave: MaterialButton
 
     private var allApps: List<AppInfo> = emptyList()
-    private var selectedPackages: MutableSet<String> = mutableSetOf()
+    private var selectedPackages: LinkedHashSet<String> = linkedSetOf()
     private var selectionMode: String = MODE_MULTIPLE
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,9 +59,10 @@ class AppListActivity : AppCompatActivity() {
 
         // 모드별 초기 선택 앱 목록 로드
         when (selectionMode) {
-            MODE_DISABLED_APPS -> selectedPackages = settings.disabledApps.toMutableSet()
-            MODE_SHORTCUT_DISABLED_APPS -> selectedPackages = settings.shortcutDisabledApps.toMutableSet()
-            MODE_NAVBAR_APPS -> selectedPackages = settings.navbarAppsItems.toMutableSet()
+            MODE_DISABLED_APPS -> selectedPackages = LinkedHashSet(settings.disabledApps)
+            MODE_SHORTCUT_DISABLED_APPS -> selectedPackages = LinkedHashSet(settings.shortcutDisabledApps)
+            MODE_NAVBAR_APPS -> selectedPackages = LinkedHashSet(settings.navbarAppsItems)
+            MODE_TASKBAR_CUSTOM_APPS -> selectedPackages = LinkedHashSet(settings.taskbarCustomAppsItems)
         }
 
         initViews()
@@ -102,6 +105,11 @@ class AppListActivity : AppCompatActivity() {
                     if (selectionMode == MODE_NAVBAR_APPS && selectedPackages.size >= NavbarAppsPanel.MAX_APPS) {
                         Toast.makeText(this, getString(R.string.navbar_apps_max_limit, NavbarAppsPanel.MAX_APPS), Toast.LENGTH_SHORT).show()
                         // 체크 되돌리기
+                        adapter.submitList(sortAppsWithSelectedFirst(allApps), selectedPackages)
+                        return@AppListAdapter
+                    }
+                    if (selectionMode == MODE_TASKBAR_CUSTOM_APPS && selectedPackages.size >= RecentAppsManager.MAX_RECENT_APPS) {
+                        Toast.makeText(this, getString(R.string.taskbar_custom_apps_max_limit, RecentAppsManager.MAX_RECENT_APPS), Toast.LENGTH_SHORT).show()
                         adapter.submitList(sortAppsWithSelectedFirst(allApps), selectedPackages)
                         return@AppListAdapter
                     }
@@ -188,6 +196,14 @@ class AppListActivity : AppCompatActivity() {
      * 선택된 앱을 상단에 배치하고, 나머지는 이름순 정렬
      */
     private fun sortAppsWithSelectedFirst(apps: List<AppInfo>): List<AppInfo> {
+        if (selectionMode == MODE_TASKBAR_CUSTOM_APPS) {
+            val appByPackage = apps.associateBy { it.packageName }
+            val selectedInOrder = selectedPackages.mapNotNull { appByPackage[it] }
+            val notSelected = apps.filter { !selectedPackages.contains(it.packageName) }
+                .sortedBy { it.name.lowercase() }
+            return selectedInOrder + notSelected
+        }
+
         val selected = apps.filter { selectedPackages.contains(it.packageName) }
             .sortedBy { it.name.lowercase() }
         val notSelected = apps.filter { !selectedPackages.contains(it.packageName) }
@@ -216,6 +232,10 @@ class AppListActivity : AppCompatActivity() {
             MODE_SHORTCUT_DISABLED_APPS -> settings.shortcutDisabledApps = selectedPackages
             MODE_NAVBAR_APPS -> {
                 settings.navbarAppsItems = selectedPackages.toList()
+                sendBroadcast(Intent(com.minsoo.ultranavbar.core.Constants.Action.SETTINGS_CHANGED))
+            }
+            MODE_TASKBAR_CUSTOM_APPS -> {
+                settings.taskbarCustomAppsItems = selectedPackages.toList()
                 sendBroadcast(Intent(com.minsoo.ultranavbar.core.Constants.Action.SETTINGS_CHANGED))
             }
         }
