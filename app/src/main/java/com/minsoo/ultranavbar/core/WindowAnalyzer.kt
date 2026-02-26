@@ -54,6 +54,33 @@ class WindowAnalyzer(
     // 런처 패키지 목록
     private var launcherPackages: Set<String> = emptySet()
 
+    private val launcherOverlayTitleKeywords = listOf(
+        "widget",
+        "widgets",
+        "위젯",
+        "wallpaper",
+        "배경",
+        "menu",
+        "drawer",
+        "settings",
+        "설정"
+    )
+
+    private val novaHomePreviewTextGroups = listOf(
+        listOf("Wallpaper", "wallpaper", "배경화면", "배경"),
+        listOf("Widgets", "widgets", "위젯"),
+        listOf("Settings", "settings", "설정")
+    )
+
+    private val launcherDragHintTexts = listOf(
+        "Remove",
+        "Uninstall",
+        "App info",
+        "삭제",
+        "제거",
+        "앱 정보"
+    )
+
     // 네비바 높이 (px)
     private var navBarHeightPx: Int = 0
     private var navBarHeightOrientation: Int = Configuration.ORIENTATION_UNDEFINED
@@ -268,30 +295,35 @@ class WindowAnalyzer(
         rootNode: AccessibilityNodeInfo?
     ): Boolean {
         val launcherVisible = hasLauncherLikeWindow(windows, rootNode)
+        if (!launcherVisible) return false
         val screenBounds = getScreenBounds()
 
         if (isLauncherOverlayOpen(rootNode)) return true
         if (isDiscoverOverlayOpen(rootNode, launcherVisible)) return true
+        if (isNovaHomePreviewSurface(rootNode)) return true
 
         for (window in windows) {
             if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
             val windowTitle = try { window.title?.toString().orEmpty() } catch (e: Exception) { "" }
-            if (windowTitle.contains("widget", ignoreCase = true)) {
-                val bounds = Rect()
-                val isLargeSheet = try {
-                    window.getBoundsInScreen(bounds)
-                    bounds.height() >= (screenBounds.height() * 0.45f).toInt()
-                } catch (e: Exception) {
-                    false
-                }
-                if (isLargeSheet) return true
-            }
             val root = try { window.root } catch (e: Exception) { null } ?: continue
             try {
                 val pkg = root.packageName?.toString() ?: continue
                 val className = root.className?.toString() ?: ""
                 if (isLauncherPackage(pkg)) {
                     if (isLauncherOverlayOpen(root)) return true
+                    if (isLauncherNonHomeClass(pkg, className)) return true
+                    if (isNovaHomePreviewSurface(root)) return true
+                    if (isLauncherOverlayTitle(windowTitle)) {
+                        val bounds = Rect()
+                        val isOverlayLike = try {
+                            window.getBoundsInScreen(bounds)
+                            bounds.height() >= (screenBounds.height() * 0.35f).toInt() &&
+                                bounds.width() >= (screenBounds.width() * 0.4f).toInt()
+                        } catch (e: Exception) {
+                            false
+                        }
+                        if (isOverlayLike) return true
+                    }
                     continue
                 }
                 if (isDiscoverOverlaySurface(pkg, className, launcherVisible)) return true
@@ -314,13 +346,23 @@ class WindowAnalyzer(
             "com.android.launcher3:id/action_drop_target",
             "com.android.launcher3:id/delete_target_text",
             "com.android.launcher3:id/uninstall_target_text",
-            "com.android.launcher3:id/info_target_text"
+            "com.android.launcher3:id/info_target_text",
+            "com.teslacoilsw.launcher:id/drop_target_bar",
+            "com.teslacoilsw.launcher:id/action_drop_target",
+            "com.teslacoilsw.launcher:id/delete_target_text",
+            "com.teslacoilsw.launcher:id/uninstall_target_text",
+            "com.teslacoilsw.launcher:id/info_target_text"
         )
 
         val rootPkg = rootNode?.packageName?.toString()
         val rootClass = rootNode?.className?.toString().orEmpty()
         if (!rootPkg.isNullOrEmpty() && isLauncherPackage(rootPkg) && !isRecentsClassName(rootClass)) {
             if (hasVisibleNodeByIds(rootNode, dragTargetIds)) {
+                return true
+            }
+            if (rootPkg == "com.teslacoilsw.launcher" &&
+                hasVisibleTextHints(rootNode, launcherDragHintTexts, minMatches = 1)
+            ) {
                 return true
             }
         }
@@ -336,12 +378,31 @@ class WindowAnalyzer(
                 if (hasVisibleNodeByIds(root, dragTargetIds)) {
                     return true
                 }
+                if (pkg == "com.teslacoilsw.launcher" &&
+                    hasVisibleTextHints(root, launcherDragHintTexts, minMatches = 1)
+                ) {
+                    return true
+                }
             } finally {
                 root.recycle()
             }
         }
 
         return false
+    }
+
+    fun isLauncherNonHomeSurface(packageName: String, className: String): Boolean {
+        return isLauncherNonHomeClass(packageName, className)
+    }
+
+    fun isLauncherDragSurface(packageName: String, className: String): Boolean {
+        if (!isLauncherPackage(packageName)) return false
+        if (className.isBlank()) return false
+        if (isRecentsClassName(className)) return false
+
+        val simpleName = className.substringAfterLast('.')
+        return simpleName.contains("Drag", ignoreCase = true) ||
+            simpleName.contains("DropTarget", ignoreCase = true)
     }
 
     private fun hasVisibleNodeByIds(
@@ -365,6 +426,104 @@ class WindowAnalyzer(
         }
 
         return false
+    }
+
+    private fun isLauncherOverlayTitle(title: String): Boolean {
+        if (title.isBlank()) return false
+        return launcherOverlayTitleKeywords.any { keyword ->
+            title.contains(keyword, ignoreCase = true)
+        }
+    }
+
+    private fun isLauncherNonHomeClass(packageName: String, className: String): Boolean {
+        if (!isLauncherPackage(packageName)) return false
+        if (className.isBlank()) return false
+        if (isRecentsClassName(className)) return false
+
+        val normalizedClass = className.trim()
+        val simpleName = normalizedClass.substringAfterLast('.')
+
+        if (packageName == "com.teslacoilsw.launcher") {
+            if (
+                normalizedClass.equals("com.teslacoilsw.launcher.NovaLauncher", ignoreCase = true) ||
+                simpleName.equals("NovaLauncher", ignoreCase = true)
+            ) {
+                return false
+            }
+
+            val novaNonHomeKeywords = listOf(
+                "widget",
+                "drawer",
+                "allapps",
+                "settings",
+                "preference",
+                "preview",
+                "menu"
+            )
+            if (novaNonHomeKeywords.any { simpleName.contains(it, ignoreCase = true) }) {
+                return true
+            }
+        }
+
+        return simpleName.contains("AllApps", ignoreCase = true) ||
+            simpleName.contains("Widget", ignoreCase = true) ||
+            simpleName.contains("WidgetSheet", ignoreCase = true) ||
+            simpleName.contains("WidgetPicker", ignoreCase = true)
+    }
+
+    private fun isNovaHomePreviewSurface(rootNode: AccessibilityNodeInfo?): Boolean {
+        rootNode ?: return false
+        val pkg = rootNode.packageName?.toString() ?: return false
+        if (pkg != "com.teslacoilsw.launcher") return false
+
+        val className = rootNode.className?.toString() ?: ""
+        if (isRecentsClassName(className)) return false
+
+        val previewIds = listOf(
+            "com.teslacoilsw.launcher:id/wallpaper_button",
+            "com.teslacoilsw.launcher:id/widgets_button",
+            "com.teslacoilsw.launcher:id/settings_button",
+            "com.teslacoilsw.launcher:id/overview_panel"
+        )
+        if (hasVisibleNodeByIds(rootNode, previewIds)) {
+            return true
+        }
+
+        val matchedGroups = novaHomePreviewTextGroups.count { group ->
+            hasVisibleTextHints(rootNode, group, minMatches = 1)
+        }
+        return matchedGroups >= 2
+    }
+
+    private fun hasVisibleTextHints(
+        rootNode: AccessibilityNodeInfo?,
+        keywords: List<String>,
+        minMatches: Int
+    ): Boolean {
+        rootNode ?: return false
+        var matches = 0
+        for (keyword in keywords) {
+            if (keyword.isBlank()) continue
+            if (hasVisibleText(rootNode, keyword)) {
+                matches += 1
+                if (matches >= minMatches) return true
+            }
+        }
+        return false
+    }
+
+    private fun hasVisibleText(rootNode: AccessibilityNodeInfo, text: String): Boolean {
+        val nodes = try { rootNode.findAccessibilityNodeInfosByText(text) } catch (e: Exception) { null }
+        if (nodes.isNullOrEmpty()) return false
+
+        var found = false
+        for (node in nodes) {
+            if (!found && node.isVisibleToUser) {
+                found = true
+            }
+            node.recycle()
+        }
+        return found
     }
 
     private fun hasLauncherLikeWindow(
@@ -413,6 +572,8 @@ class WindowAnalyzer(
 
     private fun isLauncherOverlayOpen(rootNode: AccessibilityNodeInfo?): Boolean {
         rootNode ?: return false
+        val packageName = rootNode.packageName?.toString() ?: return false
+        if (!isLauncherPackage(packageName)) return false
 
         val targetIds = listOf(
             // QuickStep / Launcher3 - app drawer
@@ -433,34 +594,18 @@ class WindowAnalyzer(
             // Nova Launcher
             "com.teslacoilsw.launcher:id/apps_view",
             "com.teslacoilsw.launcher:id/apps_list_view",
-            "com.teslacoilsw.launcher:id/widgets_panel"
+            "com.teslacoilsw.launcher:id/widgets_panel",
+            "com.teslacoilsw.launcher:id/widgets_list_view",
+            "com.teslacoilsw.launcher:id/widgets_recycler_view",
+            "com.teslacoilsw.launcher:id/widget_picker_container",
+            "com.teslacoilsw.launcher:id/search_container_all_apps"
         )
 
-        for (id in targetIds) {
-            val nodes = try { rootNode.findAccessibilityNodeInfosByViewId(id) } catch (e: Exception) { null }
-            if (!nodes.isNullOrEmpty()) {
-                var found = false
-                for (node in nodes) {
-                    if (!found && node.isVisibleToUser) {
-                        found = true
-                    }
-                    node.recycle()
-                }
-                if (found) return true
-            }
-        }
+        if (hasVisibleNodeByIds(rootNode, targetIds)) return true
+        if (packageName == "com.teslacoilsw.launcher" && isNovaHomePreviewSurface(rootNode)) return true
 
         val className = rootNode.className?.toString() ?: ""
-        val simpleName = className.substringAfterLast('.')
-        if (simpleName.contains("AllApps", ignoreCase = true) ||
-            simpleName.contains("Widget", ignoreCase = true) ||
-            simpleName.contains("WidgetSheet", ignoreCase = true) ||
-            simpleName.contains("WidgetPicker", ignoreCase = true)
-        ) {
-            return true
-        }
-
-        return false
+        return isLauncherNonHomeClass(packageName, className)
     }
 
     private fun isDiscoverOverlaySurface(

@@ -540,6 +540,19 @@ class NavBarAccessibilityService : AccessibilityService() {
             this.packageName
         )
 
+        // Ignore generic TYPE_WINDOW_CONTENT_CHANGED events coming from widgets
+        // (e.g. clock widget updates) when we're on the home screen and the
+        // top visible window is still the launcher and there are no visible
+        // non-launcher app windows. These should not be treated as app launch
+        // hints to avoid flicker/false positives.
+        val topWindow = windowAnalyzer.getTopApplicationWindow(windowList)
+        if (genericClassSignal && !hasVisibleNonLauncherApp &&
+            (topWindow == null || windowAnalyzer.isLauncherPackage(topWindow.packageName))
+        ) {
+            Log.d(TAG, "Ignoring home widget content event: pkg=$packageName (top=${topWindow?.packageName})")
+            return
+        }
+
         maybeAbortHomeEntryTransitionForLaunchHint(
             packageName = packageName,
             className = className,
@@ -811,19 +824,19 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         if (shouldIgnoreGoogleCompanionNearHome(packageName, className, windowList, rootInActiveWindow)) {
             Log.d(TAG, "Ignore Google companion near home (event): class=$className")
-            syncLauncherOverlayState(windowList, rootInActiveWindow, "event_google_guard")
+            syncLauncherOverlayState(windowList, rootInActiveWindow, "event_google_guard", packageName, className)
             return
         }
 
         if (shouldIgnoreStaleAppEventNearHomeEntry(packageName, className, windowList, rootInActiveWindow)) {
             Log.d(TAG, "Ignore stale non-launcher near home entry (event): $packageName")
-            syncLauncherOverlayState(windowList, rootInActiveWindow, "event_stale_app")
+            syncLauncherOverlayState(windowList, rootInActiveWindow, "event_stale_app", packageName, className)
             return
         }
 
         if (shouldIgnoreStaleNonLauncherAfterHome(packageName)) {
             Log.d(TAG, "Ignore stale non-launcher after HOME (event): $packageName")
-            syncLauncherOverlayState(windowList, rootInActiveWindow, "event_stale")
+            syncLauncherOverlayState(windowList, rootInActiveWindow, "event_stale", packageName, className)
             return
         }
 
@@ -917,22 +930,37 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
         }
 
-        syncLauncherOverlayState(windowList, rootInActiveWindow, "event")
+        syncLauncherOverlayState(windowList, rootInActiveWindow, "event", packageName, className)
     }
 
     private fun syncLauncherOverlayState(
         windowList: List<AccessibilityWindowInfo>,
         root: AccessibilityNodeInfo?,
-        source: String
+        source: String,
+        hintPackage: String = "",
+        hintClassName: String = ""
     ) {
         if (isOnHomeScreen) {
             val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
                 windowList,
                 this.packageName
             )
-            var appDrawerOpen = windowAnalyzer.analyzeLauncherOverlayState(windowList, root)
+            val normalizedHintPackage = hintPackage.trim()
+            val normalizedHintClass = hintClassName.trim()
+            val launcherNonHomeHint =
+                normalizedHintPackage.isNotEmpty() &&
+                    windowAnalyzer.isLauncherNonHomeSurface(normalizedHintPackage, normalizedHintClass)
+            val launcherDragHint =
+                normalizedHintPackage.isNotEmpty() &&
+                    windowAnalyzer.isLauncherDragSurface(normalizedHintPackage, normalizedHintClass)
 
-            if (appDrawerOpen && hasVisibleNonLauncherApp) {
+            var appDrawerOpen = windowAnalyzer.analyzeLauncherOverlayState(windowList, root)
+            if (launcherNonHomeHint) {
+                appDrawerOpen = true
+                Log.d(TAG, "Launcher non-home hint ($source): $normalizedHintPackage/$normalizedHintClass")
+            }
+
+            if (appDrawerOpen && hasVisibleNonLauncherApp && !launcherNonHomeHint) {
                 Log.d(
                     TAG,
                     "Ignore launcher overlay candidate during app-to-home transition ($source)"
@@ -943,6 +971,7 @@ class NavBarAccessibilityService : AccessibilityService() {
             val homeActionElapsed = SystemClock.elapsedRealtime() - lastHomeActionAt
             if (
                 appDrawerOpen &&
+                !launcherNonHomeHint &&
                 lastHomeActionSourcePackage.isNotEmpty() &&
                 homeActionElapsed in 0 until HOME_ACTION_OVERLAY_GUARD_MS
             ) {
@@ -954,7 +983,12 @@ class NavBarAccessibilityService : AccessibilityService() {
             }
 
             val homeEntryElapsed = SystemClock.elapsedRealtime() - lastHomeEntryAt
-            if (appDrawerOpen && homeEntryElapsed < HOME_ENTRY_STABILIZE_MS && shouldSuppressHomeForRecentApp()) {
+            if (
+                appDrawerOpen &&
+                !launcherNonHomeHint &&
+                homeEntryElapsed < HOME_ENTRY_STABILIZE_MS &&
+                shouldSuppressHomeForRecentApp()
+            ) {
                 Log.d(
                     TAG,
                     "Ignore launcher overlay candidate near home entry ($source, ${homeEntryElapsed}ms)"
@@ -968,10 +1002,15 @@ class NavBarAccessibilityService : AccessibilityService() {
                 overlay?.setAppDrawerState(isAppDrawerOpen)
             }
 
+            val dragDetectedByWindow = windowAnalyzer.analyzeLauncherIconDragState(windowList, root)
             val iconDragActive =
                 !hasVisibleNonLauncherApp &&
                     !appDrawerOpen &&
-                    windowAnalyzer.analyzeLauncherIconDragState(windowList, root)
+                    (dragDetectedByWindow || launcherDragHint)
+
+            if (launcherDragHint && !dragDetectedByWindow) {
+                Log.d(TAG, "Launcher drag hint ($source): $normalizedHintPackage/$normalizedHintClass")
+            }
 
             if (isLauncherIconDragActive != iconDragActive) {
                 isLauncherIconDragActive = iconDragActive
@@ -1292,7 +1331,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         val packageChanged = updateForegroundPackage(packageName, "${source}_launch_fast", className)
         updateHomeScreenState(false, "${source}_launch_fast")
-        syncLauncherOverlayState(windowList, root, "${source}_launch_fast")
+        syncLauncherOverlayState(windowList, root, "${source}_launch_fast", packageName, className)
 
         if (packageChanged) {
             if (source == "event") {
@@ -1345,7 +1384,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         val packageChanged = updateForegroundPackage(effectivePackage, "${source}_home_fast", className)
         updateHomeScreenState(true, "${source}_home_fast")
-        syncLauncherOverlayState(windowList, root, "${source}_home_fast")
+        syncLauncherOverlayState(windowList, root, "${source}_home_fast", packageName, className)
 
         if (packageChanged) {
             if (source == "event") {
@@ -1943,19 +1982,19 @@ class NavBarAccessibilityService : AccessibilityService() {
 
         if (shouldIgnoreGoogleCompanionNearHome(packageName, className, windowList, root)) {
             Log.d(TAG, "Ignore Google companion near home (windows): class=$className")
-            syncLauncherOverlayState(windowList, root, "windows_google_guard")
+            syncLauncherOverlayState(windowList, root, "windows_google_guard", packageName, className)
             return
         }
 
         if (shouldIgnoreStaleAppEventNearHomeEntry(packageName, className, windowList, root)) {
             Log.d(TAG, "Ignore stale non-launcher near home entry (windows): $packageName")
-            syncLauncherOverlayState(windowList, root, "windows_stale_app")
+            syncLauncherOverlayState(windowList, root, "windows_stale_app", packageName, className)
             return
         }
 
         if (shouldIgnoreStaleNonLauncherAfterHome(packageName)) {
             Log.d(TAG, "Ignore stale non-launcher after HOME (windows): $packageName")
-            syncLauncherOverlayState(windowList, root, "windows_stale")
+            syncLauncherOverlayState(windowList, root, "windows_stale", packageName, className)
             return
         }
 
@@ -2043,7 +2082,7 @@ class NavBarAccessibilityService : AccessibilityService() {
             updateHomeScreenState(newOnHomeScreen, homeStateSource)
         }
 
-        syncLauncherOverlayState(windowList, root, "windows")
+        syncLauncherOverlayState(windowList, root, "windows", packageName, className)
 
         if (packageChanged) {
             updateOverlayVisibility()

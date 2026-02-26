@@ -14,6 +14,8 @@ import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Toast
+import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.settings.SettingsManager
 import kotlin.math.abs
 import kotlin.math.sqrt
@@ -34,6 +36,10 @@ class RecentAppsTaskbar(
         const val MOVE_THRESHOLD_DP = 10        // 움직임 인식 임계값
         const val SPLIT_TRIGGER_DP = 80         // 분할화면 트리거 거리
         const val LONG_PRESS_TIME_MS = 400L
+        // 작업표시줄(32dp) 드래그 아이콘을 앱 즐겨찾기 패널 아이콘(48dp) 크기까지 키움
+        private val TASKBAR_DRAG_MAX_SCALE =
+            (NavbarAppsPanel.ICON_SIZE_DP.toFloat() / Constants.Dimension.TASKBAR_ICON_SIZE_DP.toFloat())
+                .coerceAtLeast(1f)
     }
 
     /**
@@ -144,9 +150,15 @@ class RecentAppsTaskbar(
         val cornerRadiusPx = when (shapeMode) {
             SettingsManager.RecentAppsTaskbarIconShape.CIRCLE -> sizePx / 2f
             SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> 0f
-            SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> sizePx * 0.38f
+            SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> 0f
             SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> sizePx * 0.22f
         }
+        val iconDrawable =
+            if (shapeMode == SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE) {
+                IconShapeMaskHelper.wrapWithSquircleMask(context, app.icon)
+            } else {
+                app.icon
+            }
 
         return ImageView(context).apply {
             val params = LinearLayout.LayoutParams(sizePx, sizePx).apply {
@@ -155,7 +167,7 @@ class RecentAppsTaskbar(
             }
             layoutParams = params
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageDrawable(app.icon)
+            setImageDrawable(iconDrawable)
             contentDescription = app.label
 
             // 모양별 클리핑
@@ -173,36 +185,47 @@ class RecentAppsTaskbar(
                         SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> {
                             outline.setRect(0, 0, width, height)
                         }
-                        SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE,
+                        SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> {
+                            outline.setRect(0, 0, width, height)
+                        }
                         SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> {
                             outline.setRoundRect(0, 0, width, height, cornerRadiusPx)
                         }
                     }
                 }
             }
-            clipToOutline = true
+            clipToOutline = shapeMode != SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE
 
             // 그림자 없음
             elevation = 0f
 
             // Ripple 효과
             val rippleColor = ColorStateList.valueOf(0x33808080)
-            val maskDrawable = GradientDrawable().apply {
-                when (shapeMode) {
-                    SettingsManager.RecentAppsTaskbarIconShape.CIRCLE -> {
-                        shape = GradientDrawable.OVAL
-                    }
-                    SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> {
-                        shape = GradientDrawable.RECTANGLE
-                        cornerRadius = 0f
-                    }
-                    SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE,
-                    SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> {
-                        shape = GradientDrawable.RECTANGLE
-                        cornerRadius = cornerRadiusPx
+            val maskDrawable = when (shapeMode) {
+                SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> {
+                    IconShapeMaskHelper.createSquircleRippleMask(context)
+                }
+                else -> {
+                    GradientDrawable().apply {
+                        when (shapeMode) {
+                            SettingsManager.RecentAppsTaskbarIconShape.CIRCLE -> {
+                                shape = GradientDrawable.OVAL
+                            }
+                            SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> {
+                                shape = GradientDrawable.RECTANGLE
+                                cornerRadius = 0f
+                            }
+                            SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> {
+                                shape = GradientDrawable.RECTANGLE
+                                cornerRadius = cornerRadiusPx
+                            }
+                            SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> {
+                                shape = GradientDrawable.RECTANGLE
+                            }
+                        }
+                        setColor(android.graphics.Color.GRAY)
                     }
                 }
-                setColor(android.graphics.Color.GRAY)
             }
             foreground = RippleDrawable(rippleColor, null, maskDrawable)
         }
@@ -275,7 +298,8 @@ class RecentAppsTaskbar(
                     if (isDragging) {
                         val distance = sqrt(deltaX * deltaX + deltaY * deltaY)
                         val rawProgress = (distance / splitTriggerPx).coerceAtLeast(0f)
-                        val scale = 1f + (rawProgress.coerceAtMost(1f) * 0.3f)
+                        val dragProgress = rawProgress.coerceAtMost(1f)
+                        val scale = 1f + ((TASKBAR_DRAG_MAX_SCALE - 1f) * dragProgress)
 
                         listener.onDragIconUpdate(event.rawX, event.rawY, scale)
 
@@ -304,7 +328,14 @@ class RecentAppsTaskbar(
 
                     when {
                         isDragging -> {
-                            if (distance > splitTriggerPx && splitZoneFactor(event.rawX, event.rawY) > 0.5f) {
+                            val zoneFactor = splitZoneFactor(event.rawX, event.rawY)
+                            val shouldLaunchSplit = distance > splitTriggerPx && zoneFactor > 0.5f
+
+                            if (distance > splitTriggerPx && !shouldLaunchSplit) {
+                                Toast.makeText(context, R.string.split_screen_zone_cancelled, Toast.LENGTH_SHORT).show()
+                            }
+
+                            if (shouldLaunchSplit) {
                                 Log.d(TAG, "Long-press drag to split: ${app.packageName}, distance=$distance")
                                 listener.onAppDraggedToSplit(app.packageName)
                             } else {

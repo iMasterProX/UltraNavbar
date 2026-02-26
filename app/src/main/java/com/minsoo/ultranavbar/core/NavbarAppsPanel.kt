@@ -505,7 +505,13 @@ class NavbarAppsPanel(
         }
 
         val iconView = ImageView(context).apply {
-            setImageDrawable(icon)
+            val shapedIcon =
+                if (iconShape == SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE) {
+                    IconShapeMaskHelper.wrapWithSquircleMask(context, icon)
+                } else {
+                    icon
+                }
+            setImageDrawable(shapedIcon)
             scaleType = ImageView.ScaleType.CENTER_CROP
             layoutParams = LinearLayout.LayoutParams(iconSizePx, iconSizePx)
             applyIconShape(this, iconShape)
@@ -552,8 +558,7 @@ class NavbarAppsPanel(
                         outline.setRect(0, 0, width, height)
                     }
                     SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> {
-                        val radius = minOf(width, height) * 0.38f
-                        outline.setRoundRect(0, 0, width, height, radius)
+                        outline.setRect(0, 0, width, height)
                     }
                     SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> {
                         val radius = minOf(width, height) * 0.22f
@@ -562,7 +567,7 @@ class NavbarAppsPanel(
                 }
             }
         }
-        iconView.clipToOutline = true
+        iconView.clipToOutline = iconShape != SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE
     }
 
     @SuppressLint("ClickableViewAccessibility")

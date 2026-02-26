@@ -35,6 +35,7 @@ import com.minsoo.ultranavbar.core.BackgroundManager
 import com.minsoo.ultranavbar.core.ButtonManager
 import com.minsoo.ultranavbar.core.Constants
 import com.minsoo.ultranavbar.core.GestureHandler
+import com.minsoo.ultranavbar.core.IconShapeMaskHelper
 import com.minsoo.ultranavbar.core.NavbarAppsPanel
 import com.minsoo.ultranavbar.core.RecentAppsManager
 import com.minsoo.ultranavbar.core.RecentAppsTaskbar
@@ -57,7 +58,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     companion object {
         private const val TAG = "NavBarOverlay"
-        private const val APP_DRAWER_CLOSE_LAUNCH_GUARD_MS = 600L
         private const val RECENTS_TRANSITION_GUARD_MS = 900L
         private const val HOME_BUTTON_PREVIEW_GUARD_MS = 1200L
         private const val HOME_APP_FOREGROUND_GRACE_MS = 1200L
@@ -204,7 +204,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
          * 분할화면 상태면 종료 후 실행, 아니면 바로 실행
          */
         private fun launchApp(packageName: String) {
-            val isSplitScreen = SplitScreenHelper.isSplitScreenActive()
+            val splitCached = SplitScreenHelper.isSplitScreenActive()
+            val isSplitScreen = SplitScreenHelper.isSplitScreenActuallyActive()
+            if (splitCached && !isSplitScreen) {
+                Log.d(TAG, "Split cache was stale; skipping split toggle for normal launch: $packageName")
+            }
 
             if (isSplitScreen) {
                 // 분할화면 종료 후 앱 실행
@@ -1798,14 +1802,20 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     fun setAppDrawerState(isOpen: Boolean) {
         if (isAppDrawerOpen == isOpen) return
-        val wasOpen = isAppDrawerOpen
         isAppDrawerOpen = isOpen
         Log.d(TAG, "App Drawer state changed: $isOpen")
 
-        if (wasOpen && !isOpen && isOnHomeScreen) {
-            startHomeExitSuppression(APP_DRAWER_CLOSE_LAUNCH_GUARD_MS)
-            Log.d(TAG, "App drawer close launch guard: ${APP_DRAWER_CLOSE_LAUNCH_GUARD_MS}ms")
+        if (isOpen) {
+            clearHomeButtonPreviewHint()
         }
+
+        // Nova 런처 오버레이 전환은 즉시 반영.
+        // - 홈배경 -> 일반배경: 즉시 전환(페이드 없음)
+        // - 일반배경 -> 홈배경: 페이드 복원
+        val shouldUseCustom = shouldUseCustomBackground()
+        val animate = shouldUseCustom
+        applyBackgroundImmediate(useCustom = shouldUseCustom, animate = animate)
+        Log.d(TAG, "Launcher overlay immediate background: custom=$shouldUseCustom, animate=$animate")
 
         updateNavBarBackground()
     }
@@ -1818,6 +1828,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (active) {
             clearHomeButtonPreviewHint()
         }
+
+        // 런처 드래그 전환은 즉시 반영.
+        // - 홈배경 -> 일반배경: 즉시 전환(페이드 없음)
+        // - 일반배경 -> 홈배경: 페이드 복원
+        val shouldUseCustom = shouldUseCustomBackground()
+        val animate = shouldUseCustom
+        applyBackgroundImmediate(useCustom = shouldUseCustom, animate = animate)
+        Log.d(TAG, "Launcher drag immediate background: custom=$shouldUseCustom, animate=$animate")
 
         updateNavBarBackground()
     }
@@ -2240,19 +2258,26 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 currentPackage != context.packageName &&
                 currentPackage != "com.android.systemui" &&
                 !service.isLauncherPackageForOverlay(currentPackage)
+        val immediateDefaultForLauncherOverlay =
+            !shouldUseCustom &&
+                isOnHomeScreen &&
+                (isAppDrawerOpen || isLauncherIconDragActive)
         if (backgroundManager.isTransitionInProgress() &&
             backgroundManager.wasLastAppliedCustom() != shouldUseCustom
         ) {
             // 진행 중인 트랜지션을 중단하고 올바른 상태로 전환
             // 앱 런치/로딩 시작 구간은 즉시 일반배경으로 전환해 잔상 방지
-            val forceAnimate = isOnHomeScreen && !immediateDefaultForAppLaunch
+            val forceAnimate =
+                isOnHomeScreen &&
+                    !immediateDefaultForAppLaunch &&
+                    !immediateDefaultForLauncherOverlay
             applyBackgroundImmediate(shouldUseCustom, animate = forceAnimate)
             return
         }
         backgroundManager.applyBackground(
             bar,
             shouldUseCustom,
-            animate = !immediateDefaultForAppLaunch
+            animate = !(immediateDefaultForAppLaunch || immediateDefaultForLauncherOverlay)
         )
 
         if (!shouldUseCustom) {
@@ -2510,12 +2535,19 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (iconSize <= 0) return
 
         // 아이콘 drawable 복사 + 모양 클리핑 적용
-        val drawable = iconView.drawable?.constantState?.newDrawable()?.mutate() ?: return
+        val shapeMode = settings.recentAppsTaskbarIconShape
+        val sourceDrawable = iconView.drawable ?: return
+        val baseDrawable = sourceDrawable.constantState?.newDrawable()?.mutate() ?: sourceDrawable.mutate()
+        val drawable = if (shapeMode == SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE) {
+            IconShapeMaskHelper.wrapWithSquircleMask(context, baseDrawable)
+        } else {
+            baseDrawable
+        }
 
         val icon = ImageView(context).apply {
             setImageDrawable(drawable)
             scaleType = ImageView.ScaleType.CENTER_CROP
-            applyDragIconShape(this, settings.recentAppsTaskbarIconShape)
+            applyDragIconShape(this, shapeMode)
         }
         dragIconView = icon
 
@@ -2631,8 +2663,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                         outline.setRect(0, 0, width, height)
                     }
                     SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> {
-                        val radius = minOf(width, height) * 0.38f
-                        outline.setRoundRect(0, 0, width, height, radius)
+                        outline.setRect(0, 0, width, height)
                     }
                     SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> {
                         val radius = minOf(width, height) * 0.22f
@@ -2641,7 +2672,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 }
             }
         }
-        icon.clipToOutline = true
+        icon.clipToOutline = shapeMode != SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE
     }
 
     /**

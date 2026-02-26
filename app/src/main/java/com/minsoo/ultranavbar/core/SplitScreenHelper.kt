@@ -122,6 +122,31 @@ object SplitScreenHelper {
     fun isSplitScreenActive(): Boolean = isSplitScreenActive
 
     /**
+     * 현재 시점에 실제 분할화면이 활성인지 즉시 검사.
+     * 캐시 플래그가 stale true인 경우를 정리해
+     * 일반 앱 실행이 의도치 않게 분할 전환되는 것을 방지한다.
+     */
+    fun isSplitScreenActuallyActive(): Boolean {
+        val activeNow = isSplitActiveNow()
+        val now = SystemClock.elapsedRealtime()
+
+        if (activeNow) {
+            lastSplitDetectedAt = now
+            if (!isSplitScreenActive) {
+                Log.d(TAG, "Split live-check active: false -> true")
+                isSplitScreenActive = true
+            }
+            return true
+        }
+
+        if (isSplitScreenActive) {
+            Log.d(TAG, "Split live-check inactive: clearing stale active cache")
+            isSplitScreenActive = false
+        }
+        return false
+    }
+
+    /**
      * 분할화면 활성 상태 설정 (NavBarAccessibilityService에서 호출)
      */
     fun setSplitScreenActive(active: Boolean) {
