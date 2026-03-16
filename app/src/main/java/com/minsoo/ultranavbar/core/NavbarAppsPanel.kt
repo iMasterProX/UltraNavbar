@@ -24,6 +24,8 @@ import android.widget.TextView
 import android.widget.Toast
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.settings.SettingsManager
+import com.minsoo.ultranavbar.util.CustomAppIconStore
+import com.minsoo.ultranavbar.util.IconPackManager
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -482,11 +484,17 @@ class NavbarAppsPanel(
         val packageName = if (isShortcut) item.removePrefix("shortcut:") else item
 
         val icon = try {
-            if (isShortcut) {
-                pm.getApplicationIcon(packageName.split("/").firstOrNull() ?: packageName)
+            val iconPackageName = if (isShortcut) {
+                packageName.split("/").firstOrNull() ?: packageName
             } else {
-                pm.getApplicationIcon(packageName)
+                packageName
             }
+
+            CustomAppIconStore.loadDrawable(context, iconPackageName)
+                ?: SettingsManager.getInstance(context).iconPackPackage?.let { iconPackPackage ->
+                    IconPackManager.loadDrawableForPackage(context, iconPackPackage, iconPackageName)
+                }
+                ?: pm.getApplicationIcon(iconPackageName)
         } catch (e: Exception) {
             null
         } ?: return View(context)
@@ -506,11 +514,7 @@ class NavbarAppsPanel(
 
         val iconView = ImageView(context).apply {
             val shapedIcon =
-                if (iconShape == SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE) {
-                    IconShapeMaskHelper.wrapWithSquircleMask(context, icon)
-                } else {
-                    icon
-                }
+                IconShapeMaskHelper.wrapWithShapeMask(context, icon, iconShape)
             setImageDrawable(shapedIcon)
             scaleType = ImageView.ScaleType.CENTER_CROP
             layoutParams = LinearLayout.LayoutParams(iconSizePx, iconSizePx)
@@ -555,7 +559,8 @@ class NavbarAppsPanel(
                         outline.setOval(0, 0, width, height)
                     }
                     SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> {
-                        outline.setRect(0, 0, width, height)
+                        val radius = minOf(width, height) * Constants.Dimension.TASKBAR_SQUARE_RADIUS_RATIO
+                        outline.setRoundRect(0, 0, width, height, radius)
                     }
                     SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> {
                         outline.setRect(0, 0, width, height)

@@ -292,6 +292,7 @@ class NavBarSettingsFragment : Fragment() {
         sliderRecentAppsIconCount.value = settings.recentAppsTaskbarIconCount.toFloat()
         updateRecentAppsIconCountValueText(settings.recentAppsTaskbarIconCount)
         setRecentAppsTaskbarControlsEnabled(settings.recentAppsTaskbarEnabled)
+        updateRecentAppsTaskbarShowOnHomeForcedUi()
         syncTaskbarCustomManageVisibility(settings.taskbarMode, settings.recentAppsTaskbarEnabled)
 
         // 버튼 배치 반전 상태 로드
@@ -351,6 +352,16 @@ class NavBarSettingsFragment : Fragment() {
         txtRecentAppsIconCountValue.alpha = if (enabled) 1f else 0.5f
     }
 
+    private fun updateRecentAppsTaskbarShowOnHomeForcedUi() {
+        val forced = settings.isRecentAppsTaskbarShowOnHomeForced()
+        if (forced && !switchRecentAppsTaskbarShowOnHome.isChecked) {
+            switchRecentAppsTaskbarShowOnHome.isChecked = true
+        }
+        switchRecentAppsTaskbarShowOnHome.isEnabled = settings.recentAppsTaskbarEnabled
+        switchRecentAppsTaskbarShowOnHome.alpha = if (settings.recentAppsTaskbarEnabled) 1f else 0.5f
+        sliderRecentAppsIconCount.valueTo = if (settings.isRecentAppsTaskbarShowOnHomeForced()) 6f else 7f
+    }
+
     private fun updateTaskbarModeUi(mode: SettingsManager.TaskbarMode) {
         val targetId = when (mode) {
             SettingsManager.TaskbarMode.RECENT_APPS -> R.id.btnTaskbarModeRecentApps
@@ -399,6 +410,7 @@ class NavBarSettingsFragment : Fragment() {
             val before = settings.recentAppsTaskbarEnabled
             settings.recentAppsTaskbarEnabled = isChecked
             setRecentAppsTaskbarControlsEnabled(settings.recentAppsTaskbarEnabled)
+            updateRecentAppsTaskbarShowOnHomeForcedUi()
             syncTaskbarCustomManageVisibility(settings.taskbarMode, settings.recentAppsTaskbarEnabled)
             if (before != settings.recentAppsTaskbarEnabled) {
                 notifySettingsChanged()
@@ -423,6 +435,17 @@ class NavBarSettingsFragment : Fragment() {
         }
 
         switchRecentAppsTaskbarShowOnHome.setOnCheckedChangeListener { _, isChecked ->
+            if (settings.isRecentAppsTaskbarShowOnHomeForced()) {
+                if (!switchRecentAppsTaskbarShowOnHome.isChecked) {
+                    switchRecentAppsTaskbarShowOnHome.isChecked = true
+                }
+                Toast.makeText(
+                    requireContext(),
+                    R.string.quickstep_plus_taskbar_show_on_home_required,
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@setOnCheckedChangeListener
+            }
             settings.recentAppsTaskbarShowOnHome = isChecked
             notifySettingsChanged()
         }
@@ -445,7 +468,16 @@ class NavBarSettingsFragment : Fragment() {
         }
 
         sliderRecentAppsIconCount.addOnChangeListener { _, value, _ ->
-            val count = value.toInt().coerceIn(3, 7)
+            val maxCount = if (settings.isRecentAppsTaskbarShowOnHomeForced()) 6 else 7
+            val count = value.toInt().coerceIn(3, maxCount)
+            if (settings.isRecentAppsTaskbarShowOnHomeForced() && value > 6f) {
+                sliderRecentAppsIconCount.value = 6f
+                Toast.makeText(
+                    requireContext(),
+                    R.string.quickstep_plus_taskbar_icon_count_limited,
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
             updateRecentAppsIconCountValueText(count)
             if (settings.recentAppsTaskbarIconCount != count) {
                 settings.recentAppsTaskbarIconCount = count

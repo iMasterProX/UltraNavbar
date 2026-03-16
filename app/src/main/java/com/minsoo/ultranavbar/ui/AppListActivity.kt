@@ -22,6 +22,8 @@ import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.core.NavbarAppsPanel
 import com.minsoo.ultranavbar.core.RecentAppsManager
 import com.minsoo.ultranavbar.settings.SettingsManager
+import com.minsoo.ultranavbar.util.CustomAppIconStore
+import com.minsoo.ultranavbar.util.IconPackManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,6 +33,7 @@ class AppListActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_SELECTION_MODE = "selection_mode"
         const val EXTRA_SELECTED_PACKAGE = "selected_package"
+        const val EXTRA_TITLE = "title"
         const val MODE_SINGLE = "single"
         const val MODE_MULTIPLE = "multiple"
         const val MODE_DISABLED_APPS = "disabled_apps"
@@ -71,8 +74,11 @@ class AppListActivity : AppCompatActivity() {
 
     private fun initViews() {
         // 툴바
-        findViewById<MaterialToolbar>(R.id.toolbar).setNavigationOnClickListener {
-            finish()
+        findViewById<MaterialToolbar>(R.id.toolbar).apply {
+            title = intent.getStringExtra(EXTRA_TITLE) ?: title
+            setNavigationOnClickListener {
+                finish()
+            }
         }
 
         // 검색
@@ -175,7 +181,11 @@ class AppListActivity : AppCompatActivity() {
             val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
             val name = pm.getApplicationLabel(appInfo).toString()
             val icon = try {
-                pm.getApplicationIcon(appInfo)
+                CustomAppIconStore.loadDrawable(this, packageName)
+                    ?: settings.iconPackPackage?.let { iconPackPackage ->
+                        IconPackManager.loadDrawableForPackage(this, iconPackPackage, packageName)
+                    }
+                    ?: pm.getApplicationIcon(appInfo)
             } catch (e: Exception) {
                 null
             }

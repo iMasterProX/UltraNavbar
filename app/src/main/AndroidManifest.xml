@@ -40,6 +40,15 @@
         <intent>
             <action android:name="android.intent.action.CREATE_SHORTCUT" />
         </intent>
+        <intent>
+            <action android:name="com.novalauncher.THEME" />
+        </intent>
+        <intent>
+            <action android:name="org.adw.launcher.THEMES" />
+        </intent>
+        <intent>
+            <action android:name="com.gau.go.launcherex.theme" />
+        </intent>
     </queries>
 
     <!-- 태블릿 전용 앱 (600dp 이상 화면 필요) -->

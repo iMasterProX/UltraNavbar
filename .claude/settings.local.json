@@ -80,7 +80,24 @@
       "WebFetch(domain:play.google.com)",
       "Bash(pip install:*)",
       "Bash(copy:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(/c/Users/minsi/AndroidStudioProjects/UltraNavbar/gradlew.bat:*)",
+      "Bash(MSYS_NO_PATHCONV=1 adb pull:*)",
+      "Bash(MSYS_NO_PATHCONV=1 adb shell:*)",
+      "Bash(MSYS_NO_PATHCONV=1 grep:*)",
+      "Bash(MSYS_NO_PATHCONV=1 ffprobe:*)",
+      "Bash(mkdir -p /tmp/frames)",
+      "Bash(ffmpeg -y -i \"app/src/main/java/com/minsoo/ultranavbar/screen-20260316-142802.mp4\" -vf \"fps=15,crop=600:200:600:880\" -q:v 2 /tmp/frames/frame_%04d.jpg)",
+      "Bash(cp /tmp/frames/frame_0001.jpg \"C:/Users/minsi/AndroidStudioProjects/UltraNavbar/frame_0001.jpg\")",
+      "Bash(cp /tmp/frames/frame_0050.jpg \"C:/Users/minsi/AndroidStudioProjects/UltraNavbar/frame_0050.jpg\")",
+      "Bash(cp /tmp/frames/frame_0100.jpg \"C:/Users/minsi/AndroidStudioProjects/UltraNavbar/frame_0100.jpg\")",
+      "Bash(cp /tmp/frames/frame_0150.jpg \"C:/Users/minsi/AndroidStudioProjects/UltraNavbar/frame_0150.jpg\")",
+      "Bash(ffmpeg -y -i \"app/src/main/java/com/minsoo/ultranavbar/screen-20260316-142802.mp4\" -vf \"fps=30,crop=600:200:600:880\" -q:v 2 /tmp/frames30/frame_%04d.jpg)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" PATH=\"C:/Program Files/Android/Android Studio/jbr/bin:$PATH\" ./gradlew assembleDebug)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" \"C:/Program Files/Android/Android Studio/jbr/bin/java\" -cp \"gradle/wrapper/gradle-wrapper.jar\" org.gradle.wrapper.GradleWrapperMain assembleDebug)",
+      "Bash(\"C:/Program Files/Android/Android Studio/jbr/bin/jar\" tf gradle/wrapper/gradle-wrapper.jar)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" cmd.exe /c \"set JAVA_HOME=C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr && gradlew.bat assembleDebug\")",
+      "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/java.exe\" -classpath \"gradle/wrapper/gradle-wrapper.jar\" org.gradle.wrapper.GradleWrapperMain assembleDebug)"
     ]
   }
 }

@@ -25,6 +25,7 @@ object Constants {
         const val CROP_HEIGHT_PX = 72
         const val TASKBAR_ICON_SIZE_DP = 32
         const val TASKBAR_ICON_SPACING_DP = 18
+        const val TASKBAR_SQUARE_RADIUS_RATIO = 0.12f
     }
 
     // ===== 타이밍 관련 (ms) =====
@@ -39,9 +40,10 @@ object Constants {
         const val PANEL_CLOSE_DEBOUNCE_MS = 150L
         const val FULLSCREEN_POLLING_MS = 300L
         const val IME_VISIBILITY_DELAY_MS = 500L
-        const val UNLOCK_FADE_DELAY_MS = 400L
+        const val UNLOCK_FADE_DELAY_MS = 0L
         const val TRANSITION_DEDUP_GRACE_MS = 500L  // 로딩화면→앱 전환 시 중복 페이드 방지 유예 시간
         const val SPLIT_SCREEN_LAUNCH_DELAY_MS = 3000L
+        const val HOME_BUTTON_GROW_ANIMATION_DELAY_MS = 150L
     }
 
     // ===== 비율 및 임계값 =====

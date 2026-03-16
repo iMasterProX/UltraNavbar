@@ -32,6 +32,8 @@ class WindowAnalyzer(
     companion object {
         private const val TAG = "WindowAnalyzer"
         private const val GOOGLE_QUICKSEARCHBOX_PACKAGE = "com.google.android.googlequicksearchbox"
+        private const val LAUNCHER3_PACKAGE = "com.android.launcher3"
+        private const val QUICKSTEP_PLUS_PACKAGE = "com.minsi.quickstepplus"
     }
 
     private data class NavBarInsets(
@@ -117,13 +119,15 @@ class WindowAnalyzer(
             Log.d(TAG, "Detected launcher packages: $detected")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load launcher packages, using fallback", e)
-            detected.add("com.android.launcher3")
+            detected.add(LAUNCHER3_PACKAGE)
+            detected.add(QUICKSTEP_PLUS_PACKAGE)
             detected.add("com.teslacoilsw.launcher")
         }
 
         val extraLaunchers = setOf(
-            "com.android.launcher3",
+            LAUNCHER3_PACKAGE,
             "com.android.quickstep",
+            QUICKSTEP_PLUS_PACKAGE,
             "com.google.android.apps.nexuslauncher",
             "com.lge.launcher3",
             "com.lge.launcher",
@@ -335,28 +339,53 @@ class WindowAnalyzer(
         return false
     }
 
+    private fun isLauncher3BasedPackage(packageName: String): Boolean {
+        if (packageName.isBlank()) return false
+        return packageName == LAUNCHER3_PACKAGE ||
+            packageName == QUICKSTEP_PLUS_PACKAGE ||
+            packageName == "com.android.quickstep" ||
+            packageName == "com.google.android.apps.nexuslauncher"
+    }
+
+    private fun buildLauncherViewIds(packageName: String, idNames: List<String>): List<String> {
+        if (idNames.isEmpty()) return emptyList()
+
+        val packages = linkedSetOf<String>()
+        if (packageName.isNotBlank()) {
+            packages.add(packageName)
+        }
+        if (isLauncher3BasedPackage(packageName)) {
+            packages.add(LAUNCHER3_PACKAGE)
+        }
+
+        return packages.flatMap { pkg ->
+            idNames.map { idName -> "$pkg:id/$idName" }
+        }
+    }
+
     fun analyzeLauncherIconDragState(
         windows: List<AccessibilityWindowInfo>,
         rootNode: AccessibilityNodeInfo?
     ): Boolean {
         if (!hasLauncherLikeWindow(windows, rootNode)) return false
 
-        val dragTargetIds = listOf(
-            "com.android.launcher3:id/drop_target_bar",
-            "com.android.launcher3:id/action_drop_target",
-            "com.android.launcher3:id/delete_target_text",
-            "com.android.launcher3:id/uninstall_target_text",
-            "com.android.launcher3:id/info_target_text",
-            "com.teslacoilsw.launcher:id/drop_target_bar",
-            "com.teslacoilsw.launcher:id/action_drop_target",
-            "com.teslacoilsw.launcher:id/delete_target_text",
-            "com.teslacoilsw.launcher:id/uninstall_target_text",
-            "com.teslacoilsw.launcher:id/info_target_text"
+        val launcherDragIdNames = listOf(
+            "drop_target_bar",
+            "action_drop_target",
+            "delete_target_text",
+            "uninstall_target_text",
+            "info_target_text"
         )
+        val novaDragTargetIds = buildLauncherViewIds("com.teslacoilsw.launcher", launcherDragIdNames)
 
         val rootPkg = rootNode?.packageName?.toString()
         val rootClass = rootNode?.className?.toString().orEmpty()
         if (!rootPkg.isNullOrEmpty() && isLauncherPackage(rootPkg) && !isRecentsClassName(rootClass)) {
+            val dragTargetIds = if (rootPkg == "com.teslacoilsw.launcher") {
+                novaDragTargetIds
+            } else {
+                buildLauncherViewIds(rootPkg, launcherDragIdNames)
+            }
             if (hasVisibleNodeByIds(rootNode, dragTargetIds)) {
                 return true
             }
@@ -375,6 +404,11 @@ class WindowAnalyzer(
                 val className = root.className?.toString() ?: ""
                 if (!isLauncherPackage(pkg) || isRecentsClassName(className)) continue
 
+                val dragTargetIds = if (pkg == "com.teslacoilsw.launcher") {
+                    novaDragTargetIds
+                } else {
+                    buildLauncherViewIds(pkg, launcherDragIdNames)
+                }
                 if (hasVisibleNodeByIds(root, dragTargetIds)) {
                     return true
                 }
@@ -461,6 +495,28 @@ class WindowAnalyzer(
                 "menu"
             )
             if (novaNonHomeKeywords.any { simpleName.contains(it, ignoreCase = true) }) {
+                return true
+            }
+        }
+
+        if (isLauncher3BasedPackage(packageName)) {
+            if (simpleName.equals("Launcher", ignoreCase = true) ||
+                simpleName.equals("SearchLauncher", ignoreCase = true)
+            ) {
+                return false
+            }
+
+            val launcher3NonHomeKeywords = listOf(
+                "allapps",
+                "widget",
+                "widgets",
+                "sheet",
+                "picker",
+                "settings",
+                "preference",
+                "popup"
+            )
+            if (launcher3NonHomeKeywords.any { simpleName.contains(it, ignoreCase = true) }) {
                 return true
             }
         }
@@ -575,31 +631,34 @@ class WindowAnalyzer(
         val packageName = rootNode.packageName?.toString() ?: return false
         if (!isLauncherPackage(packageName)) return false
 
-        val targetIds = listOf(
-            // QuickStep / Launcher3 - app drawer
-            "com.android.launcher3:id/apps_view",
-            "com.android.launcher3:id/apps_list_view",
-            "com.android.launcher3:id/all_apps_container_view",
-            "com.android.launcher3:id/all_apps_header",
-            "com.android.launcher3:id/search_container_all_apps",
-            // QuickStep / Launcher3 - widgets full sheet
-            "com.android.launcher3:id/widgets_full_sheet",
-            "com.android.launcher3:id/widgets_list_view",
-            "com.android.launcher3:id/widgets_search_bar",
-            "com.android.launcher3:id/widgets_recycler_view",
-            "com.android.launcher3:id/widget_list_view",
-            "com.android.launcher3:id/widget_picker_container",
-            "com.android.launcher3:id/widgets_bottom_sheet",
-            "com.android.launcher3:id/widget_cell",
-            // Nova Launcher
-            "com.teslacoilsw.launcher:id/apps_view",
-            "com.teslacoilsw.launcher:id/apps_list_view",
-            "com.teslacoilsw.launcher:id/widgets_panel",
-            "com.teslacoilsw.launcher:id/widgets_list_view",
-            "com.teslacoilsw.launcher:id/widgets_recycler_view",
-            "com.teslacoilsw.launcher:id/widget_picker_container",
-            "com.teslacoilsw.launcher:id/search_container_all_apps"
+        val launcherOverlayIdNames = listOf(
+            "apps_view",
+            "apps_list_view",
+            "all_apps_container_view",
+            "all_apps_header",
+            "search_container_all_apps",
+            "widgets_full_sheet",
+            "widgets_list_view",
+            "widgets_search_bar",
+            "widgets_recycler_view",
+            "widget_list_view",
+            "widget_picker_container",
+            "widgets_bottom_sheet",
+            "widget_cell"
         )
+        val targetIds = if (packageName == "com.teslacoilsw.launcher") {
+            listOf(
+                "com.teslacoilsw.launcher:id/apps_view",
+                "com.teslacoilsw.launcher:id/apps_list_view",
+                "com.teslacoilsw.launcher:id/widgets_panel",
+                "com.teslacoilsw.launcher:id/widgets_list_view",
+                "com.teslacoilsw.launcher:id/widgets_recycler_view",
+                "com.teslacoilsw.launcher:id/widget_picker_container",
+                "com.teslacoilsw.launcher:id/search_container_all_apps"
+            )
+        } else {
+            buildLauncherViewIds(packageName, launcherOverlayIdNames)
+        }
 
         if (hasVisibleNodeByIds(rootNode, targetIds)) return true
         if (packageName == "com.teslacoilsw.launcher" && isNovaHomePreviewSurface(rootNode)) return true
@@ -996,10 +1055,10 @@ class WindowAnalyzer(
     fun isRecentsOpen(rootNode: AccessibilityNodeInfo?): Boolean {
         rootNode ?: return false
 
-        // QuickStep 런처 최근 앱 뷰 ID
-        val targetIds = listOf(
-            "com.android.launcher3:id/overview_panel",
-            "com.android.launcher3:id/overview_actions_view"
+        val packageName = rootNode.packageName?.toString().orEmpty()
+        val targetIds = buildLauncherViewIds(
+            packageName,
+            listOf("overview_panel", "overview_actions_view")
         )
 
         for (id in targetIds) {

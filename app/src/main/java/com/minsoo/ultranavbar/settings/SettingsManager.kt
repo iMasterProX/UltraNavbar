@@ -1,6 +1,8 @@
 package com.minsoo.ultranavbar.settings
 
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.SharedPreferences
 
 class SettingsManager private constructor(context: Context) {
@@ -81,6 +83,7 @@ class SettingsManager private constructor(context: Context) {
 
         // Experimental: Coordinate Auto Touch
         private const val KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED = "touch_point_experimental_enabled"
+        private const val KEY_ICON_PACK_PACKAGE = "icon_pack_package"
 
         // Android 12L style navbar layout tuning
         private const val KEY_ANDROID12L_NAVBAR_LAYOUT_TUNING_ENABLED = "android12l_navbar_layout_tuning_enabled"
@@ -128,12 +131,13 @@ class SettingsManager private constructor(context: Context) {
 
         fun getInstance(context: Context): SettingsManager {
             return instance ?: synchronized(this) {
-                instance ?: SettingsManager(context).also { instance = it }
+                instance ?: SettingsManager(context.applicationContext).also { instance = it }
             }
         }
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+    private val appContext: Context = context.applicationContext
 
     var navbarEnabled: Boolean
         get() = prefs.getBoolean(KEY_NAVBAR_ENABLED, true)
@@ -292,12 +296,35 @@ class SettingsManager private constructor(context: Context) {
         set(value) = prefs.edit().putString(KEY_RECENT_APPS_TASKBAR_ICON_SHAPE, value.name).apply()
 
     var recentAppsTaskbarIconCount: Int
-        get() = prefs.getInt(KEY_RECENT_APPS_TASKBAR_ICON_COUNT, 5).coerceIn(3, 7)
-        set(value) = prefs.edit().putInt(KEY_RECENT_APPS_TASKBAR_ICON_COUNT, value.coerceIn(3, 7)).apply()
+        get() {
+            val maxCount = if (isQuickstepPlusDefaultLauncher()) 6 else 7
+            return prefs.getInt(KEY_RECENT_APPS_TASKBAR_ICON_COUNT, 5).coerceIn(3, maxCount)
+        }
+        set(value) {
+            val maxCount = if (isQuickstepPlusDefaultLauncher()) 6 else 7
+            prefs.edit().putInt(KEY_RECENT_APPS_TASKBAR_ICON_COUNT, value.coerceIn(3, maxCount)).apply()
+        }
 
     var recentAppsTaskbarShowOnHome: Boolean
-        get() = prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_SHOW_ON_HOME, true)
-        set(value) = prefs.edit().putBoolean(KEY_RECENT_APPS_TASKBAR_SHOW_ON_HOME, value).apply()
+        get() = if (isQuickstepPlusDefaultLauncher()) true else prefs.getBoolean(KEY_RECENT_APPS_TASKBAR_SHOW_ON_HOME, true)
+        set(value) {
+            val storedValue = if (isQuickstepPlusDefaultLauncher()) true else value
+            prefs.edit().putBoolean(KEY_RECENT_APPS_TASKBAR_SHOW_ON_HOME, storedValue).apply()
+        }
+
+    fun isRecentAppsTaskbarShowOnHomeForced(): Boolean = isQuickstepPlusDefaultLauncher()
+
+    private fun isQuickstepPlusDefaultLauncher(): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+            }
+            val resolved = appContext.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            resolved?.activityInfo?.packageName == "com.minsi.quickstepplus"
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     // 분할 화면 via 작업 표시줄 (실험적)
     var splitScreenTaskbarEnabled: Boolean
@@ -308,6 +335,10 @@ class SettingsManager private constructor(context: Context) {
     var touchPointExperimentalEnabled: Boolean
         get() = prefs.getBoolean(KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_TOUCH_POINT_EXPERIMENTAL_ENABLED, value).apply()
+
+    var iconPackPackage: String?
+        get() = prefs.getString(KEY_ICON_PACK_PACKAGE, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit().putString(KEY_ICON_PACK_PACKAGE, value?.takeIf { it.isNotBlank() }).apply()
 
     // 안드로이드 12L 스타일 네비바 구성 조절
     var android12lNavbarLayoutTuningEnabled: Boolean

@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.Process
 import android.util.Log
 import com.minsoo.ultranavbar.settings.SettingsManager
+import com.minsoo.ultranavbar.util.CustomAppIconStore
+import com.minsoo.ultranavbar.util.IconPackManager
 
 /**
  * 최근 앱 목록 관리
@@ -73,6 +75,7 @@ class RecentAppsManager(
     fun loadInitialRecentApps() {
         Log.d(TAG, "Loading initial recent apps")
         val maxCount = maxRecentAppsCount()
+        recentApps.clear()
 
         // 먼저 저장된 목록 로드 시도
         val savedPackages = loadSavedRecentApps()
@@ -181,6 +184,18 @@ class RecentAppsManager(
         Log.d(TAG, "Cleared recent apps")
     }
 
+    fun refreshIcons() {
+        if (recentApps.isEmpty()) return
+
+        for (index in recentApps.indices) {
+            val existing = recentApps[index]
+            val refreshedIcon = loadAppIcon(existing.packageName) ?: continue
+            recentApps[index] = existing.copy(icon = refreshedIcon)
+        }
+
+        listener.onRecentAppsChanged(recentApps.toList())
+    }
+
     private fun isGoogleMainAppSurface(className: String?): Boolean {
         val cls = className?.trim().orEmpty()
         if (cls.isBlank()) return false
@@ -260,6 +275,10 @@ class RecentAppsManager(
      * 앱 아이콘 로드
      */
     private fun loadAppIcon(packageName: String): Drawable? {
+        CustomAppIconStore.loadDrawable(context, packageName)?.let { return it }
+        settings.iconPackPackage?.let { iconPackPackage ->
+            IconPackManager.loadDrawableForPackage(context, iconPackPackage, packageName)?.let { return it }
+        }
         return try {
             packageManager.getApplicationIcon(packageName)
         } catch (e: PackageManager.NameNotFoundException) {

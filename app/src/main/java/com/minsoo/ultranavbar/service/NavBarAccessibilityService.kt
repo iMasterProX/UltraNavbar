@@ -12,6 +12,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
@@ -70,6 +71,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private lateinit var settings: SettingsManager
     private lateinit var windowAnalyzer: WindowAnalyzer
     private lateinit var keyEventHandler: KeyEventHandler
+    private lateinit var powerManager: PowerManager
     private val notificationTracker = NotificationTracker()
 
     private val handler = Handler(Looper.getMainLooper())
@@ -104,6 +106,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var lastHomeActionSourcePackage: String = ""
     private var emptySplitSince: Long = 0
     private var lastDisabledAppHideAt: Long = 0
+    private var isScreenInteractive: Boolean = true
 
     // === 디바운스/폴링 ===
     private var pendingStateCheck: Runnable? = null
@@ -149,34 +152,28 @@ class NavBarAccessibilityService : AccessibilityService() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
+                    isScreenInteractive = false
                     Log.d(TAG, "Screen off, hiding overlay")
                     overlay?.captureUnlockBackgroundForLock()
                     overlay?.resetUnlockFadeState(clearOverride = false)
                     overlay?.hide(animate = false, showHotspot = false)
                 }
                 Intent.ACTION_SCREEN_ON -> {
+                    isScreenInteractive = true
                     Log.d(TAG, "Screen on, updating visibility")
                     // 잠금화면이 활성화된 상태에서 화면이 켜지면 해제 시 페이드 애니메이션 준비
                     if (windowAnalyzer.isLockScreenActive()) {
                         overlay?.prepareForUnlockFade()
+                        return
                     }
                     updateOverlayVisibility(forceFade = false)
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     Log.d(TAG, "User present, showing with fade")
-                    // 안전을 위해 여기서도 플래그 설정
-                    overlay?.prepareForUnlockFade()
-
-                    // 기존 예약 취소
-                    unlockFadeRunnable?.let { handler.removeCallbacks(it) }
-
-                    // 새 작업 예약
-                    unlockFadeRunnable = Runnable {
-                        unlockFadeRunnable = null
-                        if (instance == null) return@Runnable
-                        overlay?.startUnlockFade()
+                    if (overlay?.hasPendingUnlockFade() != true) {
+                        overlay?.prepareForUnlockFade()
                     }
-                    handler.postDelayed(unlockFadeRunnable!!, Constants.Timing.UNLOCK_FADE_DELAY_MS)
+                    overlay?.startUnlockFade()
                 }
             }
         }
@@ -285,6 +282,8 @@ class NavBarAccessibilityService : AccessibilityService() {
         settings = SettingsManager.getInstance(this)
         windowAnalyzer = WindowAnalyzer(this)
         keyEventHandler = KeyEventHandler(this)
+        powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        isScreenInteractive = powerManager.isInteractive
     }
 
     private fun setupServiceInfo() {
@@ -2135,6 +2134,11 @@ class NavBarAccessibilityService : AccessibilityService() {
     // ===== 오버레이 가시성 =====
 
     private fun updateOverlayVisibility(forceFade: Boolean = false) {
+        if (!isScreenInteractive) {
+            overlay?.hide(animate = false, showHotspot = false)
+            return
+        }
+
         val lockScreenActive = windowAnalyzer.isLockScreenActive()
 
         // 0. 네비게이션 바 전체 비활성화 체크
@@ -2173,6 +2177,11 @@ class NavBarAccessibilityService : AccessibilityService() {
         )
 
         Log.d(TAG, "Update visibility: shouldAutoHide=$shouldAutoHide, lock=$lockScreenActive, pkg=$currentPackage, fullscreen=$isFullscreen")
+
+        if (lockScreenActive && overlay?.hasPendingUnlockFade() == true) {
+            Log.d(TAG, "Lock screen active with prepared unlock fade - keeping overlay primed")
+            return
+        }
 
         if (shouldAutoHide) {
             if (!lockScreenActive && overlay?.canAutoHide() == false) {
