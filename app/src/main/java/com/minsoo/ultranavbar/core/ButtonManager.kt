@@ -163,8 +163,6 @@ class ButtonManager(
         _allButtons.forEach { button ->
             button.setColorFilter(color)
         }
-
-        Log.d(TAG, "All button colors updated to ${getColorName(color)} (force=$force, buttons=${_allButtons.size})")
     }
 
 

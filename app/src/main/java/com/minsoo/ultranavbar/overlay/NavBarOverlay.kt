@@ -95,6 +95,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var dragFreeMove: Boolean = false  // true: 손가락 추적 자유이동, false: X 고정 수직이동
     private var centerGroupView: View? = null  // 최근 앱 작업 표시줄 뷰 (홈화면에서 숨기기용)
     private var taskbarWindowView: FrameLayout? = null
+    private var leftButtonGroup: LinearLayout? = null
+    private var rightButtonGroup: LinearLayout? = null
+    private var homeButtonsAnimator: android.animation.AnimatorSet? = null
+    private var areButtonsMovedToCenter: Boolean = false
 
     // === 상태 ===
     private var isShowing = true
@@ -512,6 +516,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             val params = createLayoutParams()
             windowManager.addView(rootView, params)
             currentWindowHeight = params.height
+            setupNavBarTouchableRegionListener(rootView!!)
             bringTaskbarWindowToFront()
 
             isCreated = true
@@ -578,6 +583,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             gestureOverlayView = null
             hotspotView = null
             centerGroupView = null
+            resetButtonPositionsImmediate()
+            leftButtonGroup = null
+            rightButtonGroup = null
             currentWindowHeight = -1
             currentTaskbarWindowWidth = -1
             currentTaskbarWindowHeight = -1
@@ -802,6 +810,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
         contentBar.addView(rightGroup, rightParams)
 
+        // 버튼 그룹 참조 저장 (홈화면 버튼 이동 애니메이션용)
+        leftButtonGroup = leftGroup
+        rightButtonGroup = rightGroup
+
         navBarView = bar
         rootView?.addView(navBarView)
 
@@ -886,6 +898,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             gravity = Gravity.BOTTOM
             x = 0
             y = 0
+
+            // PRIVATE_FLAG_NO_MOVE_ANIMATION - 윈도우 높이 변경 시 시스템 애니메이션 방지
+            try {
+                val privateFlagsField = WindowManager.LayoutParams::class.java.getDeclaredField("privateFlags")
+                privateFlagsField.isAccessible = true
+                val current = privateFlagsField.getInt(this)
+                privateFlagsField.setInt(this, current or 0x00000040)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set PRIVATE_FLAG_NO_MOVE_ANIMATION on navbar", e)
+            }
         }
     }
 
@@ -1891,6 +1913,30 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (isCreated) {
             updateTaskbarWindowBounds()
         }
+
+        // 버튼 위치 동기화: 큰 아이콘이면 위로, 아닌 경우 원위치
+        // navbar가 아직 보이지 않거나 잠금해제/페이드 중이면 애니메이션 없이 즉시 적용
+        val navBarFullyVisible = isShowing &&
+            !isUnlockPending && !isUnlockFadeRunning && !isUnlockFadeSuppressed &&
+            (navBarView?.alpha ?: 0f) > 0.9f
+        syncButtonPositionForCurrentState(animate = navBarFullyVisible)
+    }
+
+    /**
+     * 현재 아이콘 상태에 따라 버튼 위치 동기화
+     */
+    private fun syncButtonPositionForCurrentState(animate: Boolean = true) {
+        val shouldBeCenter = shouldUseQuickstepPlusHomeTaskbarSizeForDisplay()
+        if (shouldBeCenter && !areButtonsMovedToCenter) {
+            animateButtonsToHomePosition(animate)
+        } else if (!shouldBeCenter && areButtonsMovedToCenter) {
+            if (animate) {
+                animateButtonsToOriginalPosition()
+            } else {
+                resetButtonPositionsImmediate()
+                updateWindowHeight(getDesiredVisibleWindowHeight())
+            }
+        }
     }
 
     private fun shouldDeferHomeButtonGrowAnimation(targetIconSizeDp: Int): Boolean {
@@ -1959,7 +2005,165 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     private fun getDesiredVisibleWindowHeight(): Int {
-        return getSystemNavigationBarHeightPx()
+        val barHeight = getSystemNavigationBarHeightPx()
+        if (areButtonsMovedToCenter) {
+            return barHeight + getQuickstepPlusHomeTaskbarBaseOverflowPx()
+        }
+        return barHeight
+    }
+
+    // ===== 홈화면 버튼 이동 애니메이션 =====
+
+    /**
+     * 홈화면 진입 시 좌우 버튼 그룹을 아이콘 클러스터 양옆으로 이동
+     */
+    private fun animateButtonsToHomePosition(animate: Boolean = true) {
+        val left = leftButtonGroup ?: return
+        val right = rightButtonGroup ?: return
+        if (!isQuickstepPlusTaskbarFeatureActive()) return
+        if (!shouldUseQuickstepPlusHomeTaskbarSizeForDisplay()) return
+
+        homeButtonsAnimator?.cancel()
+
+        // 윈도우 높이 확장 (버튼이 overflow 영역에 렌더링되도록)
+        areButtonsMovedToCenter = true
+        updateWindowHeight(getDesiredVisibleWindowHeight())
+
+        // 레이아웃 완료 후 위치 계산 및 적용
+        left.post {
+            if (!areButtonsMovedToCenter) return@post
+
+            val barHeight = getSystemNavigationBarHeightPx()
+            val iconSizePx = context.dpToPx(RecentAppsTaskbar.LARGE_HOME_ICON_SIZE_DP)
+            val bottomPaddingPx = (iconSizePx - barHeight).coerceAtLeast(0) + context.dpToPx(RecentAppsTaskbar.LARGE_HOME_BOTTOM_PADDING_DP)
+            val groupOffsetPx = context.dpToPx(12) // LARGE_HOME_GROUP_OFFSET_DP
+
+            // 큰 아이콘 중심의 화면 하단으로부터의 높이
+            val iconCenterFromBottom = (bottomPaddingPx - groupOffsetPx) + iconSizePx / 2
+            // 버튼 현재 중심의 화면 하단으로부터의 높이
+            val buttonCenterFromBottom = barHeight / 2
+            // 수직 이동량 (위로 = 음수)
+            val targetDy = -(iconCenterFromBottom - buttonCenterFromBottom).toFloat()
+
+            if (animate) {
+                val animSet = android.animation.AnimatorSet()
+                animSet.playTogether(
+                    android.animation.ObjectAnimator.ofFloat(left, "translationY", 0f, targetDy),
+                    android.animation.ObjectAnimator.ofFloat(right, "translationY", 0f, targetDy)
+                )
+                animSet.duration = 250L
+                animSet.interpolator = android.view.animation.DecelerateInterpolator(1.5f)
+                animSet.start()
+                homeButtonsAnimator = animSet
+            } else {
+                // 애니메이션 없이 즉시 위치 적용
+                left.translationY = targetDy
+                right.translationY = targetDy
+            }
+        }
+    }
+
+    /**
+     * 홈화면 이탈 시 좌우 버튼 그룹을 원래 위치로 복귀
+     */
+    private fun animateButtonsToOriginalPosition() {
+        val left = leftButtonGroup ?: return
+        val right = rightButtonGroup ?: return
+
+        if (!areButtonsMovedToCenter) return
+        homeButtonsAnimator?.cancel()
+
+        val animSet = android.animation.AnimatorSet()
+        animSet.playTogether(
+            android.animation.ObjectAnimator.ofFloat(left, "translationY", left.translationY, 0f),
+            android.animation.ObjectAnimator.ofFloat(right, "translationY", right.translationY, 0f)
+        )
+        animSet.duration = 200L
+        animSet.interpolator = android.view.animation.DecelerateInterpolator(1.5f)
+        animSet.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                areButtonsMovedToCenter = false
+                homeButtonsAnimator = null
+                updateWindowHeight(getDesiredVisibleWindowHeight())
+            }
+        })
+        animSet.start()
+        homeButtonsAnimator = animSet
+    }
+
+    /**
+     * 홈 버튼 이동 상태를 즉시 초기화 (애니메이션 없이)
+     */
+    private fun resetButtonPositionsImmediate() {
+        homeButtonsAnimator?.cancel()
+        homeButtonsAnimator = null
+        leftButtonGroup?.translationY = 0f
+        rightButtonGroup?.translationY = 0f
+        areButtonsMovedToCenter = false
+    }
+
+    /**
+     * Navbar 윈도우의 터치 가능 영역 제한 (reflection, @hide API)
+     * 윈도우 높이가 확장된 경우 overflow 영역은 터치 패스스루
+     */
+    private fun setupNavBarTouchableRegionListener(window: FrameLayout) {
+        try {
+            val listenerClass = Class.forName(
+                "android.view.ViewTreeObserver\$OnComputeInternalInsetsListener"
+            )
+            val infoClass = Class.forName(
+                "android.view.ViewTreeObserver\$InternalInsetsInfo"
+            )
+            val setTouchableInsets = infoClass.getMethod(
+                "setTouchableInsets", Int::class.javaPrimitiveType
+            )
+            val touchableRegionField = infoClass.getDeclaredField("touchableRegion").apply { isAccessible = true }
+            val TOUCHABLE_INSETS_REGION = infoClass
+                .getDeclaredField("TOUCHABLE_INSETS_REGION").apply { isAccessible = true }.getInt(null)
+
+            val proxy = java.lang.reflect.Proxy.newProxyInstance(
+                listenerClass.classLoader,
+                arrayOf(listenerClass)
+            ) { _, method, args ->
+                if (method.name == "onComputeInternalInsets" && args != null) {
+                    val info = args[0]
+                    setTouchableInsets.invoke(info, TOUCHABLE_INSETS_REGION)
+                    val region = touchableRegionField.get(info) as android.graphics.Region
+                    val wh = window.height
+                    val barH = getSystemNavigationBarHeightPx()
+
+                    // 기본: navbar bar 영역 (하단)
+                    region.set(0, wh - barH, window.width, wh)
+
+                    // 버튼이 위로 이동 중이면 버튼 위치도 터치 가능 영역에 추가
+                    if (areButtonsMovedToCenter) {
+                        val left = leftButtonGroup
+                        val right = rightButtonGroup
+                        if (left != null && left.width > 0) {
+                            val ly = (left.top + left.translationY).toInt()
+                            region.union(android.graphics.Rect(
+                                left.left, ly, left.left + left.width, ly + left.height
+                            ))
+                        }
+                        if (right != null && right.width > 0) {
+                            val ry = (right.top + right.translationY).toInt()
+                            region.union(android.graphics.Rect(
+                                right.left, ry, right.left + right.width, ry + right.height
+                            ))
+                        }
+                    }
+                }
+                null
+            }
+
+            val addMethod = android.view.ViewTreeObserver::class.java.getMethod(
+                "addOnComputeInternalInsetsListener", listenerClass
+            )
+            addMethod.invoke(window.viewTreeObserver, proxy)
+            Log.d(TAG, "setupNavBarTouchableRegionListener: success")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set navbar touchable region listener", e)
+        }
     }
 
     private fun getDesiredTaskbarWindowWidth(): Int {
@@ -3347,6 +3551,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             hideTaskbarImmediate()
         }
         updateWindowHeight(getDesiredVisibleWindowHeight())
+
+        // 홈화면이면 버튼을 미리 위로 올린 상태로 준비 (애니메이션 없이)
+        if (shouldUseQuickstepPlusHomeTaskbarSizeForDisplay()) {
+            animateButtonsToHomePosition(animate = false)
+        }
 
         Log.d(TAG, "Prepared for unlock fade (home=$isOnHomeScreen, useCustom=$useCustomForUnlock)")
     }
