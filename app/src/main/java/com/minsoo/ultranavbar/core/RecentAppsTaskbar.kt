@@ -217,39 +217,26 @@ class RecentAppsTaskbar(
                 iconViews.isNotEmpty() &&
                 sizeChanged
 
-        if (deferVisibleGrowAnimation && sizeChanged && targetSizeDp > startSizeDp) {
-            pendingAnimatedTargetSizeDp = targetSizeDp
-            if (iconViews.isEmpty() && currentApps.isNotEmpty()) {
-                val apps = currentApps
-                currentApps = emptyList()
-                updateApps(apps)
-            } else {
-                updateCenterGroupPadding(renderedIconSizeDp)
-            }
-            return
-        }
+        // [ANIMATION DISABLED] defer 로직 비활성화 - 즉시 적용
+        // if (deferVisibleGrowAnimation && sizeChanged && targetSizeDp > startSizeDp) {
+        //     pendingAnimatedTargetSizeDp = targetSizeDp
+        //     ...
+        //     return
+        // }
 
-        if (shouldAnimate) {
-            pendingAnimatedTargetSizeDp = null
-            animateIconSizeChange(
-                fromSizeDp = startSizeDp,
-                toSizeDp = targetSizeDp,
-                group = group ?: return
-            )
-            return
-        }
+        // [ANIMATION DISABLED] 아이콘 크기 애니메이션 비활성화 - 즉시 적용으로 전환
+        // if (shouldAnimate) {
+        //     pendingAnimatedTargetSizeDp = null
+        //     animateIconSizeChange(fromSizeDp = startSizeDp, toSizeDp = targetSizeDp, group = group ?: return)
+        //     return
+        // }
 
-        if (sizeChanged && targetSizeDp > startSizeDp) {
-            pendingAnimatedTargetSizeDp = targetSizeDp
-            if (iconViews.isEmpty() && currentApps.isNotEmpty()) {
-                val apps = currentApps
-                currentApps = emptyList()
-                updateApps(apps)
-            } else {
-                updateCenterGroupPadding(renderedIconSizeDp)
-            }
-            return
-        }
+        // [ANIMATION DISABLED] 두 번째 defer 분기도 비활성화
+        // if (sizeChanged && targetSizeDp > startSizeDp) {
+        //     pendingAnimatedTargetSizeDp = targetSizeDp
+        //     ...
+        //     return
+        // }
 
         pendingAnimatedTargetSizeDp = null
         renderedIconSizeDp = targetSizeDp
@@ -551,11 +538,9 @@ class RecentAppsTaskbar(
             }
             longPressTriggered = true
             isDragging = true
-            iconView.animate()
-                .scaleX(1.06f)
-                .scaleY(1.06f)
-                .setDuration(90L)
-                .start()
+            // [ANIMATION DISABLED] 롱프레스 스케일 애니메이션 비활성화
+            iconView.scaleX = 1.06f
+            iconView.scaleY = 1.06f
             listener.onDragStateChanged(true, 0f)
             iconView.alpha = 0f
             listener.onDragStart(iconView, startRawX, startRawY)

@@ -189,16 +189,18 @@ class ButtonManager(
                 button.rotation = rotation
                 return
             }
-            if (animate) {
-                button.animate().cancel()
-                button.animate()
-                    .rotation(rotation)
-                    .setDuration(Constants.Timing.ANIMATION_DURATION_MS)
-                    .withLayer()
-                    .start()
-            } else {
-                button.rotation = rotation
-            }
+            // [ANIMATION DISABLED] 패널 버튼 회전 애니메이션 비활성화 - 즉시 회전
+            // if (animate) {
+            //     button.animate().cancel()
+            //     button.animate()
+            //         .rotation(rotation)
+            //         .setDuration(Constants.Timing.ANIMATION_DURATION_MS)
+            //         .withLayer()
+            //         .start()
+            // } else {
+            //     button.rotation = rotation
+            // }
+            button.rotation = rotation
         }
     }
 
