@@ -4,6 +4,7 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.animation.AnimatorSet
+import android.app.ActivityOptions
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
@@ -206,16 +207,16 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     private val taskbarListener = object : RecentAppsTaskbar.TaskbarActionListener {
-        override fun onAppTapped(packageName: String) {
+        override fun onAppTapped(packageName: String, iconView: View?) {
             Log.d(TAG, "App tapped: $packageName")
-            launchApp(packageName)
+            launchApp(packageName, iconView)
         }
 
         /**
          * 앱 실행
          * 분할화면 상태면 종료 후 실행, 아니면 바로 실행
          */
-        private fun launchApp(packageName: String) {
+        private fun launchApp(packageName: String, iconView: View? = null) {
             val splitCached = SplitScreenHelper.isSplitScreenActive()
             val isSplitScreen = SplitScreenHelper.isSplitScreenActuallyActive()
             if (splitCached && !isSplitScreen) {
@@ -228,30 +229,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 Log.d(TAG, "Exiting split screen before launch: $packageName")
 
                 handler.postDelayed({
-                    launchAppDirect(packageName)
+                    launchAppWithReveal(packageName, null)
                 }, 150L)
             } else {
                 // 바로 앱 실행
-                launchAppDirect(packageName)
-            }
-        }
-
-        /**
-         * 앱 직접 실행
-         */
-        private fun launchAppDirect(packageName: String) {
-            try {
-                val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-                if (intent != null) {
-                    intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                                   android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
-                    context.startActivity(intent)
-                    Log.d(TAG, "App launched: $packageName")
-                } else {
-                    Log.w(TAG, "Cannot find launch intent for: $packageName")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Launch failed: $packageName", e)
+                launchAppWithReveal(packageName, iconView)
             }
         }
 
@@ -293,18 +275,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     private val navbarAppsPanelListener = object : NavbarAppsPanel.PanelActionListener {
-        override fun onAppTapped(packageName: String) {
+        override fun onAppTapped(packageName: String, iconView: View?) {
             Log.d(TAG, "NavbarApps: app tapped: $packageName")
-            try {
-                val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-                if (intent != null) {
-                    intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                                   android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
-                    context.startActivity(intent)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "NavbarApps: launch failed: $packageName", e)
-            }
+            launchAppWithReveal(packageName, iconView)
         }
 
         override fun onAppDraggedToSplit(packageName: String) {
@@ -381,6 +354,42 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return pkg
         }
         return null
+    }
+
+    /**
+     * ClipReveal 애니메이션으로 앱 실행
+     * iconView가 있으면 아이콘 위치에서 펼쳐지는 효과, 없으면 기본 실행
+     */
+    private fun launchAppWithReveal(packageName: String, iconView: View?) {
+        try {
+            val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+            if (intent != null) {
+                intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                               android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                if (iconView != null) {
+                    val options = ActivityOptions.makeClipRevealAnimation(
+                        iconView, 0, 0, iconView.width, iconView.height
+                    )
+                    context.startActivity(intent, options.toBundle())
+                } else {
+                    context.startActivity(intent)
+                }
+                Log.d(TAG, "App launched with reveal: $packageName (hasIcon=${iconView != null})")
+            } else {
+                Log.w(TAG, "Cannot find launch intent for: $packageName")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Launch failed: $packageName", e)
+            // fallback: reveal 없이 실행
+            try {
+                val fallbackIntent = context.packageManager.getLaunchIntentForPackage(packageName)
+                if (fallbackIntent != null) {
+                    fallbackIntent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                           android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                    context.startActivity(fallbackIntent)
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     private fun handleSplitLaunchRequest(packageName: String, sourceTag: String) {
@@ -516,15 +525,14 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             val params = createLayoutParams()
             windowManager.addView(rootView, params)
             currentWindowHeight = params.height
+            setupNavBarTouchableRegionListener(rootView!!)
             bringTaskbarWindowToFront()
 
             isCreated = true
             isShowing = true
 
-            updateNavBarBackground() // 기본 색상 먼저 적용
-            backgroundManager.loadBackgroundBitmaps(onComplete = Runnable {
-                if (isCreated) updateNavBarBackground()
-            })
+            backgroundManager.loadBackgroundBitmaps()
+            updateNavBarBackground()
             buttonManager.updatePanelButtonState(isOpen = false, animate = false)
 
             Log.i(TAG, "Overlay created successfully")
@@ -1113,9 +1121,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         // 분할화면 오버레이 크기 재생성
         recreateSplitScreenOverlay()
 
-        backgroundManager.loadBackgroundBitmaps(forceReload = false, onComplete = Runnable {
-            if (isCreated) updateNavBarBackground()
-        })
+        backgroundManager.loadBackgroundBitmaps(forceReload = false)
         return true
     }
 
@@ -1218,7 +1224,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             showGestureOverlay()
         }
 
-        // [ANIMATION DISABLED] 모든 show 페이드/슬라이드 애니메이션 비활성화 - ANR 방지
+        val shouldFade = fade || isUnlockFade || shouldUseQuickstepPlusOverlayFade()
         val suppressBackgroundLayer = isUnlockFade || isUnlockPending || isUnlockFadeRunning || isUnlockFadeSuppressed
 
         val wasHidden = !isShowing
@@ -1228,75 +1234,117 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         val bar = navBarView ?: return
         hotspotView?.visibility = View.GONE
-
-        // 언락 페이드 상태 즉시 완료 처리
-        if (isUnlockFade) {
-            isUnlockFadeRunning = true
+        fun runFadeAnimator(set: AnimatorSet) {
+            var unlockFadeCancelled = false
+            if (isUnlockFade) {
+                set.addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationCancel(animation: Animator) {
+                        unlockFadeCancelled = true
+                    }
+                })
+                isUnlockFadeRunning = true
+            }
+            startAnimator(
+                set,
+                onStart = {
+                    if (suppressBackgroundLayer) {
+                        backgroundView?.visibility = View.GONE
+                    }
+                },
+                onEnd = {
+                    if (isUnlockFade) {
+                        isUnlockFadeRunning = false
+                        isUnlockFadeSuppressed = isUnlockPending
+                        if (!isUnlockPending) {
+                            unlockUseCustomOverride = null
+                        }
+                        if (!isUnlockPending) {
+                            restoreBackgroundLayerDefault()
+                        }
+                        backgroundView?.alpha = 1f
+                        backgroundView?.visibility = if (!unlockFadeCancelled && !isUnlockPending) {
+                            View.VISIBLE
+                        } else {
+                            View.GONE
+                        }
+                        // 언락 페이드 완료 후 상태 동기화 (버튼 색상 등)
+                        if (!unlockFadeCancelled && !isUnlockPending) {
+                            handler.postDelayed({
+                                if (!isCreated) return@postDelayed
+                                ensureVisualStateSync()
+                            }, 50L)
+                        }
+                    }
+                }
+            )
         }
 
         if (isShowing) {
             updateWindowHeight(getDesiredVisibleWindowHeight())
-            // 이미 보이는 상태: 즉시 최종 상태 적용
+            if (!shouldFade) return
+            if (bar.alpha >= 1f && !isUnlockFade) return
+
             bar.translationY = 0f
-            bar.alpha = 1f
+            val animators = mutableListOf<Animator>()
+            animators.add(createAlphaAnimator(bar, bar.alpha, 1f))
+            centerGroupView?.takeIf { it.visibility == View.VISIBLE }?.let { center ->
+                animators.add(createAlphaAnimator(center, center.alpha, 1f))
+            }
             if (!suppressBackgroundLayer) {
-                backgroundView?.alpha = 1f
-                backgroundView?.visibility = View.VISIBLE
+                backgroundView?.let { bg ->
+                    bg.visibility = View.VISIBLE
+                    animators.add(createAlphaAnimator(bg, bg.alpha, 1f))
+                }
             } else {
                 backgroundView?.visibility = View.GONE
             }
-            centerGroupView?.takeIf { it.visibility == View.VISIBLE }?.alpha = 1f
 
-            // 언락 페이드 즉시 완료
-            if (isUnlockFade) {
-                isUnlockFadeRunning = false
-                isUnlockFadeSuppressed = isUnlockPending
-                if (!isUnlockPending) {
-                    unlockUseCustomOverride = null
-                    restoreBackgroundLayerDefault()
-                }
-                backgroundView?.alpha = 1f
-                backgroundView?.visibility = if (!isUnlockPending) View.VISIBLE else View.GONE
-                if (!isUnlockPending) {
-                    handler.postDelayed({
-                        if (!isCreated) return@postDelayed
-                        ensureVisualStateSync()
-                    }, 50L)
-                }
-            }
+            val set = AnimatorSet().apply { playTogether(animators) }
+            runFadeAnimator(set)
             return
         }
 
-        // 숨겨진 상태에서 표시: 즉시 표시
-        updateWindowHeight(getDesiredVisibleWindowHeight())
-        bar.alpha = 1f
-        bar.visibility = View.VISIBLE
-        bar.translationY = 0f
-        backgroundView?.alpha = 1f
-        backgroundView?.visibility = if (suppressBackgroundLayer) View.GONE else View.VISIBLE
-        hotspotView?.visibility = View.GONE
-        centerGroupView?.takeIf { it.visibility == View.VISIBLE }?.alpha = 1f
+        if (shouldFade) {
+            updateWindowHeight(getDesiredVisibleWindowHeight())
+            bar.translationY = 0f
+            if (!suppressBackgroundLayer) {
+                bar.alpha = 0f
+                bar.visibility = View.VISIBLE
+                backgroundView?.alpha = 0f
+                backgroundView?.visibility = View.VISIBLE
+            } else {
+                bar.alpha = 0f
+                bar.visibility = View.VISIBLE
+                backgroundView?.visibility = View.GONE
+            }
+            hotspotView?.visibility = View.GONE
+            centerGroupView?.takeIf { it.visibility == View.VISIBLE }?.alpha = 0f
 
-        // 언락 페이드 즉시 완료
-        if (isUnlockFade) {
-            isUnlockFadeRunning = false
-            isUnlockFadeSuppressed = isUnlockPending
-            if (!isUnlockPending) {
-                unlockUseCustomOverride = null
-                restoreBackgroundLayerDefault()
+            val animators = mutableListOf<Animator>()
+            animators.add(createAlphaAnimator(bar, bar.alpha, 1f))
+            centerGroupView?.takeIf { it.visibility == View.VISIBLE }?.let { center ->
+                animators.add(createAlphaAnimator(center, center.alpha, 1f))
             }
+            if (!suppressBackgroundLayer) {
+                backgroundView?.let { bg ->
+                    animators.add(createAlphaAnimator(bg, bg.alpha, 1f))
+                }
+            }
+
+            val set = AnimatorSet().apply { playTogether(animators) }
+            runFadeAnimator(set)
+        } else {
+            updateWindowHeight(getDesiredVisibleWindowHeight())
             backgroundView?.alpha = 1f
-            backgroundView?.visibility = if (!isUnlockPending) View.VISIBLE else View.GONE
-            if (!isUnlockPending) {
-                handler.postDelayed({
-                    if (!isCreated) return@postDelayed
-                    ensureVisualStateSync()
-                }, 50L)
-            }
+            backgroundView?.visibility = if (suppressBackgroundLayer) View.GONE else View.VISIBLE
+            bar.alpha = 1f
+            bar.visibility = View.VISIBLE
+            bar.translationY = 0f
+            hotspotView?.visibility = View.GONE
         }
 
         isShowing = true
-        Log.d(TAG, "Overlay shown (instant, fromGesture=$fromGesture, unlock=$isUnlockFade)")
+        Log.d(TAG, "Overlay shown (fade=$shouldFade, fromGesture=$fromGesture, unlock=$isUnlockFade)")
     }
 
     fun startUnlockFade() {
@@ -1369,18 +1417,41 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         cancelCurrentAnimator()
 
-        // [ANIMATION DISABLED] hide 슬라이드 애니메이션 비활성화 - 항상 즉시 숨김
-        bar.visibility = View.GONE
-        bar.translationY = 0f
-        backgroundView?.visibility = View.GONE
-        centerGroupView?.visibility = View.GONE
-        updateTaskbarWindowTouchableState()
-        if (shouldShowHotspot) {
-            updateWindowHeight(context.dpToPx(settings.hotspotHeight))
+        val shouldUseImmediateHide = !animate || shouldUseQuickstepPlusTaskbarNoSlide()
+
+        if (shouldUseImmediateHide) {
+            bar.visibility = View.GONE
+            bar.translationY = 0f
+            backgroundView?.visibility = View.GONE
+            centerGroupView?.visibility = View.GONE
+            updateTaskbarWindowTouchableState()
+            if (shouldShowHotspot) {
+                updateWindowHeight(context.dpToPx(settings.hotspotHeight))
+            } else {
+                updateWindowHeight(0)
+            }
+            hideAnimationInProgress = false
         } else {
-            updateWindowHeight(0)
+            hideAnimationInProgress = true
+            val toY = getBarHeightForAnimation()
+            val animator = createTranslationAnimator(bar, 0f, toY)
+            startAnimator(
+                animator,
+                onEnd = {
+                    hideAnimationInProgress = false
+                    bar.visibility = View.GONE
+                    bar.translationY = 0f
+                    backgroundView?.visibility = View.GONE
+                    centerGroupView?.visibility = View.GONE
+                    updateTaskbarWindowTouchableState()
+                    if (shouldShowHotspot) {
+                        updateWindowHeight(context.dpToPx(settings.hotspotHeight))
+                    } else {
+                        updateWindowHeight(0)
+                    }
+                }
+            )
         }
-        hideAnimationInProgress = false
 
         hotspotView?.visibility = if (shouldShowHotspot) View.VISIBLE else View.GONE
         isShowing = false
@@ -1590,7 +1661,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      * Android 12 스타일: 아래에서 슬라이드 + 페이드 + 스케일
      */
     private fun animateTaskbarEntry() {
-        // [ANIMATION DISABLED] 태스크바 진입 애니메이션 비활성화 - 즉시 표시
+        Log.d(TAG, "animateTaskbarEntry() CALLED", Exception("stack trace"))
         val view = centerGroupView ?: return
 
         if (!shouldShowTaskbar()) {
@@ -1598,18 +1669,81 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             return
         }
 
+        if (taskbarEntryAnimator?.isRunning == true) {
+            return
+        }
+
+        if (view.visibility == View.VISIBLE &&
+            taskbarEntryAnimator == null &&
+            taskbarExitAnimator == null &&
+            view.alpha >= 0.99f
+        ) {
+            return
+        }
+
+        // 퇴장 애니메이션 취소
         taskbarExitAnimator?.cancel()
         taskbarExitAnimator = null
-        taskbarEntryAnimator?.cancel()
-        taskbarEntryAnimator = null
 
         val targetTranslationY = getVisibleTaskbarTranslationY()
-        view.alpha = 1f
-        view.translationY = targetTranslationY
-        view.scaleX = 1f
-        view.scaleY = 1f
+        val startAlpha = if (view.visibility == View.VISIBLE) view.alpha else 0f
+        val startTranslationY = if (view.visibility == View.VISIBLE) {
+            view.translationY
+        } else {
+            if (shouldUseQuickstepPlusTaskbarNoSlide()) {
+                targetTranslationY
+            } else {
+                targetTranslationY + context.dpToPx(30).toFloat()
+            }
+        }
+        val startScaleX = if (shouldUseQuickstepPlusTaskbarNoSlide()) {
+            1f
+        } else if (view.visibility == View.VISIBLE) {
+            view.scaleX
+        } else {
+            0.85f
+        }
+        val startScaleY = if (shouldUseQuickstepPlusTaskbarNoSlide()) {
+            1f
+        } else if (view.visibility == View.VISIBLE) {
+            view.scaleY
+        } else {
+            0.85f
+        }
+
+        // 초기 상태 보정
+        view.alpha = startAlpha
+        view.translationY = startTranslationY
+        view.scaleX = startScaleX
+        view.scaleY = startScaleY
         view.visibility = View.VISIBLE
-        tryPlayPendingTaskbarIconSizeAnimation()
+
+        // 애니메이션 생성
+        val alphaAnim = ObjectAnimator.ofFloat(view, "alpha", startAlpha, 1f)
+        val translateAnim = ObjectAnimator.ofFloat(view, "translationY", startTranslationY, targetTranslationY)
+        val scaleXAnim = ObjectAnimator.ofFloat(view, "scaleX", startScaleX, 1f)
+        val scaleYAnim = ObjectAnimator.ofFloat(view, "scaleY", startScaleY, 1f)
+
+        taskbarEntryAnimator = AnimatorSet().apply {
+            playTogether(alphaAnim, translateAnim, scaleXAnim, scaleYAnim)
+            duration = 250L
+            interpolator = android.view.animation.DecelerateInterpolator(2f)
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    view.alpha = 1f
+                    view.translationY = targetTranslationY
+                    view.scaleX = 1f
+                    view.scaleY = 1f
+                    taskbarEntryAnimator = null
+                    tryPlayPendingTaskbarIconSizeAnimation()
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    taskbarEntryAnimator = null
+                }
+            })
+            start()
+        }
     }
 
     /**
@@ -1617,20 +1751,66 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      * Android 12 스타일: 아래로 슬라이드 + 페이드 + 스케일
      */
     private fun animateTaskbarExit() {
-        // [ANIMATION DISABLED] 태스크바 퇴장 애니메이션 비활성화 - 즉시 숨김
+        Log.d(TAG, "animateTaskbarExit() CALLED", Exception("stack trace"))
         val view = centerGroupView ?: return
 
+        // 등장 애니메이션 취소
         taskbarEntryAnimator?.cancel()
         taskbarEntryAnimator = null
-        taskbarExitAnimator?.cancel()
-        taskbarExitAnimator = null
 
-        view.visibility = View.GONE
-        view.alpha = 1f
-        view.translationY = 0f
-        view.scaleX = 1f
-        view.scaleY = 1f
-        updateTaskbarWindowTouchableState()
+        // 이미 숨겨져 있거나 퇴장 애니메이션 진행 중이면 스킵
+        if (view.visibility != View.VISIBLE || taskbarExitAnimator?.isRunning == true) {
+            if (view.visibility != View.VISIBLE) {
+                view.visibility = View.GONE
+                updateTaskbarWindowTouchableState()
+            }
+            return
+        }
+
+        // 이전 퇴장 애니메이션 취소
+        taskbarExitAnimator?.cancel()
+
+        // 현재 상태에서 시작 (진행 중인 등장 애니메이션이 있었을 수 있음)
+        val currentAlpha = view.alpha
+        val currentTranslationY = view.translationY
+        val currentScaleX = view.scaleX
+        val currentScaleY = view.scaleY
+
+        // 애니메이션 생성 - 현재 상태에서 목표 상태로
+        val targetTranslationY = if (shouldUseQuickstepPlusTaskbarNoSlide()) {
+            getVisibleTaskbarTranslationY()
+        } else {
+            getVisibleTaskbarTranslationY() + context.dpToPx(25).toFloat()
+        }
+        val targetScale = if (shouldUseQuickstepPlusTaskbarNoSlide()) 1f else 0.85f
+        val alphaAnim = ObjectAnimator.ofFloat(view, "alpha", currentAlpha, 0f)
+        val translateAnim = ObjectAnimator.ofFloat(view, "translationY", currentTranslationY, targetTranslationY)
+        val scaleXAnim = ObjectAnimator.ofFloat(view, "scaleX", currentScaleX, targetScale)
+        val scaleYAnim = ObjectAnimator.ofFloat(view, "scaleY", currentScaleY, targetScale)
+
+        taskbarExitAnimator = AnimatorSet().apply {
+            playTogether(alphaAnim, translateAnim, scaleXAnim, scaleYAnim)
+            duration = 180L
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    view.visibility = View.GONE
+                    // 상태 리셋
+                    view.alpha = 1f
+                    view.translationY = 0f
+                    view.scaleX = 1f
+                    view.scaleY = 1f
+                    taskbarExitAnimator = null
+                    updateTaskbarWindowTouchableState()
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    taskbarExitAnimator = null
+                    updateTaskbarWindowTouchableState()
+                }
+            })
+            start()
+        }
     }
 
     /**
@@ -1777,12 +1957,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     private fun schedulePendingHomeButtonGrowAnimationIfNeeded() {
-        // [ANIMATION DISABLED] 딜레이 없이 즉시 실행
         pendingHomeButtonGrowTask?.let { handler.removeCallbacks(it) }
-        pendingHomeButtonGrowTask = null
-        homeButtonGrowHintUntil = 0L
-        recentAppsTaskbar?.deferPendingIconSizeAnimationPlayback = false
-        recentAppsTaskbar?.playPendingIconSizeAnimationIfNeeded()
+        val task = Runnable {
+            pendingHomeButtonGrowTask = null
+            homeButtonGrowHintUntil = 0L
+            recentAppsTaskbar?.deferPendingIconSizeAnimationPlayback = false
+            recentAppsTaskbar?.playPendingIconSizeAnimationIfNeeded()
+        }
+        pendingHomeButtonGrowTask = task
+        handler.postDelayed(task, Constants.Timing.HOME_BUTTON_GROW_ANIMATION_DELAY_MS)
     }
 
     private fun cancelPendingHomeButtonGrowAnimation(clearHint: Boolean = true) {
@@ -1844,40 +2027,77 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
      * 홈화면 진입 시 좌우 버튼 그룹을 아이콘 클러스터 양옆으로 이동
      */
     private fun animateButtonsToHomePosition(animate: Boolean = true) {
-        // [ANIMATION DISABLED] 버튼 위치 이동 애니메이션 비활성화 - 항상 즉시 적용
         val left = leftButtonGroup ?: return
         val right = rightButtonGroup ?: return
         if (!isQuickstepPlusTaskbarFeatureActive()) return
         if (!shouldUseQuickstepPlusHomeTaskbarSizeForDisplay()) return
 
         homeButtonsAnimator?.cancel()
-        homeButtonsAnimator = null
 
         // 윈도우 높이 확장 (버튼이 overflow 영역에 렌더링되도록)
         areButtonsMovedToCenter = true
         updateWindowHeight(getDesiredVisibleWindowHeight())
 
-        // 위치 계산 및 즉시 적용 (post 없이 - 아이콘 크기 변경과 동시에 적용)
-        val barHeight = getSystemNavigationBarHeightPx()
-        val iconSizePx = context.dpToPx(RecentAppsTaskbar.LARGE_HOME_ICON_SIZE_DP)
-        val bottomPaddingPx = (iconSizePx - barHeight).coerceAtLeast(0) + context.dpToPx(RecentAppsTaskbar.LARGE_HOME_BOTTOM_PADDING_DP)
-        val groupOffsetPx = context.dpToPx(12) // LARGE_HOME_GROUP_OFFSET_DP
+        // 레이아웃 완료 후 위치 계산 및 적용
+        left.post {
+            if (!areButtonsMovedToCenter) return@post
 
-        val iconCenterFromBottom = (bottomPaddingPx - groupOffsetPx) + iconSizePx / 2
-        val buttonCenterFromBottom = barHeight / 2
-        val targetDy = -(iconCenterFromBottom - buttonCenterFromBottom).toFloat()
+            val barHeight = getSystemNavigationBarHeightPx()
+            val iconSizePx = context.dpToPx(RecentAppsTaskbar.LARGE_HOME_ICON_SIZE_DP)
+            val bottomPaddingPx = (iconSizePx - barHeight).coerceAtLeast(0) + context.dpToPx(RecentAppsTaskbar.LARGE_HOME_BOTTOM_PADDING_DP)
+            val groupOffsetPx = context.dpToPx(12) // LARGE_HOME_GROUP_OFFSET_DP
 
-        left.translationY = targetDy
-        right.translationY = targetDy
+            // 큰 아이콘 중심의 화면 하단으로부터의 높이
+            val iconCenterFromBottom = (bottomPaddingPx - groupOffsetPx) + iconSizePx / 2
+            // 버튼 현재 중심의 화면 하단으로부터의 높이
+            val buttonCenterFromBottom = barHeight / 2
+            // 수직 이동량 (위로 = 음수)
+            val targetDy = -(iconCenterFromBottom - buttonCenterFromBottom).toFloat()
+
+            if (animate) {
+                val animSet = android.animation.AnimatorSet()
+                animSet.playTogether(
+                    android.animation.ObjectAnimator.ofFloat(left, "translationY", 0f, targetDy),
+                    android.animation.ObjectAnimator.ofFloat(right, "translationY", 0f, targetDy)
+                )
+                animSet.duration = 250L
+                animSet.interpolator = android.view.animation.DecelerateInterpolator(1.5f)
+                animSet.start()
+                homeButtonsAnimator = animSet
+            } else {
+                // 애니메이션 없이 즉시 위치 적용
+                left.translationY = targetDy
+                right.translationY = targetDy
+            }
+        }
     }
 
     /**
      * 홈화면 이탈 시 좌우 버튼 그룹을 원래 위치로 복귀
      */
     private fun animateButtonsToOriginalPosition() {
-        // [ANIMATION DISABLED] 버튼 복귀 애니메이션 비활성화 - 즉시 원위치
-        resetButtonPositionsImmediate()
-        updateWindowHeight(getDesiredVisibleWindowHeight())
+        val left = leftButtonGroup ?: return
+        val right = rightButtonGroup ?: return
+
+        if (!areButtonsMovedToCenter) return
+        homeButtonsAnimator?.cancel()
+
+        val animSet = android.animation.AnimatorSet()
+        animSet.playTogether(
+            android.animation.ObjectAnimator.ofFloat(left, "translationY", left.translationY, 0f),
+            android.animation.ObjectAnimator.ofFloat(right, "translationY", right.translationY, 0f)
+        )
+        animSet.duration = 200L
+        animSet.interpolator = android.view.animation.DecelerateInterpolator(1.5f)
+        animSet.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                areButtonsMovedToCenter = false
+                homeButtonsAnimator = null
+                updateWindowHeight(getDesiredVisibleWindowHeight())
+            }
+        })
+        animSet.start()
+        homeButtonsAnimator = animSet
     }
 
     /**
@@ -1891,10 +2111,69 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         areButtonsMovedToCenter = false
     }
 
-    // touchableRegion 리플렉션은 Android 12+(API 31)에서 차단됨 (max-target-r, denied)
-    // 대신 PRIVATE_FLAG_NO_MOVE_ANIMATION + 동적 윈도우 높이로 터치 영역 관리:
-    // - areButtonsMovedToCenter=false → 윈도우 높이 = 바 높이만 (overflow 없음)
-    // - areButtonsMovedToCenter=true → 윈도우 확장, taskbar 윈도우가 앞에 있어 센터 터치 정상 동작
+    /**
+     * Navbar 윈도우의 터치 가능 영역 제한 (reflection, @hide API)
+     * 윈도우 높이가 확장된 경우 overflow 영역은 터치 패스스루
+     */
+    private fun setupNavBarTouchableRegionListener(window: FrameLayout) {
+        try {
+            val listenerClass = Class.forName(
+                "android.view.ViewTreeObserver\$OnComputeInternalInsetsListener"
+            )
+            val infoClass = Class.forName(
+                "android.view.ViewTreeObserver\$InternalInsetsInfo"
+            )
+            val setTouchableInsets = infoClass.getMethod(
+                "setTouchableInsets", Int::class.javaPrimitiveType
+            )
+            val touchableRegionField = infoClass.getDeclaredField("touchableRegion").apply { isAccessible = true }
+            val TOUCHABLE_INSETS_REGION = infoClass
+                .getDeclaredField("TOUCHABLE_INSETS_REGION").apply { isAccessible = true }.getInt(null)
+
+            val proxy = java.lang.reflect.Proxy.newProxyInstance(
+                listenerClass.classLoader,
+                arrayOf(listenerClass)
+            ) { _, method, args ->
+                if (method.name == "onComputeInternalInsets" && args != null) {
+                    val info = args[0]
+                    setTouchableInsets.invoke(info, TOUCHABLE_INSETS_REGION)
+                    val region = touchableRegionField.get(info) as android.graphics.Region
+                    val wh = window.height
+                    val barH = getSystemNavigationBarHeightPx()
+
+                    // 기본: navbar bar 영역 (하단)
+                    region.set(0, wh - barH, window.width, wh)
+
+                    // 버튼이 위로 이동 중이면 버튼 위치도 터치 가능 영역에 추가
+                    if (areButtonsMovedToCenter) {
+                        val left = leftButtonGroup
+                        val right = rightButtonGroup
+                        if (left != null && left.width > 0) {
+                            val ly = (left.top + left.translationY).toInt()
+                            region.union(android.graphics.Rect(
+                                left.left, ly, left.left + left.width, ly + left.height
+                            ))
+                        }
+                        if (right != null && right.width > 0) {
+                            val ry = (right.top + right.translationY).toInt()
+                            region.union(android.graphics.Rect(
+                                right.left, ry, right.left + right.width, ry + right.height
+                            ))
+                        }
+                    }
+                }
+                null
+            }
+
+            val addMethod = android.view.ViewTreeObserver::class.java.getMethod(
+                "addOnComputeInternalInsetsListener", listenerClass
+            )
+            addMethod.invoke(window.viewTreeObserver, proxy)
+            Log.d(TAG, "setupNavBarTouchableRegionListener: success")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set navbar touchable region listener", e)
+        }
+    }
 
     private fun getDesiredTaskbarWindowWidth(): Int {
         val groupChildCount = (centerGroupView as? ViewGroup)?.childCount ?: 0
@@ -2035,6 +2314,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val bar = navBarView ?: return
         syncOrientationIfNeeded("home_entry")
 
+        // backgroundView가 숨김 상태일 수 있으므로 반드시 복원
+        backgroundView?.alpha = 1f
+        backgroundView?.visibility = View.VISIBLE
+
         val shouldUseCustom = shouldUseCustomBackground()
         backgroundManager.applyBackground(bar, shouldUseCustom, forceUpdate = true, animate = true)
 
@@ -2044,15 +2327,11 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         updateQuickstepHomeShadowVisibility()
         Log.d(TAG, "Home entry background applied with fade (custom=$shouldUseCustom)")
 
-        // [ANIMATION DISABLED] 애니메이션 딜레이 제거 - 즉시 상태 동기화
-        // handler.postDelayed({
-        //     if (!isCreated) return@postDelayed
-        //     ensureVisualStateSync()
-        // }, Constants.Timing.BG_TRANSITION_DURATION_MS + 50L)
-        handler.post {
-            if (!isCreated) return@post
+        // 홈 진입 완료 후 상태 동기화 예약 (애니메이션 완료 후)
+        handler.postDelayed({
+            if (!isCreated) return@postDelayed
             ensureVisualStateSync()
-        }
+        }, Constants.Timing.BG_TRANSITION_DURATION_MS + 50L)
     }
 
     /**
@@ -2398,9 +2677,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         backgroundManager.cancelBackgroundTransition()
 
         // 방향 변경 시 반드시 새 배경 로드 (가로/세로 이미지가 다름)
-        backgroundManager.loadBackgroundBitmaps(forceReload = true, onComplete = Runnable {
-            if (isCreated) updateNavBarBackground()
-        })
+        backgroundManager.loadBackgroundBitmaps(forceReload = true)
+        updateNavBarBackground()
     }
 
     // ===== 다크 모드 =====
@@ -2415,9 +2693,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             backgroundManager.cancelBackgroundTransition()
 
             // 다크 모드 전환 시 비트맵 리로드 (다크 변형 사용을 위해)
-            backgroundManager.loadBackgroundBitmaps(forceReload = true, onComplete = Runnable {
-                if (isCreated) updateNavBarBackground()
-            })
+            backgroundManager.loadBackgroundBitmaps(forceReload = true)
 
             // forceUpdate=true로 호출하여 dedup 로직을 우회
             // (useCustom 값이 같아도 색상이 WHITE↔BLACK으로 바뀌므로 반드시 업데이트 필요)
@@ -2473,28 +2749,27 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (orientationChanged || darkModeChanged) {
             // 진행 중인 배경 전환 취소 후 비트맵 리로드 (1회만)
             backgroundManager.cancelBackgroundTransition()
-            val animateBg = !orientationChanged
-            backgroundManager.loadBackgroundBitmaps(forceReload = true, onComplete = Runnable {
-                if (!isCreated) return@Runnable
-                val bar = navBarView ?: return@Runnable
-                val stableHomeCustom =
-                    isOnHomeScreen &&
-                        !isRecentsVisible &&
-                        !isHomeExitPending &&
-                        !isAppDrawerOpen &&
-                        !isLauncherIconDragActive &&
-                        !isPanelOpen() &&
-                        !isImeVisible
-                val shouldUseCustom = if (stableHomeCustom) true else shouldUseCustomBackground()
-                backgroundManager.applyBackground(
-                    bar, shouldUseCustom,
-                    forceUpdate = true,
-                    animate = animateBg
-                )
-                if (!shouldUseCustom) {
-                    backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
-                }
-            })
+            backgroundManager.loadBackgroundBitmaps(forceReload = true)
+
+            // forceUpdate로 배경 강제 적용 (dedup 우회)
+            val bar = navBarView ?: return
+            val stableHomeCustom =
+                isOnHomeScreen &&
+                    !isRecentsVisible &&
+                    !isHomeExitPending &&
+                    !isAppDrawerOpen &&
+                    !isLauncherIconDragActive &&
+                    !isPanelOpen() &&
+                    !isImeVisible
+            val shouldUseCustom = if (stableHomeCustom) true else shouldUseCustomBackground()
+            backgroundManager.applyBackground(
+                bar, shouldUseCustom,
+                forceUpdate = true,
+                animate = !orientationChanged  // 방향 전환 시는 즉시, 다크 모드만 변경 시는 페이드
+            )
+            if (!shouldUseCustom) {
+                backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+            }
 
             // 분할화면 오버레이 색상 업데이트
             if (darkModeChanged) {
@@ -2718,6 +2993,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         // 버튼 색상 강제 동기화
         backgroundManager.forceApplyCurrentButtonColor()
 
+        // backgroundView 가시성 보장 (숨김 애니메이션 후 복원 누락 방지)
+        if (!(isUnlockPending || isUnlockFadeRunning || isUnlockFadeSuppressed)) {
+            backgroundView?.alpha = 1f
+            backgroundView?.visibility = View.VISIBLE
+        }
+
         // 배경 레이어 상태 확인
         val shouldUseCustom = shouldUseCustomBackground()
         if (!shouldUseCustom) {
@@ -2826,10 +3107,20 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private fun hideSplitScreenOverlay() {
         val overlay = splitScreenOverlayView ?: return
 
-        // [ANIMATION DISABLED] 스플릿 스크린 페이드 비활성화 - 즉시 숨김
         overlay.animate().cancel()
-        overlay.alpha = 0f
-        overlay.visibility = View.INVISIBLE
+
+        if (overlay.visibility == View.VISIBLE && overlay.alpha > 0f) {
+            overlay.animate()
+                .alpha(0f)
+                .setDuration(100)
+                .withEndAction {
+                    overlay.visibility = View.INVISIBLE
+                }
+                .start()
+        } else {
+            overlay.alpha = 0f
+            overlay.visibility = View.INVISIBLE
+        }
     }
 
     /**
@@ -3010,16 +3301,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         }
 
         cancelHideAnimationOnly()
-
-        // 홈 버튼 프리뷰: 배경을 즉시 커스텀으로 전환 (애니메이션 없음)
-        // TransitionDrawable 크로스페이드 중 isCrossFadeEnabled=true로 인해
-        // navBarView가 반투명해져 시스템 네비바가 보이는 문제 방지
-        backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
-        backgroundView?.alpha = 1f
-        backgroundView?.visibility = View.VISIBLE
-
-        applyBackgroundImmediate(useCustom = true, animate = false)
-        Log.d(TAG, "Home button preview transition: ${durationMs}ms (instant bg)")
+        applyBackgroundImmediate(useCustom = true, animate = true)
+        Log.d(TAG, "Home button preview transition: ${durationMs}ms")
     }
 
     fun startBackExitHomePreviewTransition(durationMs: Long = HOME_BUTTON_PREVIEW_GUARD_MS) {
@@ -3153,9 +3436,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
         // 진행 중인 전환 취소 후 강제 리로드
         backgroundManager.cancelBackgroundTransition()
-        backgroundManager.loadBackgroundBitmaps(forceReload = true, onComplete = Runnable {
-            if (isCreated) updateNavBarBackground()
-        })
+        backgroundManager.loadBackgroundBitmaps(forceReload = true)
 
         // Taskbar 컴포넌트 초기화 (createNavBar 전에 해야 centerGroup 생성됨)
         if (settings.recentAppsTaskbarEnabled) {
@@ -3224,9 +3505,8 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     fun reloadBackgroundImages() {
         // 진행 중인 전환 취소 후 배경 이미지 강제 리로드
         backgroundManager.cancelBackgroundTransition()
-        backgroundManager.loadBackgroundBitmaps(forceReload = true, onComplete = Runnable {
-            if (isCreated) updateNavBarBackground()
-        })
+        backgroundManager.loadBackgroundBitmaps(forceReload = true)
+        updateNavBarBackground()
     }
 
     // ===== 유틸리티 =====

@@ -15,6 +15,8 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewOutlineProvider
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -41,6 +43,8 @@ class RecentAppsTaskbar(
         const val MOVE_THRESHOLD_DP = 10 // 움직임 인식 임계값
         const val SPLIT_TRIGGER_DP = 80 // 분할화면 트리거 거리
         const val LONG_PRESS_TIME_MS = 400L
+        private const val PRESSED_SCALE = 1.1f
+        private const val CLICK_FEEDBACK_DURATION = 200L
         const val LARGE_HOME_ICON_SIZE_DP = 55
         const val LARGE_HOME_BOTTOM_PADDING_DP = 18
         private const val LARGE_HOME_OVERFLOW_EXTRA_DP = 36
@@ -75,7 +79,7 @@ class RecentAppsTaskbar(
      * Taskbar 액션 리스너
      */
     interface TaskbarActionListener {
-        fun onAppTapped(packageName: String)
+        fun onAppTapped(packageName: String, iconView: View? = null)
         fun onAppDraggedToSplit(packageName: String)
         fun onDragStateChanged(isDragging: Boolean, progress: Float) // 드래그 상태 콜백
         fun onDragIconUpdate(screenX: Float, screenY: Float, scale: Float) // 드래그 아이콘 좌표 업데이트
@@ -217,26 +221,39 @@ class RecentAppsTaskbar(
                 iconViews.isNotEmpty() &&
                 sizeChanged
 
-        // [ANIMATION DISABLED] defer 로직 비활성화 - 즉시 적용
-        // if (deferVisibleGrowAnimation && sizeChanged && targetSizeDp > startSizeDp) {
-        //     pendingAnimatedTargetSizeDp = targetSizeDp
-        //     ...
-        //     return
-        // }
+        if (deferVisibleGrowAnimation && sizeChanged && targetSizeDp > startSizeDp) {
+            pendingAnimatedTargetSizeDp = targetSizeDp
+            if (iconViews.isEmpty() && currentApps.isNotEmpty()) {
+                val apps = currentApps
+                currentApps = emptyList()
+                updateApps(apps)
+            } else {
+                updateCenterGroupPadding(renderedIconSizeDp)
+            }
+            return
+        }
 
-        // [ANIMATION DISABLED] 아이콘 크기 애니메이션 비활성화 - 즉시 적용으로 전환
-        // if (shouldAnimate) {
-        //     pendingAnimatedTargetSizeDp = null
-        //     animateIconSizeChange(fromSizeDp = startSizeDp, toSizeDp = targetSizeDp, group = group ?: return)
-        //     return
-        // }
+        if (shouldAnimate) {
+            pendingAnimatedTargetSizeDp = null
+            animateIconSizeChange(
+                fromSizeDp = startSizeDp,
+                toSizeDp = targetSizeDp,
+                group = group ?: return
+            )
+            return
+        }
 
-        // [ANIMATION DISABLED] 두 번째 defer 분기도 비활성화
-        // if (sizeChanged && targetSizeDp > startSizeDp) {
-        //     pendingAnimatedTargetSizeDp = targetSizeDp
-        //     ...
-        //     return
-        // }
+        if (sizeChanged && targetSizeDp > startSizeDp) {
+            pendingAnimatedTargetSizeDp = targetSizeDp
+            if (iconViews.isEmpty() && currentApps.isNotEmpty()) {
+                val apps = currentApps
+                currentApps = emptyList()
+                updateApps(apps)
+            } else {
+                updateCenterGroupPadding(renderedIconSizeDp)
+            }
+            return
+        }
 
         pendingAnimatedTargetSizeDp = null
         renderedIconSizeDp = targetSizeDp
@@ -352,6 +369,10 @@ class RecentAppsTaskbar(
                     iconSizeAnimator = null
                     if (wasCancelled) return
 
+                    // outline 최종 갱신
+                    for (iconView in iconViews) {
+                        iconView.invalidateOutline()
+                    }
                     renderedIconSizeDp = toSizeDp
                     reservedIconSizeDp = currentIconSizeDp
                     applyIconSizeImmediately(currentIconSizeDp)
@@ -388,7 +409,6 @@ class RecentAppsTaskbar(
             if (changed) {
                 iconView.layoutParams = params
             }
-            iconView.invalidateOutline()
         }
     }
 
@@ -538,9 +558,11 @@ class RecentAppsTaskbar(
             }
             longPressTriggered = true
             isDragging = true
-            // [ANIMATION DISABLED] 롱프레스 스케일 애니메이션 비활성화
-            iconView.scaleX = 1.06f
-            iconView.scaleY = 1.06f
+            iconView.animate()
+                .scaleX(1.06f)
+                .scaleY(1.06f)
+                .setDuration(90L)
+                .start()
             listener.onDragStateChanged(true, 0f)
             iconView.alpha = 0f
             listener.onDragStart(iconView, startRawX, startRawY)
@@ -562,6 +584,14 @@ class RecentAppsTaskbar(
                     if (splitScreenEnabled) {
                         view.postDelayed(longPressRunnable, LONG_PRESS_TIME_MS)
                     }
+                    // 누름 피드백: 아이콘 확대 + 리플
+                    view.animate().cancel()
+                    view.animate()
+                        .scaleX(PRESSED_SCALE).scaleY(PRESSED_SCALE)
+                        .setDuration(CLICK_FEEDBACK_DURATION)
+                        .setInterpolator(AccelerateInterpolator())
+                        .start()
+                    view.isPressed = true
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -574,6 +604,7 @@ class RecentAppsTaskbar(
                         if (!longPressTriggered) {
                             view.removeCallbacks(longPressRunnable)
                         }
+                        view.isPressed = false
                     }
 
                     if (isDragging) {
@@ -591,6 +622,7 @@ class RecentAppsTaskbar(
                 }
                 MotionEvent.ACTION_UP -> {
                     view.removeCallbacks(longPressRunnable)
+                    view.isPressed = false
 
                     val deltaX = event.rawX - startRawX
                     val deltaY = startRawY - event.rawY
@@ -604,8 +636,13 @@ class RecentAppsTaskbar(
                     }
 
                     view.translationY = 0f
-                    view.scaleX = 1f
-                    view.scaleY = 1f
+                    // 놓음 피드백: 아이콘 원래 크기로 복귀 애니메이션
+                    view.animate().cancel()
+                    view.animate()
+                        .scaleX(1f).scaleY(1f)
+                        .setDuration(CLICK_FEEDBACK_DURATION)
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
 
                     when {
                         isDragging -> {
@@ -625,7 +662,7 @@ class RecentAppsTaskbar(
                         }
                         !hasMoved && !longPressTriggered -> {
                             Log.d(TAG, "Tap: ${app.packageName}")
-                            listener.onAppTapped(app.packageName)
+                            listener.onAppTapped(app.packageName, view)
                         }
                         else -> {
                             Log.d(TAG, "No action: hasMoved=$hasMoved, longPressTriggered=$longPressTriggered")
@@ -635,6 +672,7 @@ class RecentAppsTaskbar(
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     view.removeCallbacks(longPressRunnable)
+                    view.isPressed = false
 
                     if (isDragging) {
                         listener.onDragStateChanged(false, 0f)
@@ -642,8 +680,13 @@ class RecentAppsTaskbar(
                         view.alpha = 1f
                     }
                     view.translationY = 0f
-                    view.scaleX = 1f
-                    view.scaleY = 1f
+                    // 취소 시 원래 크기로 복귀
+                    view.animate().cancel()
+                    view.animate()
+                        .scaleX(1f).scaleY(1f)
+                        .setDuration(CLICK_FEEDBACK_DURATION)
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
                     true
                 }
                 else -> false

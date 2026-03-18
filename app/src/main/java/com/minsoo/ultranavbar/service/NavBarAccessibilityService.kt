@@ -48,6 +48,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         private const val BACK_EXIT_PREVIEW_PROBE_ATTEMPTS = 4
         private const val HOME_ENTRY_STALE_APP_EVENT_GUARD_MS = 1100L
         private const val RECENTS_EVENT_FALSE_DEBOUNCE_MS = 420L
+        private const val BROADCAST_DRAWER_STATE_GUARD_MS = 1500L
         private const val ORIENTATION_CHANGE_STABILIZE_MS = 500L  // 화면 회전 후 안정화 시간
         private const val DISABLED_HOME_RECOVERY_WINDOW_MS = 5000L
         private const val SPLIT_FOREGROUND_STALE_MS = 2500L
@@ -85,6 +86,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isOnHomeScreen: Boolean = false
     private var isRecentsVisible: Boolean = false
     private var isAppDrawerOpen: Boolean = false
+    private var lastBroadcastDrawerStateAt: Long = 0L
     private var isLauncherIconDragActive: Boolean = false
     private var isNotificationPanelOpen: Boolean = false
     private var isQuickSettingsOpen: Boolean = false
@@ -175,6 +177,52 @@ class NavBarAccessibilityService : AccessibilityService() {
                     }
                     overlay?.startUnlockFade()
                 }
+            }
+        }
+    }
+
+    // 런처 상태 연동 리시버 (Quickstep+ → UltraNavbar)
+    private val launcherStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val sourcePackage = intent.getStringExtra("source_package") ?: return
+            val isHome = intent.getBooleanExtra("is_home", false)
+            val isAllApps = intent.getBooleanExtra("is_all_apps", false)
+            val isRecents = intent.getBooleanExtra("is_recents", false)
+            val isTransitionStart = intent.getBooleanExtra("is_transition_start", false)
+
+            Log.d(TAG, "Launcher state from $sourcePackage: home=$isHome, allApps=$isAllApps, " +
+                "recents=$isRecents, transitionStart=$isTransitionStart")
+
+            val drawerChanged: Boolean
+            if (isTransitionStart) {
+                // 전환 시작 시점: 앱서랍 열림만 즉시 처리 (배경 전환 즉시 트리거)
+                // 앱서랍 닫힘은 전환 완료 시점까지 대기 (슬라이드 중 조기 전환 방지)
+                if (isAllApps && !isAppDrawerOpen) {
+                    isAppDrawerOpen = true
+                    drawerChanged = true
+                    Log.d(TAG, "App Drawer opening detected via launcher broadcast (transition start)")
+                    overlay?.setAppDrawerState(true)
+                } else {
+                    drawerChanged = false
+                }
+            }
+            // 전환 완료 시점 (기존 onStateSetEnd): 최종 상태 확정
+            else {
+                if (isAllApps && !isAppDrawerOpen) {
+                    isAppDrawerOpen = true
+                    drawerChanged = true
+                    overlay?.setAppDrawerState(true)
+                } else if (!isAllApps && isAppDrawerOpen) {
+                    isAppDrawerOpen = false
+                    drawerChanged = true
+                    Log.d(TAG, "App Drawer closed via launcher broadcast (transition end)")
+                    overlay?.setAppDrawerState(false)
+                } else {
+                    drawerChanged = false
+                }
+            }
+            if (drawerChanged) {
+                lastBroadcastDrawerStateAt = SystemClock.elapsedRealtime()
             }
         }
     }
@@ -347,6 +395,17 @@ class NavBarAccessibilityService : AccessibilityService() {
             addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED)
         }
         registerReceiver(bluetoothReceiver, bluetoothFilter)
+
+        // 런처 상태 연동 브로드캐스트
+        val launcherStateFilter = IntentFilter().apply {
+            addAction("com.minsoo.ultranavbar.INTEGRATION_LAUNCHER_STATE")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(launcherStateReceiver, launcherStateFilter, Context.RECEIVER_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(launcherStateReceiver, launcherStateFilter)
+        }
     }
 
     override fun onDestroy() {
@@ -395,6 +454,7 @@ class NavBarAccessibilityService : AccessibilityService() {
             unregisterReceiver(settingsReceiver)
             unregisterReceiver(screenStateReceiver)
             unregisterReceiver(bluetoothReceiver)
+            unregisterReceiver(launcherStateReceiver)
         } catch (e: Exception) {
             Log.w(TAG, "Receiver not registered", e)
         }
@@ -939,6 +999,13 @@ class NavBarAccessibilityService : AccessibilityService() {
         hintPackage: String = "",
         hintClassName: String = ""
     ) {
+        // 런처 브로드캐스트로 설정된 앱서랍 상태는 일정 시간 동안 창 분석으로 덮어쓰지 않음
+        val broadcastElapsed = SystemClock.elapsedRealtime() - lastBroadcastDrawerStateAt
+        if (broadcastElapsed in 0 until BROADCAST_DRAWER_STATE_GUARD_MS) {
+            Log.d(TAG, "syncLauncherOverlayState skipped ($source): broadcast guard active (${broadcastElapsed}ms)")
+            return
+        }
+
         if (isOnHomeScreen) {
             val hasVisibleNonLauncherApp = windowAnalyzer.hasVisibleNonLauncherAppWindow(
                 windowList,

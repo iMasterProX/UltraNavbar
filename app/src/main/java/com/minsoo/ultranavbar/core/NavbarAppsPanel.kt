@@ -8,7 +8,9 @@ import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.content.res.ColorStateList
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -16,6 +18,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.GridLayout
 import android.widget.ImageView
@@ -46,6 +50,8 @@ class NavbarAppsPanel(
         const val PANEL_MAX_WIDTH_DP = 250
         private const val PANEL_SHOW_DURATION_MS = 220L
         private const val PANEL_HIDE_DURATION_MS = 220L
+        private const val PRESSED_SCALE = 1.1f
+        private const val CLICK_FEEDBACK_DURATION = 200L
         private const val PANEL_ENTER_TRANSLATION_X_DP = 8f
         private const val PANEL_EXIT_TRANSLATION_X_DP = 10f
         private const val PANEL_ENTER_TRANSLATION_DP = 14f
@@ -55,7 +61,7 @@ class NavbarAppsPanel(
     }
 
     interface PanelActionListener {
-        fun onAppTapped(packageName: String)
+        fun onAppTapped(packageName: String, iconView: View? = null)
         fun onAppDraggedToSplit(packageName: String)
         fun onDragStateChanged(isDragging: Boolean, progress: Float)
         fun onDragStart(iconView: ImageView, screenX: Float, screenY: Float)
@@ -519,6 +525,33 @@ class NavbarAppsPanel(
             scaleType = ImageView.ScaleType.CENTER_CROP
             layoutParams = LinearLayout.LayoutParams(iconSizePx, iconSizePx)
             applyIconShape(this, iconShape)
+
+            // Ripple 효과
+            val rippleColor = ColorStateList.valueOf(0x33808080)
+            val maskDrawable = when (iconShape) {
+                SettingsManager.RecentAppsTaskbarIconShape.SQUIRCLE -> {
+                    IconShapeMaskHelper.createSquircleRippleMask(context)
+                }
+                else -> {
+                    GradientDrawable().apply {
+                        when (iconShape) {
+                            SettingsManager.RecentAppsTaskbarIconShape.CIRCLE ->
+                                shape = GradientDrawable.OVAL
+                            SettingsManager.RecentAppsTaskbarIconShape.SQUARE -> {
+                                shape = GradientDrawable.RECTANGLE
+                                cornerRadius = iconSizePx * Constants.Dimension.TASKBAR_SQUARE_RADIUS_RATIO
+                            }
+                            SettingsManager.RecentAppsTaskbarIconShape.ROUNDED_RECT -> {
+                                shape = GradientDrawable.RECTANGLE
+                                cornerRadius = iconSizePx * 0.22f
+                            }
+                            else -> shape = GradientDrawable.RECTANGLE
+                        }
+                        setColor(android.graphics.Color.GRAY)
+                    }
+                }
+            }
+            foreground = RippleDrawable(rippleColor, null, maskDrawable)
         }
 
         val labelView = TextView(context).apply {
@@ -617,6 +650,15 @@ class NavbarAppsPanel(
                     if (!isShortcut) {
                         view.postDelayed(longPressRunnable, longPressTimeMs)
                     }
+                    // 누름 피드백: 아이콘 확대
+                    iconView.animate().cancel()
+                    iconView.animate()
+                        .scaleX(PRESSED_SCALE).scaleY(PRESSED_SCALE)
+                        .setDuration(CLICK_FEEDBACK_DURATION)
+                        .setInterpolator(AccelerateInterpolator())
+                        .start()
+                    // 리플 효과 전달
+                    iconView.isPressed = true
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -628,6 +670,8 @@ class NavbarAppsPanel(
                         if (!longPressTriggered) {
                             view.removeCallbacks(longPressRunnable)
                         }
+                        // 이동 시 누름 효과 해제
+                        iconView.isPressed = false
                     }
 
                     if (isDragging) {
@@ -644,6 +688,14 @@ class NavbarAppsPanel(
                 }
                 MotionEvent.ACTION_UP -> {
                     view.removeCallbacks(longPressRunnable)
+                    iconView.isPressed = false
+                    // 놓음 피드백: 아이콘 원래 크기로 복귀
+                    iconView.animate().cancel()
+                    iconView.animate()
+                        .scaleX(1f).scaleY(1f)
+                        .setDuration(CLICK_FEEDBACK_DURATION)
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
 
                     if (isDragging) {
                         val deltaX = event.rawX - startRawX
@@ -666,13 +718,21 @@ class NavbarAppsPanel(
                             listener.onAppDraggedToSplit(packageName)
                         }
                     } else if (!hasMoved && !longPressTriggered) {
-                        listener.onAppTapped(packageName)
+                        listener.onAppTapped(packageName, iconView)
                         hide(reason = "app_tap")
                     }
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     view.removeCallbacks(longPressRunnable)
+                    iconView.isPressed = false
+                    // 취소 시 원래 크기로 복귀
+                    iconView.animate().cancel()
+                    iconView.animate()
+                        .scaleX(1f).scaleY(1f)
+                        .setDuration(CLICK_FEEDBACK_DURATION)
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
                     if (isDragging) {
                         listener.onDragStateChanged(false, 0f)
                         listener.onDragEnd()
