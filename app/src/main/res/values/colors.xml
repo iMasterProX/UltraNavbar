@@ -17,4 +17,17 @@
     <!-- 실험적 기능 경고 색상 -->
     <color name="experimental_warning">#FFB74D</color>
     <color name="experimental_warning_bg">#1AFFB74D</color>
+
+    <!-- Keyboard battery widget -->
+    <color name="widget_surface">#FFF3F4F6</color>
+    <color name="widget_surface_variant">#FFDCE3E8</color>
+    <color name="widget_progress_tint">#FF5A8F68</color>
+    <color name="widget_text_primary">#FF1A1C1E</color>
+    <color name="widget_text_secondary">#FF44474A</color>
+    <color name="widget_text_tertiary">#FF6A6F73</color>
+    <color name="widget_icon_tint">#FF5C6166</color>
+    <color name="widget_battery_unknown">#FF7A7F85</color>
+    <color name="widget_battery_high">#FF386A20</color>
+    <color name="widget_battery_medium">#FF8D4A00</color>
+    <color name="widget_battery_low">#FFB3261E</color>
 </resources>

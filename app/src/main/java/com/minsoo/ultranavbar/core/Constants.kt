@@ -32,6 +32,7 @@ object Constants {
     object Timing {
         const val ANIMATION_DURATION_MS = 200L
         const val BG_TRANSITION_DURATION_MS = 350L
+        const val HOME_UI_TRANSITION_DURATION_MS = 350L
         const val GESTURE_AUTO_HIDE_MS = 3000L
         const val DARK_MODE_DEBOUNCE_MS = 1000L
         const val STATE_CHECK_DELAY_MS = 50L
@@ -44,6 +45,26 @@ object Constants {
         const val TRANSITION_DEDUP_GRACE_MS = 500L  // 로딩화면→앱 전환 시 중복 페이드 방지 유예 시간
         const val SPLIT_SCREEN_LAUNCH_DELAY_MS = 3000L
         const val HOME_BUTTON_GROW_ANIMATION_DELAY_MS = 150L
+    }
+
+    object Performance {
+        const val ADAPTIVE_ANIMATION_MODE_ENABLED = true
+        const val HIGH_QUALITY_FRAME_DELAY_MS = 16L
+        const val MEDIUM_QUALITY_FRAME_DELAY_MS = 33L
+        const val LOW_QUALITY_FRAME_DELAY_MS = 50L
+        const val MIN_QUALITY_FRAME_DELAY_MS = 66L
+        const val MIN_ANIMATION_DURATION_MS = 80L
+        const val FRAME_SAMPLE_WINDOW_SIZE = 24
+        const val STABLE_FRAMES_FOR_UPGRADE = 45
+        const val HIGH_TO_MEDIUM_AVG_FRAME_MS = 28L
+        const val MEDIUM_TO_LOW_AVG_FRAME_MS = 42L
+        const val LOW_TO_MIN_AVG_FRAME_MS = 82L
+        const val MEDIUM_TO_HIGH_AVG_FRAME_MS = 21L
+        const val LOW_TO_MEDIUM_AVG_FRAME_MS = 30L
+        const val MIN_TO_LOW_AVG_FRAME_MS = 44L
+        const val SEVERE_FRAME_TIME_MS = 95L
+        const val SEVERE_FRAME_STREAK_FOR_LOW = 2
+        const val SEVERE_FRAME_STREAK_FOR_MIN = 6
     }
 
     // ===== 비율 및 임계값 =====
@@ -74,6 +95,14 @@ object Constants {
         const val SETTINGS_CHANGED = "com.minsoo.ultranavbar.SETTINGS_CHANGED"
         const val RELOAD_BACKGROUND = "com.minsoo.ultranavbar.RELOAD_BACKGROUND"
         const val UPDATE_BUTTON_COLORS = "com.minsoo.ultranavbar.UPDATE_BUTTON_COLORS"
+    }
+
+    object Launcher {
+        const val LG_ULTRATAB_LAUNCHER_LABEL = "LG UltraTab Launcher"
+        const val QUICKSTEPPLUS_INTERNAL_NAME = "quickstepplus"
+        const val QUICKSTEPPLUS_PACKAGE = "com.minsi.quickstepplus"
+        const val QUICKSTEPPLUS_SETTINGS_AUTHORITY = "com.minsi.quickstepplus.settings"
+        const val QUICKSTEPPLUS_GRID_AUTHORITY = "com.minsi.quickstepplus.grid_control"
     }
 }
 

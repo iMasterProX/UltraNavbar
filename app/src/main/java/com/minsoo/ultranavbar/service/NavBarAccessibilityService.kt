@@ -83,6 +83,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var currentClassNameAt: Long = 0
     private var currentOrientation: Int = Configuration.ORIENTATION_UNDEFINED
     private var isFullscreen: Boolean = false
+    private var fullscreenSlidePendingShow: Boolean = false
     private var isOnHomeScreen: Boolean = false
     private var isRecentsVisible: Boolean = false
     private var isAppDrawerOpen: Boolean = false
@@ -181,7 +182,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         }
     }
 
-    // 런처 상태 연동 리시버 (Quickstep+ → UltraNavbar)
+    // 런처 상태 연동 리시버 (LG UltraTab Launcher -> UltraNavbar)
     private val launcherStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val sourcePackage = intent.getStringExtra("source_package") ?: return
@@ -482,8 +483,21 @@ class NavBarAccessibilityService : AccessibilityService() {
 
             windowAnalyzer.calculateNavBarHeight()
 
-            // 화면 회전 후 오버레이를 강제로 표시 (숨김 방지)
-            overlay?.show(fade = false)
+            val shouldKeepHiddenAfterRotation =
+                windowAnalyzer.shouldAutoHideOverlay(
+                    currentPackage = currentPackage,
+                    isFullscreen = isFullscreen,
+                    isOnHomeScreen = isOnHomeScreen,
+                    isWallpaperPreviewVisible = isWallpaperPreviewVisible
+                )
+
+            if (shouldKeepHiddenAfterRotation) {
+                Log.d(TAG, "Orientation changed while auto-hide should remain active - keeping overlay hidden")
+                overlay?.hide(animate = false, showHotspot = false)
+            } else {
+                // 화면 회전 후 오버레이를 강제로 표시 (숨김 방지)
+                overlay?.show(fade = false)
+            }
 
             // 화면 회전 후 일정 시간 후에 상태 재확인
             handler.postDelayed({
@@ -2230,8 +2244,19 @@ class NavBarAccessibilityService : AccessibilityService() {
         // 1.5. 화면 회전 안정화 기간 동안 숨김 방지
         val orientationChangeElapsed = SystemClock.elapsedRealtime() - lastOrientationChangeAt
         if (orientationChangeElapsed < ORIENTATION_CHANGE_STABILIZE_MS) {
-            Log.d(TAG, "Orientation change stabilizing (${orientationChangeElapsed}ms) - keeping overlay visible")
-            overlay?.show(fade = false)
+            val shouldAutoHideDuringRotation = windowAnalyzer.shouldAutoHideOverlay(
+                currentPackage = currentPackage,
+                isFullscreen = isFullscreen,
+                isOnHomeScreen = isOnHomeScreen,
+                isWallpaperPreviewVisible = isWallpaperPreviewVisible
+            )
+            if (shouldAutoHideDuringRotation) {
+                Log.d(TAG, "Orientation change stabilizing (${orientationChangeElapsed}ms) - keeping overlay hidden")
+                overlay?.hide(animate = false, showHotspot = false)
+            } else {
+                Log.d(TAG, "Orientation change stabilizing (${orientationChangeElapsed}ms) - keeping overlay visible")
+                overlay?.show(fade = false)
+            }
             return
         }
 
@@ -2250,15 +2275,55 @@ class NavBarAccessibilityService : AccessibilityService() {
             return
         }
 
+        if (lockScreenActive) {
+            Log.d(TAG, "Lock screen active - hiding custom overlay")
+            fullscreenSlidePendingShow = false
+            overlay?.hide(animate = false, showHotspot = false)
+            return
+        }
+
+        if (shouldHoldOverlayVisibleForCustomHomeAction()) {
+            Log.d(TAG, "Keeping overlay visible during custom HOME transition guard")
+            val useFullscreenSlide = fullscreenSlidePendingShow
+            fullscreenSlidePendingShow = false
+            overlay?.show(fade = false, slide = useFullscreenSlide)
+            return
+        }
+
         if (shouldAutoHide) {
-            if (!lockScreenActive && overlay?.canAutoHide() == false) {
+            val forceFullscreenHide = isFullscreen && !isOnHomeScreen
+            if (!forceFullscreenHide && overlay?.canAutoHide() == false) {
                 Log.d(TAG, "Auto-hide blocked: recently shown by gesture")
                 return
             }
-            overlay?.hide(animate = !lockScreenActive, showHotspot = !lockScreenActive)
+            if (forceFullscreenHide) {
+                fullscreenSlidePendingShow = true
+                Log.d(TAG, "Fullscreen auto-hide: hiding overlay with slide animation")
+                overlay?.hide(animate = true, showHotspot = false, slide = true)
+            } else {
+                fullscreenSlidePendingShow = false
+                overlay?.hide(animate = true, showHotspot = true)
+            }
         } else {
-            overlay?.show(fade = forceFade)
+            val useFullscreenSlide = fullscreenSlidePendingShow
+            fullscreenSlidePendingShow = false
+            overlay?.show(fade = forceFade && !useFullscreenSlide, slide = useFullscreenSlide)
         }
+    }
+
+    private fun shouldHoldOverlayVisibleForCustomHomeAction(): Boolean {
+        if (isOnHomeScreen || isRecentsVisible) return false
+        if (lastHomeActionSourcePackage.isEmpty()) return false
+
+        val elapsed = SystemClock.elapsedRealtime() - lastHomeActionAt
+        if (elapsed !in 0 until HOME_ACTION_OVERLAY_GUARD_MS) return false
+
+        if (currentPackage.isEmpty()) return true
+        if (currentPackage == packageName || currentPackage == "com.android.systemui") return true
+        if (isImePackageOrWindow(currentPackage, currentClassName)) return false
+        if (windowAnalyzer.isLauncherPackage(currentPackage)) return false
+
+        return true
     }
 
     /**
@@ -3224,5 +3289,3 @@ class NavBarAccessibilityService : AccessibilityService() {
         return null
     }
 }
-
-

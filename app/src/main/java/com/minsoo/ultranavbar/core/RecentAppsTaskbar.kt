@@ -133,6 +133,10 @@ class RecentAppsTaskbar(
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val iconSizeInterpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
 
+    init {
+        AnimationPerformanceHelper.applyGlobalSettings()
+    }
+
     /**
      * Center group 생성
      * 기존 상태를 초기화하여 updateApps가 제대로 동작하도록 함
@@ -217,13 +221,17 @@ class RecentAppsTaskbar(
 
     fun setIconSizeDp(iconSizeDp: Int, deferVisibleGrowAnimation: Boolean = false) {
         val normalized = iconSizeDp.coerceAtLeast(Constants.Dimension.TASKBAR_ICON_SIZE_DP)
+        val targetSizeDp = normalized.toFloat()
         // 이미 같은 목표로 애니메이션 중이거나 완료된 경우 중복 호출 무시
         // (iconSizeAnimator가 실행 중이어도 같은 목표면 재시작하지 않음)
-        if (currentIconSizeDp == normalized && pendingAnimatedTargetSizeDp == null) return
+        if (currentIconSizeDp == normalized) {
+            val pendingMatches = pendingAnimatedTargetSizeDp?.let { abs(it - targetSizeDp) < 0.01f } ?: true
+            if (pendingMatches) return
+        }
 
         val startSizeDp = renderedIconSizeDp
-        val targetSizeDp = normalized.toFloat()
         val sizeChanged = abs(startSizeDp - targetSizeDp) > 0.01f
+        val shouldSkipAnimation = AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()
         currentIconSizeDp = normalized
         reservedIconSizeDp = ceil(maxOf(startSizeDp, targetSizeDp).toDouble()).toInt()
 
@@ -239,7 +247,7 @@ class RecentAppsTaskbar(
                 iconViews.isNotEmpty() &&
                 sizeChanged
 
-        if (deferVisibleGrowAnimation && sizeChanged && targetSizeDp > startSizeDp) {
+        if (!shouldSkipAnimation && deferVisibleGrowAnimation && sizeChanged && targetSizeDp > startSizeDp) {
             pendingAnimatedTargetSizeDp = targetSizeDp
             if (iconViews.isEmpty() && currentApps.isNotEmpty()) {
                 val apps = currentApps
@@ -251,7 +259,7 @@ class RecentAppsTaskbar(
             return
         }
 
-        if (shouldAnimate) {
+        if (!shouldSkipAnimation && shouldAnimate) {
             pendingAnimatedTargetSizeDp = null
             animateIconSizeChange(
                 fromSizeDp = startSizeDp,
@@ -261,7 +269,7 @@ class RecentAppsTaskbar(
             return
         }
 
-        if (sizeChanged && targetSizeDp > startSizeDp) {
+        if (!shouldSkipAnimation && sizeChanged && targetSizeDp > startSizeDp) {
             pendingAnimatedTargetSizeDp = targetSizeDp
             if (iconViews.isEmpty() && currentApps.isNotEmpty()) {
                 val apps = currentApps
@@ -314,6 +322,10 @@ class RecentAppsTaskbar(
         return true
     }
 
+    fun hasPendingIconSizeAnimation(): Boolean {
+        return pendingAnimatedTargetSizeDp != null
+    }
+
     fun getCurrentGroupTranslationY(): Float {
         return centerGroup?.translationY ?: calculateGroupTranslationY(renderedIconSizeDp)
     }
@@ -358,11 +370,22 @@ class RecentAppsTaskbar(
         val targetTranslationY = calculateGroupTranslationY(toSizeDp)
         val startBottomPadding = group.paddingBottom
         val targetBottomPadding = calculateBottomPaddingPx(toSizeDp)
+        val frameThrottle = AnimationPerformanceHelper.FrameThrottle()
+        val durationMs = AnimationPerformanceHelper.resolveDuration(Constants.Timing.HOME_UI_TRANSITION_DURATION_MS)
+
+        if (durationMs <= 0L || AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+            renderedIconSizeDp = toSizeDp
+            reservedIconSizeDp = currentIconSizeDp
+            applyIconSizeImmediately(currentIconSizeDp)
+            listener.onIconSizeAnimationEnd()
+            return
+        }
 
         iconSizeAnimator = ValueAnimator.ofFloat(fromSizeDp, toSizeDp).apply {
-            duration = Constants.Timing.BG_TRANSITION_DURATION_MS
+            duration = durationMs
             interpolator = iconSizeInterpolator
             addUpdateListener { animator ->
+                if (!frameThrottle.shouldDispatch(animator)) return@addUpdateListener
                 val animatedSizeDp = animator.animatedValue as Float
                 val progress = animator.animatedFraction
 
@@ -381,10 +404,12 @@ class RecentAppsTaskbar(
 
                 override fun onAnimationCancel(animation: Animator) {
                     wasCancelled = true
+                    frameThrottle.reset()
                 }
 
                 override fun onAnimationEnd(animation: Animator) {
                     iconSizeAnimator = null
+                    frameThrottle.reset()
                     if (wasCancelled) return
 
                     // outline 최종 갱신
@@ -576,11 +601,18 @@ class RecentAppsTaskbar(
             }
             longPressTriggered = true
             isDragging = true
-            iconView.animate()
-                .scaleX(1.06f)
-                .scaleY(1.06f)
-                .setDuration(90L)
-                .start()
+            val durationMs = AnimationPerformanceHelper.resolveDuration(90L)
+            iconView.animate().cancel()
+            if (durationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+                iconView.animate()
+                    .scaleX(1.06f)
+                    .scaleY(1.06f)
+                    .setDuration(durationMs)
+                    .start()
+            } else {
+                iconView.scaleX = 1.06f
+                iconView.scaleY = 1.06f
+            }
             listener.onDragStateChanged(true, 0f)
             iconView.alpha = 0f
             listener.onDragStart(iconView, startRawX, startRawY)
@@ -604,11 +636,17 @@ class RecentAppsTaskbar(
                     }
                     // 누름 피드백: 아이콘 확대 + 리플
                     view.animate().cancel()
-                    view.animate()
-                        .scaleX(PRESSED_SCALE).scaleY(PRESSED_SCALE)
-                        .setDuration(CLICK_FEEDBACK_DURATION)
-                        .setInterpolator(AccelerateInterpolator())
-                        .start()
+                    val durationMs = AnimationPerformanceHelper.resolveDuration(CLICK_FEEDBACK_DURATION)
+                    if (durationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+                        view.animate()
+                            .scaleX(PRESSED_SCALE).scaleY(PRESSED_SCALE)
+                            .setDuration(durationMs)
+                            .setInterpolator(AccelerateInterpolator())
+                            .start()
+                    } else {
+                        view.scaleX = PRESSED_SCALE
+                        view.scaleY = PRESSED_SCALE
+                    }
                     view.isPressed = true
                     true
                 }
@@ -656,11 +694,17 @@ class RecentAppsTaskbar(
                     view.translationY = 0f
                     // 놓음 피드백: 아이콘 원래 크기로 복귀 애니메이션
                     view.animate().cancel()
-                    view.animate()
-                        .scaleX(1f).scaleY(1f)
-                        .setDuration(CLICK_FEEDBACK_DURATION)
-                        .setInterpolator(DecelerateInterpolator())
-                        .start()
+                    val upDurationMs = AnimationPerformanceHelper.resolveDuration(CLICK_FEEDBACK_DURATION)
+                    if (upDurationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+                        view.animate()
+                            .scaleX(1f).scaleY(1f)
+                            .setDuration(upDurationMs)
+                            .setInterpolator(DecelerateInterpolator())
+                            .start()
+                    } else {
+                        view.scaleX = 1f
+                        view.scaleY = 1f
+                    }
 
                     when {
                         isDragging -> {
@@ -700,11 +744,17 @@ class RecentAppsTaskbar(
                     view.translationY = 0f
                     // 취소 시 원래 크기로 복귀
                     view.animate().cancel()
-                    view.animate()
-                        .scaleX(1f).scaleY(1f)
-                        .setDuration(CLICK_FEEDBACK_DURATION)
-                        .setInterpolator(DecelerateInterpolator())
-                        .start()
+                    val cancelDurationMs = AnimationPerformanceHelper.resolveDuration(CLICK_FEEDBACK_DURATION)
+                    if (cancelDurationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+                        view.animate()
+                            .scaleX(1f).scaleY(1f)
+                            .setDuration(cancelDurationMs)
+                            .setInterpolator(DecelerateInterpolator())
+                            .start()
+                    } else {
+                        view.scaleX = 1f
+                        view.scaleY = 1f
+                    }
                     true
                 }
                 else -> false

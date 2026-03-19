@@ -1416,7 +1416,7 @@ object SplitScreenHelper {
         val extraLaunchers = setOf(
             "com.android.launcher3",
             "com.android.quickstep",
-            "com.minsi.quickstepplus",
+            Constants.Launcher.QUICKSTEPPLUS_PACKAGE,
             "com.google.android.apps.nexuslauncher",
             "com.lge.launcher3",
             "com.lge.launcher",

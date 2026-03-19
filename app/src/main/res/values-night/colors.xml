@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_surface">#FF1B1C1F</color>
+    <color name="widget_surface_variant">#FF373A3F</color>
+    <color name="widget_progress_tint">#FF81C995</color>
+    <color name="widget_text_primary">#FFE3E2E6</color>
+    <color name="widget_text_secondary">#FFC4C7CA</color>
+    <color name="widget_text_tertiary">#FF9AA0A6</color>
+    <color name="widget_icon_tint">#FFC6C9CC</color>
+    <color name="widget_battery_unknown">#FFA8ADB3</color>
+    <color name="widget_battery_high">#FF9DCE7C</color>
+    <color name="widget_battery_medium">#FFFFB86C</color>
+    <color name="widget_battery_low">#FFFFB4AB</color>
+</resources>

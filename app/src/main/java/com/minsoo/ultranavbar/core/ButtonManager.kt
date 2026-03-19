@@ -56,6 +56,10 @@ class ButtonManager(
     // 알림 깜빡임 디바운스 타임스탬프
     private var lastBlinkStartTime: Long = 0
 
+    init {
+        AnimationPerformanceHelper.applyGlobalSettings()
+    }
+
     /**
      * 버튼 액션 리스너
      */
@@ -189,13 +193,16 @@ class ButtonManager(
                 button.rotation = rotation
                 return
             }
-            if (animate) {
+            val durationMs = AnimationPerformanceHelper.resolveDuration(Constants.Timing.ANIMATION_DURATION_MS)
+            if (animate && durationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
                 button.animate().cancel()
-                button.animate()
+                val animator = button.animate()
                     .rotation(rotation)
-                    .setDuration(Constants.Timing.ANIMATION_DURATION_MS)
-                    .withLayer()
-                    .start()
+                    .setDuration(durationMs)
+                if (AnimationPerformanceHelper.shouldUseHardwareLayers()) {
+                    animator.withLayer()
+                }
+                animator.start()
             } else {
                 button.rotation = rotation
             }
@@ -223,12 +230,15 @@ class ButtonManager(
 
         _backButton?.let { button ->
             button.animate().cancel()
-            if (animate) {
-                button.animate()
+            val durationMs = AnimationPerformanceHelper.resolveDuration(Constants.Timing.ANIMATION_DURATION_MS)
+            if (animate && durationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+                val animator = button.animate()
                     .rotation(targetRotation)
-                    .setDuration(Constants.Timing.ANIMATION_DURATION_MS)
-                    .withLayer()
-                    .start()
+                    .setDuration(durationMs)
+                if (AnimationPerformanceHelper.shouldUseHardwareLayers()) {
+                    animator.withLayer()
+                }
+                animator.start()
             } else {
                 button.rotation = targetRotation
             }
@@ -257,16 +267,27 @@ class ButtonManager(
 
         stopNotificationBlink()
         val button = _panelButton ?: return
+        if (AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+            button.alpha = 1f
+            return
+        }
 
         lastBlinkStartTime = now
 
+        val frameThrottle = AnimationPerformanceHelper.FrameThrottle()
         notificationBlinkAnimator = ValueAnimator.ofFloat(1.0f, 0.4f).apply {
             duration = 800L
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.REVERSE
             addUpdateListener { animator ->
+                if (!frameThrottle.shouldDispatch(animator)) return@addUpdateListener
                 button.alpha = animator.animatedValue as Float
             }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationCancel(animation: android.animation.Animator) {
+                    frameThrottle.reset()
+                }
+            })
             start()
         }
         Log.d(TAG, "Notification blink started")

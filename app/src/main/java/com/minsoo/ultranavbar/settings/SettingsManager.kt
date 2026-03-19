@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.SharedPreferences
+import com.minsoo.ultranavbar.core.Constants
 
 class SettingsManager private constructor(context: Context) {
 
@@ -190,7 +191,7 @@ class SettingsManager private constructor(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_BATTERY_OPT_REQUESTED, value).apply()
 
     var previewFilterOpacity: Int
-        get() = prefs.getInt(KEY_PREVIEW_FILTER_OPACITY, 9)
+        get() = prefs.getInt(KEY_PREVIEW_FILTER_OPACITY, 13)
         set(value) = prefs.edit().putInt(KEY_PREVIEW_FILTER_OPACITY, value.coerceIn(0, 100)).apply()
 
     // 커스텀 네비바를 비활성화할 앱 목록
@@ -314,13 +315,15 @@ class SettingsManager private constructor(context: Context) {
 
     fun isRecentAppsTaskbarShowOnHomeForced(): Boolean = isQuickstepPlusDefaultLauncher()
 
+    fun isQuickstepPlusDefaultHomeLauncher(): Boolean = isQuickstepPlusDefaultLauncher()
+
     private fun isQuickstepPlusDefaultLauncher(): Boolean {
         return try {
             val intent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
             }
             val resolved = appContext.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            resolved?.activityInfo?.packageName == "com.minsi.quickstepplus"
+            resolved?.activityInfo?.packageName == Constants.Launcher.QUICKSTEPPLUS_PACKAGE
         } catch (e: Exception) {
             false
         }

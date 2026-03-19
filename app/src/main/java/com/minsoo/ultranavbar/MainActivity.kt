@@ -18,6 +18,12 @@ import com.minsoo.ultranavbar.util.DeviceProfile
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        const val EXTRA_NAVIGATE_TO = "navigate_to"
+        const val DESTINATION_PEN_SETTINGS = "pen_settings"
+        const val DESTINATION_KEYBOARD_SETTINGS = "keyboard_settings"
+    }
+
     private lateinit var navigationView: NavigationView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,13 +80,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleNavigationIntent(intent: Intent) {
-        val navigateTo = intent.getStringExtra("navigate_to")
+        val navigateTo = intent.getStringExtra(EXTRA_NAVIGATE_TO)
 
         when (navigateTo) {
-            "pen_settings" -> {
+            DESTINATION_PEN_SETTINGS -> {
                 navigationView.setCheckedItem(R.id.nav_wacom_pen)
                 supportFragmentManager.beginTransaction()
                     .replace(R.id.contentFrame, WacomPenSettingsFragment())
+                    .commit()
+            }
+            DESTINATION_KEYBOARD_SETTINGS -> {
+                navigationView.setCheckedItem(R.id.nav_keyboard)
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.contentFrame, KeyboardSettingsFragment())
                     .commit()
             }
             else -> {

@@ -35,6 +35,11 @@ import com.minsoo.ultranavbar.util.ImageCropUtil
  */
 class NavBarSettingsFragment : Fragment() {
 
+    companion object {
+        private const val DEFAULT_GUIDE_PREVIEW_FILTER_OPACITY = 13
+        private const val QUICKSTEP_GUIDE_PREVIEW_FILTER_OPACITY = 11
+    }
+
     private enum class CustomIconAction {
         ASSIGN,
         REMOVE
@@ -695,9 +700,15 @@ class NavBarSettingsFragment : Fragment() {
 
     private fun openGuidePreview(isLandscape: Boolean, isDarkMode: Boolean = false) {
         selectingDarkMode = isDarkMode
+        val initialOpacity = if (settings.isQuickstepPlusDefaultHomeLauncher()) {
+            QUICKSTEP_GUIDE_PREVIEW_FILTER_OPACITY
+        } else {
+            DEFAULT_GUIDE_PREVIEW_FILTER_OPACITY
+        }
         val intent = Intent(requireContext(), WallpaperPreviewActivity::class.java).apply {
-            putExtra("is_landscape", isLandscape)
-            putExtra("is_dark_mode", isDarkMode)
+            putExtra(WallpaperPreviewActivity.EXTRA_IS_LANDSCAPE, isLandscape)
+            putExtra(WallpaperPreviewActivity.EXTRA_IS_DARK_MODE, isDarkMode)
+            putExtra(WallpaperPreviewActivity.EXTRA_INITIAL_FILTER_OPACITY, initialOpacity)
         }
         guidePreviewLauncher.launch(intent)
     }

@@ -3,6 +3,7 @@ package com.minsoo.ultranavbar.ui
 import android.Manifest
 import android.app.Activity
 import android.app.WallpaperManager
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -38,6 +39,12 @@ import kotlin.math.max
 
 class WallpaperPreviewActivity : AppCompatActivity() {
 
+    companion object {
+        const val EXTRA_IS_LANDSCAPE = "is_landscape"
+        const val EXTRA_IS_DARK_MODE = "is_dark_mode"
+        const val EXTRA_INITIAL_FILTER_OPACITY = "initial_filter_opacity"
+    }
+
     private lateinit var imagePreview: ImageView
     private lateinit var previewControlsCard: View
     private lateinit var sliderPreviewFilterOverlay: Slider
@@ -65,11 +72,18 @@ class WallpaperPreviewActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_wallpaper_preview)
 
         // 인텐트 파라미터 읽기
-        isLandscape = intent.getBooleanExtra("is_landscape", false)
-        isDarkMode = intent.getBooleanExtra("is_dark_mode", false)
+        isLandscape = intent.getBooleanExtra(EXTRA_IS_LANDSCAPE, false)
+        isDarkMode = intent.getBooleanExtra(EXTRA_IS_DARK_MODE, false)
+
+        requestedOrientation = if (isLandscape) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        }
+
+        setContentView(R.layout.activity_wallpaper_preview)
 
         hideBottomNavigationBar()
 
@@ -83,7 +97,12 @@ class WallpaperPreviewActivity : AppCompatActivity() {
         sliderPreviewFilterOverlay.valueTo = 100f
         sliderPreviewFilterOverlay.stepSize = 1f
 
-        val initialOpacity = SettingsManager.getInstance(this).previewFilterOpacity
+        val settings = SettingsManager.getInstance(this)
+        val initialOpacity = intent.getIntExtra(
+            EXTRA_INITIAL_FILTER_OPACITY,
+            settings.previewFilterOpacity
+        ).coerceIn(0, 100)
+        settings.previewFilterOpacity = initialOpacity
         sliderPreviewFilterOverlay.value = initialOpacity.toFloat()
         updatePreviewFilterOverlayValue(initialOpacity)
 
@@ -229,15 +248,13 @@ class WallpaperPreviewActivity : AppCompatActivity() {
             val wm = WallpaperManager.getInstance(this@WallpaperPreviewActivity)
             val wallpaperDrawable = wm.drawable ?: return@withContext null
 
-            val isLandscape =
-                resources.configuration.orientation ==
-                        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            val previewLandscape = this@WallpaperPreviewActivity.isLandscape
 
             // 기존 컨셉 유지(가로/세로 타겟 캔버스 크기)
             val landscapeWidth = 2000
             val landscapeHeight = 1200
-            val targetWidth = if (isLandscape) landscapeWidth else landscapeHeight
-            val targetHeight = if (isLandscape) landscapeHeight else landscapeWidth
+            val targetWidth = if (previewLandscape) landscapeWidth else landscapeHeight
+            val targetHeight = if (previewLandscape) landscapeHeight else landscapeWidth
 
             // 원본 비율 그대로 비트맵화
             val srcW = wallpaperDrawable.intrinsicWidth.coerceAtLeast(1)

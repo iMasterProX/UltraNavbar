@@ -33,7 +33,7 @@ class WindowAnalyzer(
         private const val TAG = "WindowAnalyzer"
         private const val GOOGLE_QUICKSEARCHBOX_PACKAGE = "com.google.android.googlequicksearchbox"
         private const val LAUNCHER3_PACKAGE = "com.android.launcher3"
-        private const val QUICKSTEP_PLUS_PACKAGE = "com.minsi.quickstepplus"
+        private const val QUICKSTEP_PLUS_PACKAGE = Constants.Launcher.QUICKSTEPPLUS_PACKAGE
     }
 
     private data class NavBarInsets(

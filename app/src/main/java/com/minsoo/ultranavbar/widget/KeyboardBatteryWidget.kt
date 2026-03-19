@@ -7,6 +7,10 @@ import android.appwidget.AppWidgetProvider
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -19,6 +23,7 @@ import android.widget.RemoteViews
 import androidx.core.app.ActivityCompat
 import com.minsoo.ultranavbar.MainActivity
 import com.minsoo.ultranavbar.R
+import com.minsoo.ultranavbar.core.BackgroundManager
 import com.minsoo.ultranavbar.util.BleGattBatteryReader
 import com.minsoo.ultranavbar.util.BluetoothUtils
 import java.text.SimpleDateFormat
@@ -54,6 +59,11 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
         if (intent.action == ACTION_REFRESH) {
             Log.d(TAG, "Manual refresh requested")
             animateRefreshIcon(context)
+            updateAllWidgets(context)
+            return
+        }
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            Log.d(TAG, "Package replaced - refreshing all widgets")
             updateAllWidgets(context)
             return
         }
@@ -94,6 +104,16 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
         }
     }
 
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: android.os.Bundle
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        updateAppWidget(context, appWidgetManager, appWidgetId)
+    }
+
     override fun onEnabled(context: Context) {
         // 첫 위젯이 생성될 때
         super.onEnabled(context)
@@ -110,6 +130,16 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
         appWidgetId: Int
     ) {
         val views = RemoteViews(context.packageName, R.layout.widget_keyboard_battery)
+        val palette = BackgroundManager.resolveWidgetPalette(context)
+
+        views.setImageViewBitmap(
+            R.id.imgWidgetBackground,
+            createWidgetBackgroundBitmap(context, appWidgetManager, appWidgetId, palette.surface, palette.surfaceVariant)
+        )
+        views.setTextColor(R.id.txtKeyboardName, palette.textSecondary)
+        views.setTextColor(R.id.txtLastUpdated, palette.textTertiary)
+        views.setInt(R.id.imgKeyboard, "setColorFilter", palette.iconTint)
+        views.setInt(R.id.btnRefresh, "setColorFilter", palette.iconTint)
 
         // 블루투스 키보드 정보 가져오기
         val keyboardInfo = getKeyboardBatteryInfo(context)
@@ -123,9 +153,9 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
 
                 // 색상 결정 (텍스트 + 배터리 아이콘)
                 val batteryColor = when {
-                    level <= 20 -> 0xFFF44336.toInt()
-                    level <= 50 -> 0xFFFF9800.toInt()
-                    else -> 0xFF4CAF50.toInt()
+                    level <= 20 -> palette.batteryLow
+                    level <= 50 -> palette.batteryMedium
+                    else -> palette.batteryHigh
                 }
                 views.setTextColor(R.id.txtBatteryLevel, batteryColor)
                 views.setInt(R.id.imgBattery, "setColorFilter", batteryColor)
@@ -133,8 +163,8 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
                 views.setProgressBar(R.id.batteryBar, 100, level, false)
             } else {
                 views.setTextViewText(R.id.txtBatteryLevel, "--%")
-                views.setTextColor(R.id.txtBatteryLevel, 0xFF999999.toInt())
-                views.setInt(R.id.imgBattery, "setColorFilter", 0xFF999999.toInt())
+                views.setTextColor(R.id.txtBatteryLevel, palette.batteryUnknown)
+                views.setInt(R.id.imgBattery, "setColorFilter", palette.batteryUnknown)
                 views.setViewVisibility(R.id.batteryBar, View.INVISIBLE)
             }
 
@@ -145,14 +175,17 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
         } else {
             views.setTextViewText(R.id.txtKeyboardName, context.getString(R.string.widget_no_keyboard))
             views.setTextViewText(R.id.txtBatteryLevel, "--%")
-            views.setTextColor(R.id.txtBatteryLevel, 0xFF999999.toInt())
-            views.setInt(R.id.imgBattery, "setColorFilter", 0xFF999999.toInt())
+            views.setTextColor(R.id.txtBatteryLevel, palette.batteryUnknown)
+            views.setInt(R.id.imgBattery, "setColorFilter", palette.batteryUnknown)
             views.setViewVisibility(R.id.batteryBar, View.INVISIBLE)
             views.setTextViewText(R.id.txtLastUpdated, "")
         }
 
-        // 위젯 전체 클릭 시 앱 열기
-        val appIntent = Intent(context, MainActivity::class.java)
+        // 위젯 전체 클릭 시 키보드 설정 열기
+        val appIntent = Intent(context, MainActivity::class.java).apply {
+            putExtra(MainActivity.EXTRA_NAVIGATE_TO, MainActivity.DESTINATION_KEYBOARD_SETTINGS)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
         val appPendingIntent = PendingIntent.getActivity(
             context,
             0,
@@ -174,6 +207,55 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.btnRefresh, refreshPendingIntent)
 
         appWidgetManager.updateAppWidget(appWidgetId, views)
+    }
+
+    private fun createWidgetBackgroundBitmap(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        surfaceColor: Int,
+        strokeColor: Int
+    ): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+        val minWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180)
+        val minHeightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 120)
+        val maxWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidthDp)
+        val maxHeightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeightDp)
+        val widthDp = maxOf(minWidthDp, maxWidthDp).coerceAtLeast(180)
+        val heightDp = maxOf(minHeightDp, maxHeightDp).coerceAtLeast(120)
+        val width = (widthDp * density).toInt().coerceAtLeast(1)
+        val height = (heightDp * density).toInt().coerceAtLeast(1)
+        val cornerRadius = 24f * density
+        val strokeWidth = (1.25f * density)
+
+        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+            val canvas = Canvas(this)
+            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = surfaceColor
+                style = Paint.Style.FILL
+            }
+            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = strokeColor
+                style = Paint.Style.STROKE
+                this.strokeWidth = strokeWidth
+                alpha = 180
+            }
+            val fillRect = RectF(
+                0f,
+                0f,
+                width.toFloat(),
+                height.toFloat()
+            )
+            val strokeRect = RectF(
+                strokeWidth / 2f,
+                strokeWidth / 2f,
+                width - (strokeWidth / 2f),
+                height - (strokeWidth / 2f)
+            )
+            canvas.drawRoundRect(fillRect, cornerRadius, cornerRadius, fillPaint)
+            canvas.drawRoundRect(strokeRect, cornerRadius, cornerRadius, strokePaint)
+        }
     }
 
     private fun getKeyboardBatteryInfo(context: Context): KeyboardInfo? {

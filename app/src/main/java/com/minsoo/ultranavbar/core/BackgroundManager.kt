@@ -57,11 +57,112 @@ class BackgroundManager(
         private const val DAY_NAVBAR_MAX_SATURATION   = 0.26f
         private const val NIGHT_NAVBAR_MAX_SATURATION = 0.24f
         private const val SOFT_DARK_BUTTON_COLOR      = 0xFF6B6B6B.toInt()
+
+        data class WidgetPalette(
+            val surface: Int,
+            val surfaceVariant: Int,
+            val progressTint: Int,
+            val textPrimary: Int,
+            val textSecondary: Int,
+            val textTertiary: Int,
+            val iconTint: Int,
+            val batteryUnknown: Int,
+            val batteryHigh: Int,
+            val batteryMedium: Int,
+            val batteryLow: Int
+        )
+
+        private fun fallbackWidgetPalette(context: Context): WidgetPalette {
+            return WidgetPalette(
+                surface = context.getColor(AppR.color.widget_surface),
+                surfaceVariant = context.getColor(AppR.color.widget_surface_variant),
+                progressTint = context.getColor(AppR.color.widget_progress_tint),
+                textPrimary = context.getColor(AppR.color.widget_text_primary),
+                textSecondary = context.getColor(AppR.color.widget_text_secondary),
+                textTertiary = context.getColor(AppR.color.widget_text_tertiary),
+                iconTint = context.getColor(AppR.color.widget_icon_tint),
+                batteryUnknown = context.getColor(AppR.color.widget_battery_unknown),
+                batteryHigh = context.getColor(AppR.color.widget_battery_high),
+                batteryMedium = context.getColor(AppR.color.widget_battery_medium),
+                batteryLow = context.getColor(AppR.color.widget_battery_low)
+            )
+        }
+
+        fun resolveWidgetPalette(context: Context): WidgetPalette {
+            val settings = SettingsManager.getInstance(context)
+            if (!settings.unifiedNormalBgColorEnabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                return fallbackWidgetPalette(context)
+            }
+
+            return try {
+                val base = ContextThemeWrapper(context, AppR.style.Theme_UltraNavbar)
+                val themed = DynamicColors.wrapContextIfAvailable(base)
+                val isDarkMode =
+                    (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                        Configuration.UI_MODE_NIGHT_YES
+
+                val surface = MaterialColors.getColor(
+                    themed,
+                    MaterialR.attr.colorSurfaceContainerHigh,
+                    context.getColor(AppR.color.widget_surface)
+                )
+                val surfaceVariant = MaterialColors.getColor(
+                    themed,
+                    MaterialR.attr.colorSurfaceVariant,
+                    context.getColor(AppR.color.widget_surface_variant)
+                )
+                val onSurface = MaterialColors.getColor(
+                    themed,
+                    MaterialR.attr.colorOnSurface,
+                    context.getColor(AppR.color.widget_text_primary)
+                )
+                val onSurfaceVariant = MaterialColors.getColor(
+                    themed,
+                    MaterialR.attr.colorOnSurfaceVariant,
+                    context.getColor(AppR.color.widget_text_secondary)
+                )
+                val primary = MaterialColors.getColor(
+                    themed,
+                    MaterialR.attr.colorPrimary,
+                    context.getColor(AppR.color.widget_battery_high)
+                )
+                val tertiary = MaterialColors.getColor(
+                    themed,
+                    MaterialR.attr.colorTertiary,
+                    context.getColor(AppR.color.widget_battery_medium)
+                )
+                val error = MaterialColors.getColor(
+                    themed,
+                    MaterialR.attr.colorError,
+                    context.getColor(AppR.color.widget_battery_low)
+                )
+
+                WidgetPalette(
+                    surface = ColorUtils.blendARGB(surface, surfaceVariant, if (isDarkMode) 0.12f else 0.08f),
+                    surfaceVariant = ColorUtils.blendARGB(surfaceVariant, surface, if (isDarkMode) 0.18f else 0.12f),
+                    progressTint = ColorUtils.blendARGB(primary, surfaceVariant, if (isDarkMode) 0.08f else 0.14f),
+                    textPrimary = onSurface,
+                    textSecondary = onSurfaceVariant,
+                    textTertiary = ColorUtils.blendARGB(onSurfaceVariant, surface, if (isDarkMode) 0.22f else 0.32f),
+                    iconTint = ColorUtils.blendARGB(onSurfaceVariant, primary, if (isDarkMode) 0.12f else 0.08f),
+                    batteryUnknown = ColorUtils.blendARGB(onSurfaceVariant, surface, if (isDarkMode) 0.30f else 0.40f),
+                    batteryHigh = primary,
+                    batteryMedium = ColorUtils.blendARGB(tertiary, primary, if (isDarkMode) 0.15f else 0.08f),
+                    batteryLow = error
+                )
+            } catch (_: Exception) {
+                fallbackWidgetPalette(context)
+            }
+        }
     }
 
     private val settings: SettingsManager = SettingsManager.getInstance(context)
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val android12Interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
+
+    init {
+        AnimationPerformanceHelper.applyGlobalSettings()
+    }
 
     // 일반 배경 비트맵 캐시 (시스템 네비바 높이 기준)
     private var landscapeBitmap: Bitmap? = null
@@ -317,6 +418,10 @@ class BackgroundManager(
         return if (_isDarkMode) Color.BLACK else Color.WHITE
     }
 
+    fun createDefaultBackgroundDrawable(): Drawable {
+        return ColorDrawable(getDefaultBackgroundColor())
+    }
+
     fun getDefaultButtonColor(): Int {
         if (settings.unifiedNormalBgColorEnabled) {
             val unified = resolveUnifiedMaterial3Color().color
@@ -469,7 +574,8 @@ class BackgroundManager(
 
     fun updateButtonColor(targetColor: Int, animate: Boolean = true) {
         if (_currentButtonColor == targetColor && buttonColorAnimationTarget == targetColor) return
-        if (!animate) {
+        val durationMs = AnimationPerformanceHelper.resolveDuration(Constants.Timing.BG_TRANSITION_DURATION_MS)
+        if (!animate || durationMs <= 0L || AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
             buttonColorAnimator?.cancel()
             buttonColorAnimationTarget = targetColor
             _currentButtonColor = targetColor
@@ -480,19 +586,26 @@ class BackgroundManager(
         buttonColorAnimationTarget = targetColor
         buttonColorAnimator?.cancel()
         val start = _currentButtonColor
+        val frameThrottle = AnimationPerformanceHelper.FrameThrottle()
         buttonColorAnimator = ValueAnimator.ofArgb(start, targetColor).apply {
-            duration    = Constants.Timing.BG_TRANSITION_DURATION_MS
+            duration    = durationMs
             interpolator = android12Interpolator
             addUpdateListener { anim ->
+                if (!frameThrottle.shouldDispatch(anim)) return@addUpdateListener
                 _currentButtonColor = anim.animatedValue as Int
                 listener.onButtonColorChanged(_currentButtonColor)
             }
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(a: Animator) {
+                    frameThrottle.reset()
                     if (_currentButtonColor != targetColor) {
                         _currentButtonColor = targetColor
                         listener.onButtonColorChanged(targetColor)
                     }
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    frameThrottle.reset()
                 }
             })
             start()
@@ -553,7 +666,7 @@ class BackgroundManager(
             } else ColorDrawable(defaultBgColor)
             targetButtonColor = resolveHomeBackgroundButtonColor(bitmap, defaultBgColor)
         } else {
-            targetDrawable    = ColorDrawable(defaultBgColor)
+            targetDrawable    = createDefaultBackgroundDrawable()
             targetButtonColor = getDefaultButtonColor()
         }
 
@@ -570,7 +683,15 @@ class BackgroundManager(
         cancelPendingTransitionCallback()
 
         val currentBg = targetView.background
-        if (!animate) {
+        val durationMs = AnimationPerformanceHelper.resolveDuration(Constants.Timing.BG_TRANSITION_DURATION_MS)
+        if (!animate || durationMs <= 0L) {
+            transitionEndAt = 0L
+            targetView.background = targetDrawable
+            listener.onBackgroundApplied(targetDrawable)
+            return
+        }
+        if (AnimationPerformanceHelper.shouldSkipNonEssentialAnimations() ||
+            AnimationPerformanceHelper.shouldSimplifyBackgroundTransitions()) {
             transitionEndAt = 0L
             targetView.background = targetDrawable
             listener.onBackgroundApplied(targetDrawable)
@@ -591,11 +712,11 @@ class BackgroundManager(
         val transition = TransitionDrawable(arrayOf(startDrawable, targetDrawable)).apply { isCrossFadeEnabled = false }
         // HARDWARE 레이어 사용하지 않음: 일부 기기에서 레이어 생성 시 1프레임 깜빡임 발생
         targetView.background = transition
-        transition.startTransition(Constants.Timing.BG_TRANSITION_DURATION_MS.toInt())
+        transition.startTransition(durationMs.toInt())
 
         transitionSourceUseCustom = prevUseCustom
         transitionTargetUseCustom = useCustom
-        transitionEndAt = SystemClock.elapsedRealtime() + Constants.Timing.BG_TRANSITION_DURATION_MS
+        transitionEndAt = SystemClock.elapsedRealtime() + durationMs
 
         val currentId = ++transitionId
         transitionTargetView = targetView
@@ -609,7 +730,7 @@ class BackgroundManager(
             }
         }
         pendingTransitionCallback = callback
-        targetView.postDelayed(callback, Constants.Timing.BG_TRANSITION_DURATION_MS)
+        targetView.postDelayed(callback, durationMs)
 
         Log.d(TAG, "Transition started (id=$currentId, qqplusActive=$isQQPlusActive): " +
                 "${startDrawable.javaClass.simpleName} -> ${targetDrawable.javaClass.simpleName}")

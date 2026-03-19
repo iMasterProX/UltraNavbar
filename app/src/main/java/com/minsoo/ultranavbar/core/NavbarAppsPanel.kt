@@ -229,6 +229,7 @@ class NavbarAppsPanel(
 
     private fun startShowAnimation(panel: View, backdrop: View?, isSwapped: Boolean) {
         panelAnimationGeneration++
+        val durationMs = AnimationPerformanceHelper.resolveDuration(PANEL_SHOW_DURATION_MS)
         val enterTranslationX =
             if (isSwapped) -context.dpToPx(PANEL_ENTER_TRANSLATION_X_DP).toFloat()
             else context.dpToPx(PANEL_ENTER_TRANSLATION_X_DP).toFloat()
@@ -243,20 +244,30 @@ class NavbarAppsPanel(
         backdrop?.alpha = 0f
 
         panel.animate().cancel()
-        panel.animate()
-            .alpha(1f)
-            .translationX(0f)
-            .translationY(0f)
-            .setDuration(PANEL_SHOW_DURATION_MS)
-            .setInterpolator(panelShowInterpolator)
-            .start()
+        if (durationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+            panel.animate()
+                .alpha(1f)
+                .translationX(0f)
+                .translationY(0f)
+                .setDuration(durationMs)
+                .setInterpolator(panelShowInterpolator)
+                .start()
+        } else {
+            panel.alpha = 1f
+            panel.translationX = 0f
+            panel.translationY = 0f
+        }
 
         backdrop?.animate()?.cancel()
-        backdrop?.animate()
-            ?.alpha(1f)
-            ?.setDuration(PANEL_SHOW_DURATION_MS)
-            ?.setInterpolator(panelShowInterpolator)
-            ?.start()
+        if (durationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+            backdrop?.animate()
+                ?.alpha(1f)
+                ?.setDuration(durationMs)
+                ?.setInterpolator(panelShowInterpolator)
+                ?.start()
+        } else {
+            backdrop?.alpha = 1f
+        }
     }
 
     private fun startHideAnimation(panel: View?, backdrop: View?, reason: String) {
@@ -269,6 +280,7 @@ class NavbarAppsPanel(
         panelAnimationGeneration++
         closingPanelView = panel
         closingBackdropView = backdrop
+        val durationMs = AnimationPerformanceHelper.resolveDuration(PANEL_HIDE_DURATION_MS)
         val isSwapped = lastPanelShownOnLeft
         val exitTranslationX =
             if (isSwapped) -context.dpToPx(PANEL_EXIT_TRANSLATION_X_DP).toFloat()
@@ -281,13 +293,29 @@ class NavbarAppsPanel(
         panel.animate().cancel()
         backdrop?.animate()?.cancel()
 
+        if (durationMs <= 0L || AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+            panel.alpha = 0f
+            backdrop?.alpha = 0f
+            panel.visibility = View.INVISIBLE
+            backdrop?.visibility = View.INVISIBLE
+            resetPanelVisualState(panel)
+            if (closingPanelView === panel) {
+                closingPanelView = null
+            }
+            if (closingBackdropView === backdrop) {
+                closingBackdropView = null
+            }
+            Log.d(TAG, "hide() complete immediate-adaptive (reason=$reason)")
+            return
+        }
+
         panel.animate()
             .alpha(0f)
             .scaleX(PANEL_EXIT_END_SCALE)
             .scaleY(PANEL_EXIT_END_SCALE)
             .translationX(exitTranslationX)
             .translationY(exitTranslation)
-            .setDuration(PANEL_HIDE_DURATION_MS)
+            .setDuration(durationMs)
             .setInterpolator(panelHideInterpolator)
             .withEndAction {
                 panel.alpha = 0f
@@ -307,7 +335,7 @@ class NavbarAppsPanel(
 
         backdrop?.animate()
             ?.alpha(0f)
-            ?.setDuration(PANEL_HIDE_DURATION_MS)
+            ?.setDuration(durationMs)
             ?.setInterpolator(panelHideInterpolator)
             ?.start()
     }
@@ -652,11 +680,17 @@ class NavbarAppsPanel(
                     }
                     // 누름 피드백: 아이콘 확대
                     iconView.animate().cancel()
-                    iconView.animate()
-                        .scaleX(PRESSED_SCALE).scaleY(PRESSED_SCALE)
-                        .setDuration(CLICK_FEEDBACK_DURATION)
-                        .setInterpolator(AccelerateInterpolator())
-                        .start()
+                    val durationMs = AnimationPerformanceHelper.resolveDuration(CLICK_FEEDBACK_DURATION)
+                    if (durationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+                        iconView.animate()
+                            .scaleX(PRESSED_SCALE).scaleY(PRESSED_SCALE)
+                            .setDuration(durationMs)
+                            .setInterpolator(AccelerateInterpolator())
+                            .start()
+                    } else {
+                        iconView.scaleX = PRESSED_SCALE
+                        iconView.scaleY = PRESSED_SCALE
+                    }
                     // 리플 효과 전달
                     iconView.isPressed = true
                     true
@@ -691,11 +725,17 @@ class NavbarAppsPanel(
                     iconView.isPressed = false
                     // 놓음 피드백: 아이콘 원래 크기로 복귀
                     iconView.animate().cancel()
-                    iconView.animate()
-                        .scaleX(1f).scaleY(1f)
-                        .setDuration(CLICK_FEEDBACK_DURATION)
-                        .setInterpolator(DecelerateInterpolator())
-                        .start()
+                    val upDurationMs = AnimationPerformanceHelper.resolveDuration(CLICK_FEEDBACK_DURATION)
+                    if (upDurationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+                        iconView.animate()
+                            .scaleX(1f).scaleY(1f)
+                            .setDuration(upDurationMs)
+                            .setInterpolator(DecelerateInterpolator())
+                            .start()
+                    } else {
+                        iconView.scaleX = 1f
+                        iconView.scaleY = 1f
+                    }
 
                     if (isDragging) {
                         val deltaX = event.rawX - startRawX
@@ -728,11 +768,17 @@ class NavbarAppsPanel(
                     iconView.isPressed = false
                     // 취소 시 원래 크기로 복귀
                     iconView.animate().cancel()
-                    iconView.animate()
-                        .scaleX(1f).scaleY(1f)
-                        .setDuration(CLICK_FEEDBACK_DURATION)
-                        .setInterpolator(DecelerateInterpolator())
-                        .start()
+                    val cancelDurationMs = AnimationPerformanceHelper.resolveDuration(CLICK_FEEDBACK_DURATION)
+                    if (cancelDurationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
+                        iconView.animate()
+                            .scaleX(1f).scaleY(1f)
+                            .setDuration(cancelDurationMs)
+                            .setInterpolator(DecelerateInterpolator())
+                            .start()
+                    } else {
+                        iconView.scaleX = 1f
+                        iconView.scaleY = 1f
+                    }
                     if (isDragging) {
                         listener.onDragStateChanged(false, 0f)
                         listener.onDragEnd()

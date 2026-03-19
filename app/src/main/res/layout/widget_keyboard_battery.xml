@@ -2,16 +2,24 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widgetRoot"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@drawable/widget_background"
-    android:padding="16dp">
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/imgWidgetBackground"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:adjustViewBounds="false"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_background" />
 
     <!-- Main content (centered) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:gravity="center">
+        android:gravity="center"
+        android:padding="16dp">
 
         <!-- Header: keyboard icon + device name -->
         <LinearLayout
@@ -25,6 +33,7 @@
                 android:layout_width="18dp"
                 android:layout_height="18dp"
                 android:src="@drawable/ic_widget_keyboard"
+                android:tint="@color/widget_icon_tint"
                 android:contentDescription="Keyboard" />
 
             <TextView
@@ -34,7 +43,7 @@
                 android:layout_marginStart="6dp"
                 android:text="Keyboard"
                 android:textSize="13sp"
-                android:textColor="#666666"
+                android:textColor="@color/widget_text_secondary"
                 android:ellipsize="end"
                 android:maxLines="1" />
         </LinearLayout>
@@ -87,7 +96,7 @@
             android:layout_marginTop="8dp"
             android:text="Updated: 10:30"
             android:textSize="11sp"
-            android:textColor="#999999" />
+            android:textColor="@color/widget_text_tertiary" />
     </LinearLayout>
 
     <!-- Refresh button (bottom-right corner) -->
@@ -96,7 +105,9 @@
         android:layout_width="28dp"
         android:layout_height="28dp"
         android:layout_gravity="bottom|end"
+        android:layout_margin="14dp"
         android:src="@drawable/ic_widget_refresh"
+        android:tint="@color/widget_icon_tint"
         android:contentDescription="Refresh"
         android:padding="2dp" />
 
