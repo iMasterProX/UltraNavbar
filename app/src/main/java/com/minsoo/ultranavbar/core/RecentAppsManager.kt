@@ -344,11 +344,13 @@ class RecentAppsManager(
             )
 
             usageStats
+                .asSequence()
                 .sortedByDescending { it.lastTimeUsed }
                 .map { it.packageName }
                 .distinct()
                 .filter { !isExcludedFromInitialLoad(it) }
                 .take(maxRecentAppsCount())
+                .toList()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to query usage stats", e)
             emptyList()

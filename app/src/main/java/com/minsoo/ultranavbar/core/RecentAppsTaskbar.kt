@@ -73,6 +73,22 @@ class RecentAppsTaskbar(
             if (bottomPadding == 0) return 0
             return bottomPadding + context.dpToPx(LARGE_HOME_OVERFLOW_EXTRA_DP)
         }
+
+        /**
+         * 홈화면에서 확장된 네비바 높이 계산
+         * 버튼이 올라간 위치의 중심을 기준으로 바 높이를 잡음
+         */
+        fun calculateHomeExpandedBarHeightPx(
+            context: Context,
+            barHeightPx: Int
+        ): Int {
+            val iconSizePx = context.dpToPx(LARGE_HOME_ICON_SIZE_DP)
+            val bottomPaddingPx = (iconSizePx - barHeightPx).coerceAtLeast(0) +
+                    context.dpToPx(LARGE_HOME_BOTTOM_PADDING_DP)
+            val groupOffsetPx = context.dpToPx(LARGE_HOME_GROUP_OFFSET_DP)
+            val iconCenterFromBottom = (bottomPaddingPx - groupOffsetPx) + iconSizePx / 2
+            return (iconCenterFromBottom * 2)
+        }
     }
 
     /**
@@ -201,7 +217,9 @@ class RecentAppsTaskbar(
 
     fun setIconSizeDp(iconSizeDp: Int, deferVisibleGrowAnimation: Boolean = false) {
         val normalized = iconSizeDp.coerceAtLeast(Constants.Dimension.TASKBAR_ICON_SIZE_DP)
-        if (currentIconSizeDp == normalized && iconSizeAnimator == null && pendingAnimatedTargetSizeDp == null) return
+        // 이미 같은 목표로 애니메이션 중이거나 완료된 경우 중복 호출 무시
+        // (iconSizeAnimator가 실행 중이어도 같은 목표면 재시작하지 않음)
+        if (currentIconSizeDp == normalized && pendingAnimatedTargetSizeDp == null) return
 
         val startSizeDp = renderedIconSizeDp
         val targetSizeDp = normalized.toFloat()
@@ -342,7 +360,7 @@ class RecentAppsTaskbar(
         val targetBottomPadding = calculateBottomPaddingPx(toSizeDp)
 
         iconSizeAnimator = ValueAnimator.ofFloat(fromSizeDp, toSizeDp).apply {
-            duration = 220L
+            duration = Constants.Timing.BG_TRANSITION_DURATION_MS
             interpolator = iconSizeInterpolator
             addUpdateListener { animator ->
                 val animatedSizeDp = animator.animatedValue as Float

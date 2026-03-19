@@ -22,7 +22,7 @@ object Constants {
         const val DEFAULT_HOTSPOT_HEIGHT_DP = 24
         const val MIN_IME_HEIGHT_DP = 80
         const val MIN_NAV_BAR_HEIGHT_DP = 40
-        const val CROP_HEIGHT_PX = 72
+        const val CROP_HEIGHT_PX = 120
         const val TASKBAR_ICON_SIZE_DP = 32
         const val TASKBAR_ICON_SPACING_DP = 18
         const val TASKBAR_SQUARE_RADIUS_RATIO = 0.12f

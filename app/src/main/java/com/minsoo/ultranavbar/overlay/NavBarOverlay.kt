@@ -4,6 +4,7 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.animation.AnimatorSet
+import android.animation.ValueAnimator
 import android.app.ActivityOptions
 import android.annotation.SuppressLint
 import android.content.Context
@@ -150,6 +151,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     private var pendingHomeButtonGrowTask: Runnable? = null
 
     private var currentWindowHeight: Int = -1
+
+    // QQPlus 런처 홈화면 활성 상태 추적
+    // true = QQPlus 런처 홈화면 진입 → 배경 120px 크롭 버전 사용
+    private var isQQPlusHomeActive: Boolean = false
     private var currentTaskbarWindowWidth: Int = -1
     private var currentTaskbarWindowHeight: Int = -1
     private var isOverlayTouchable: Boolean = true
@@ -1460,6 +1465,23 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         Log.d(TAG, "Overlay hidden (animate=$animate, showHotspot=$showHotspot)")
     }
 
+    private fun updateBarAndBackgroundHeight(heightPx: Int) {
+        navBarView?.let { bar ->
+            val params = bar.layoutParams
+            if (params != null && params.height != heightPx) {
+                params.height = heightPx
+                bar.layoutParams = params
+            }
+        }
+        backgroundView?.let { bg ->
+            val params = bg.layoutParams
+            if (params != null && params.height != heightPx) {
+                params.height = heightPx
+                bg.layoutParams = params
+            }
+        }
+    }
+
     private fun updateWindowHeight(heightPx: Int) {
         try {
             val params = rootView?.layoutParams as? WindowManager.LayoutParams ?: return
@@ -1554,8 +1576,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
             if (!isOnHomeScreen) {
                 isOnHomeScreen = true
                 clearHomeExitSuppression()
-                Log.d(TAG, "Home screen state: true")
 
+                // 숨김 애니메이션을 먼저 취소: 배경 전환 시작 전 navBarView가
+                // 숨김 중이면 깜빡임 발생 가능
+                cancelHideAnimationOnly()
+
+                updateQQPlusHomeState()
+                Log.d(TAG, "Home screen state: true")
 
                 if (settings.recentAppsTaskbarShowOnHome) {
                     syncTaskbarVisibility(animate = true)
@@ -1581,16 +1608,15 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                     return
                 }
 
-                // 숨김 애니메이션만 취소하고, 배경은 페이드로 전환
-                cancelHideAnimationOnly()
                 applyHomeEntryBackground()
                 return
             }
 
             if (wasHomeExitPending) {
                 // 홈 이탈이 취소됨 (패널/앱 서랍이 빠르게 열렸다 닫힌 경우)
-                // 억제를 해제하고 올바른 배경 상태를 즉시 적용
+                // 억제를 해제하고 배경 + 아이콘/버튼 모두 홈 상태로 복원
                 clearHomeExitSuppression()
+                updateTaskbarIconSizeForCurrentState()
                 val shouldUseCustom = shouldUseCustomBackground()
                 if (shouldUseCustom != backgroundManager.wasLastAppliedCustom()) {
                     applyBackgroundImmediate(shouldUseCustom, animate = true)
@@ -1612,6 +1638,13 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         cancelPendingHomeButtonGrowAnimation()
         if (!isOnHomeScreen) return
         pendingHomeState?.let { handler.removeCallbacks(it) }
+
+        // 배경 + 버튼 + 아이콘 전환을 동시에 즉시 시작
+        isHomeExitPending = true
+        startHomeExitSuppression()
+        updateTaskbarIconSizeForCurrentState()
+        updateNavBarBackground()
+
         val task = Runnable {
             pendingHomeState = null
             isHomeExitPending = false
@@ -1629,9 +1662,6 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
             updateNavBarBackground()
         }
-        isHomeExitPending = true
-        startHomeExitSuppression()
-        updateNavBarBackground()
         pendingHomeState = task
         handler.postDelayed(task, Constants.Timing.HOME_STATE_DEBOUNCE_MS)
     }
@@ -1938,6 +1968,10 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         val shouldBeCenter = shouldUseQuickstepPlusHomeTaskbarSizeForDisplay()
         if (shouldBeCenter && !areButtonsMovedToCenter) {
             animateButtonsToHomePosition(animate)
+        } else if (shouldBeCenter && areButtonsMovedToCenter && homeButtonsAnimator?.isRunning == true) {
+            // 복귀(원위치) 애니메이션 진행 중 다시 홈 위치로 돌아가야 하는 경우
+            // (빠르게 앱서랍 열었다 닫은 경우). 이미 홈 방향이면 재시작하지 않음.
+            animateButtonsToHomePosition(animate)
         } else if (!shouldBeCenter && areButtonsMovedToCenter) {
             if (animate) {
                 animateButtonsToOriginalPosition()
@@ -1984,12 +2018,19 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
 
     private fun shouldUseQuickstepPlusHomeTaskbarSize(): Boolean {
         if (!isOnHomeScreen) return false
+        if (isHomeExitPending) return false
         if (isRecentsVisible || isAppDrawerOpen || isPanelOpen()) return false
         return isQuickstepPlusTaskbarFeatureActive()
     }
 
     private fun shouldUseQuickstepPlusHomeTaskbarSizeForDisplay(): Boolean {
         if (shouldUseQuickstepPlusHomeTaskbarSize()) return true
+
+        // 홈 버튼/뒤로가기 preview 중: 아직 isOnHomeScreen은 false이지만 홈 전환 확정
+        if (SystemClock.elapsedRealtime() < homeButtonPreviewUntil &&
+            !isRecentsVisible && !isAppDrawerOpen && !isPanelOpen() && !isImeVisible &&
+            isQuickstepPlusTaskbarFeatureActive()
+        ) return true
 
         val unlockShowingHome =
             (isUnlockPending || isUnlockFadeRunning || isUnlockFadeSuppressed) &&
@@ -2038,37 +2079,44 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         areButtonsMovedToCenter = true
         updateWindowHeight(getDesiredVisibleWindowHeight())
 
-        // 레이아웃 완료 후 위치 계산 및 적용
-        left.post {
-            if (!areButtonsMovedToCenter) return@post
+        val barHeight = getSystemNavigationBarHeightPx()
+        val iconSizePx = context.dpToPx(RecentAppsTaskbar.LARGE_HOME_ICON_SIZE_DP)
+        val bottomPaddingPx = (iconSizePx - barHeight).coerceAtLeast(0) + context.dpToPx(RecentAppsTaskbar.LARGE_HOME_BOTTOM_PADDING_DP)
+        val groupOffsetPx = context.dpToPx(12) // LARGE_HOME_GROUP_OFFSET_DP
 
-            val barHeight = getSystemNavigationBarHeightPx()
-            val iconSizePx = context.dpToPx(RecentAppsTaskbar.LARGE_HOME_ICON_SIZE_DP)
-            val bottomPaddingPx = (iconSizePx - barHeight).coerceAtLeast(0) + context.dpToPx(RecentAppsTaskbar.LARGE_HOME_BOTTOM_PADDING_DP)
-            val groupOffsetPx = context.dpToPx(12) // LARGE_HOME_GROUP_OFFSET_DP
+        // 큰 아이콘 중심의 화면 하단으로부터의 높이
+        val iconCenterFromBottom = (bottomPaddingPx - groupOffsetPx) + iconSizePx / 2
+        // 버튼 현재 중심의 화면 하단으로부터의 높이
+        val buttonCenterFromBottom = barHeight / 2
+        // 수직 이동량 (위로 = 음수)
+        val targetDy = -(iconCenterFromBottom - buttonCenterFromBottom).toFloat()
 
-            // 큰 아이콘 중심의 화면 하단으로부터의 높이
-            val iconCenterFromBottom = (bottomPaddingPx - groupOffsetPx) + iconSizePx / 2
-            // 버튼 현재 중심의 화면 하단으로부터의 높이
-            val buttonCenterFromBottom = barHeight / 2
-            // 수직 이동량 (위로 = 음수)
-            val targetDy = -(iconCenterFromBottom - buttonCenterFromBottom).toFloat()
+        // 확장 bar 높이
+        val expandedBarHeight = RecentAppsTaskbar.calculateHomeExpandedBarHeightPx(context, barHeight)
 
-            if (animate) {
-                val animSet = android.animation.AnimatorSet()
-                animSet.playTogether(
-                    android.animation.ObjectAnimator.ofFloat(left, "translationY", 0f, targetDy),
-                    android.animation.ObjectAnimator.ofFloat(right, "translationY", 0f, targetDy)
-                )
-                animSet.duration = 250L
-                animSet.interpolator = android.view.animation.DecelerateInterpolator(1.5f)
-                animSet.start()
-                homeButtonsAnimator = animSet
-            } else {
-                // 애니메이션 없이 즉시 위치 적용
-                left.translationY = targetDy
-                right.translationY = targetDy
+        if (animate) {
+            val currentBarHeight = navBarView?.layoutParams?.height ?: barHeight
+            val animSet = android.animation.AnimatorSet()
+            val barHeightAnimator = ValueAnimator.ofInt(currentBarHeight, expandedBarHeight).apply {
+                addUpdateListener { animator ->
+                    val h = animator.animatedValue as Int
+                    updateBarAndBackgroundHeight(h)
+                }
             }
+            animSet.playTogether(
+                android.animation.ObjectAnimator.ofFloat(left, "translationY", left.translationY, targetDy),
+                android.animation.ObjectAnimator.ofFloat(right, "translationY", right.translationY, targetDy),
+                barHeightAnimator
+            )
+            animSet.duration = Constants.Timing.BG_TRANSITION_DURATION_MS
+            animSet.interpolator = android.view.animation.DecelerateInterpolator(1.5f)
+            animSet.start()
+            homeButtonsAnimator = animSet
+        } else {
+            // 애니메이션 없이 즉시 위치 적용
+            left.translationY = targetDy
+            right.translationY = targetDy
+            updateBarAndBackgroundHeight(expandedBarHeight)
         }
     }
 
@@ -2082,12 +2130,22 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         if (!areButtonsMovedToCenter) return
         homeButtonsAnimator?.cancel()
 
+        val barHeight = getSystemNavigationBarHeightPx()
+        val currentBarViewHeight = (navBarView?.layoutParams?.height ?: barHeight)
+
         val animSet = android.animation.AnimatorSet()
+        val barHeightAnimator = ValueAnimator.ofInt(currentBarViewHeight, barHeight).apply {
+            addUpdateListener { animator ->
+                val h = animator.animatedValue as Int
+                updateBarAndBackgroundHeight(h)
+            }
+        }
         animSet.playTogether(
             android.animation.ObjectAnimator.ofFloat(left, "translationY", left.translationY, 0f),
-            android.animation.ObjectAnimator.ofFloat(right, "translationY", right.translationY, 0f)
+            android.animation.ObjectAnimator.ofFloat(right, "translationY", right.translationY, 0f),
+            barHeightAnimator
         )
-        animSet.duration = 200L
+        animSet.duration = Constants.Timing.BG_TRANSITION_DURATION_MS
         animSet.interpolator = android.view.animation.DecelerateInterpolator(1.5f)
         animSet.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: android.animation.Animator) {
@@ -2215,7 +2273,40 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         return barHeight
     }
 
-    private fun shouldUseQuickstepPlusOverlayFade(): Boolean {
+    
+    /**
+     * QQPlus 런처 홈화면 활성 상태 갱신.
+     * isOnHomeScreen && currentPackage == QUICKSTEP_PLUS_PACKAGE 조건으로 판단.
+     * 상태 변경 시 BackgroundManager 에 전파하고 배경을 재적용한다.
+     *
+     * 호출 지점:
+     *   1) setHomeScreenState(true) 에서 홈 진입 확정 후
+     *   2) setForegroundPackage() 에서 currentPackage 변경 후
+     */
+    private fun updateQQPlusHomeState() {
+        val newActive = isOnHomeScreen && currentPackage.trim() == QUICKSTEP_PLUS_PACKAGE
+        if (isQQPlusHomeActive == newActive) return
+
+        isQQPlusHomeActive = newActive
+        Log.d(TAG, "QQPlus home active changed: $newActive")
+
+        // 비트맵이 아직 로드되지 않았으면 로드 (QQPlus 런처 활성 시 120px 비트맵 포함)
+        if (!backgroundManager.hasBitmaps()) {
+            backgroundManager.loadBackgroundBitmaps(forceReload = false)
+        }
+
+        // QQPlus 홈 활성화 시 배경 전환과 동시에 아이콘/버튼 전환도 시작
+        if (newActive && isQuickstepPlusTaskbarFeatureActive()) {
+            // backgroundView 복원 (기존 네비바 노출 방지)
+            backgroundView?.setBackgroundColor(backgroundManager.getDefaultBackgroundColor())
+            backgroundView?.alpha = 1f
+            backgroundView?.visibility = View.VISIBLE
+            updateTaskbarIconSizeForCurrentState()
+        }
+        updateNavBarBackground()
+    }
+
+private fun shouldUseQuickstepPlusOverlayFade(): Boolean {
         return currentPackage.trim() == QUICKSTEP_PLUS_PACKAGE || isOnHomeScreen || isAppDrawerOpen
     }
 
@@ -2507,6 +2598,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 )
             }
             Log.d(TAG, "Foreground package changed: $packageName")
+            updateQQPlusHomeState()
             updateNavBarBackground()
 
             // 포그라운드 패키지 변동(IME/런처/앱 전환) 후 진입 애니메이션 우선
@@ -3036,16 +3128,7 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
                 }
             }
         } else {
-            if (action == NavAction.HOME) {
-                startHomeButtonPreviewTransition()
-            }
-
-            val executed = service.executeAction(action)
-            if (!executed && action == NavAction.HOME) {
-                clearHomeButtonPreviewHint()
-                cancelPendingHomeButtonGrowAnimation()
-                updateNavBarBackground()
-            }
+            service.executeAction(action)
         }
     }
 
@@ -3286,27 +3369,9 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
     }
 
     private fun startHomeButtonPreviewTransition(durationMs: Long = HOME_BUTTON_PREVIEW_GUARD_MS) {
-        if (isOnHomeScreen) return
-        if (!settings.homeBgEnabled) return
-        if (isRecentsVisible || isAppDrawerOpen || isPanelOpen() || isImeVisible) return
-        if (isUnlockPending || isUnlockFadeRunning || isUnlockFadeSuppressed) return
-
-        val now = SystemClock.elapsedRealtime()
-        val nextUntil = now + durationMs
-        if (nextUntil > homeButtonPreviewUntil) {
-            homeButtonPreviewUntil = nextUntil
-        }
-        if (nextUntil > homeButtonGrowHintUntil) {
-            homeButtonGrowHintUntil = nextUntil
-        }
-
-        cancelHideAnimationOnly()
-        applyBackgroundImmediate(useCustom = true, animate = true)
-        Log.d(TAG, "Home button preview transition: ${durationMs}ms")
     }
 
     fun startBackExitHomePreviewTransition(durationMs: Long = HOME_BUTTON_PREVIEW_GUARD_MS) {
-        startHomeButtonPreviewTransition(durationMs)
     }
 
     fun abortHomeEntryTransitionForLaunchHint(
@@ -3500,6 +3565,12 @@ class NavBarOverlay(private val service: NavBarAccessibilityService) {
         cachedLauncherPackages = launcherPackages
         recentAppsManager?.setLauncherPackages(launcherPackages)
         recentAppsManager?.loadInitialRecentApps()
+
+        // QQPlus 런처 감지 시 BackgroundManager에 영구 활성화
+        // → 항상 120px 비트맵 사용, BOTTOM gravity로 아래 정렬 (이미지 압축 대신 위쪽 클리핑)
+        if (launcherPackages.contains(QUICKSTEP_PLUS_PACKAGE)) {
+            backgroundManager.setQQPlusActive(true)
+        }
     }
 
     fun reloadBackgroundImages() {
