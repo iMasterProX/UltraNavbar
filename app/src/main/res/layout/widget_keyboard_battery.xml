@@ -5,13 +5,22 @@
     android:layout_height="match_parent">
 
     <ImageView
-        android:id="@+id/imgWidgetBackground"
+        android:id="@+id/imgWidgetBackgroundFill"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:adjustViewBounds="false"
         android:contentDescription="@null"
         android:scaleType="fitXY"
-        android:src="@drawable/widget_background" />
+        android:src="@drawable/widget_background_fill" />
+
+    <ImageView
+        android:id="@+id/imgWidgetBackgroundStroke"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:adjustViewBounds="false"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_background_stroke" />
 
     <!-- Main content (centered) -->
     <LinearLayout

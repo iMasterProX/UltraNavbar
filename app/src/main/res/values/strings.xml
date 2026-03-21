@@ -19,6 +19,10 @@
 
     <string name="navbar_enable_title">Custom Navigation Bar</string>
     <string name="navbar_enable_summary">Show custom navigation bar overlay</string>
+    <string name="navbar_3button_enable_title">3-Button Navbar</string>
+    <string name="navbar_3button_enable_summary">Show the 3-button custom navigation bar overlay</string>
+    <string name="gesture_navbar_enable_title">Gesture Navbar</string>
+    <string name="gesture_navbar_enable_summary">Show the gesture navbar overlay that reuses the taskbar and side action buttons</string>
     <string name="navbar_category_features">Features</string>
     <string name="navbar_category_features_summary">Core behavior and control options</string>
     <string name="navbar_category_design">Design</string>
@@ -26,6 +30,8 @@
 
     <string name="nav_buttons_swap_title">Swap Button Layout</string>
     <string name="nav_buttons_swap_summary">Move navigation buttons (Back/Home/Recents) to right side, extra buttons (Screenshot/App Favorites/Notification Panel) to left side</string>
+    <string name="gesture_swap_title">Swap gesture side</string>
+    <string name="gesture_swap_summary">Move the gesture action buttons and summon corner to the opposite side.</string>
 
     <string name="recent_apps_taskbar_title">Taskbar</string>
     <string name="recent_apps_taskbar_summary">Show app icons in the center of the navigation bar.</string>
@@ -65,6 +71,8 @@
     <string name="recall_settings">Recall settings</string>
     <string name="recall_hotspot">Recall hotspot</string>
     <string name="recall_hotspot_summary">Show a small hotspot at the bottom to bring the bar back.</string>
+    <string name="gesture_hotspot_title">Corner gesture recall</string>
+    <string name="gesture_hotspot_summary">Use a lower corner diagonal swipe to reveal the gesture navbar.</string>
 
     <string name="onboarding_title">Get started</string>
     <string name="onboarding_step1">1. Tap the button below to open accessibility settings.</string>
@@ -115,6 +123,8 @@
     <string name="auto_button_label">Guide</string>
 
     <string name="app_not_found">App not found</string>
+    <string name="launcher_not_installed">LG UltraTab Launcher is not installed, so this menu cannot be opened.</string>
+    <string name="launcher_open_failed">Unable to open LG UltraTab Launcher settings.</string>
     <string name="default_action_set">Default action set.</string>
     <string name="tablet_only">Tablet-only app. This device is not supported.</string>
     <string name="permission_granted">Permission granted.</string>
@@ -144,9 +154,11 @@
     <string name="notification_panel_close">Close notification shade</string>
 
     <!-- Navigation menu -->
-    <string name="nav_menu_navbar">Navigation Bar</string>
+    <string name="nav_menu_navbar">3-Button Navbar</string>
+    <string name="nav_menu_gesture_navbar">Gesture Navbar</string>
     <string name="nav_menu_keyboard">Keyboard</string>
     <string name="nav_menu_wacom_pen">Wacom Pen</string>
+    <string name="nav_menu_launcher">Launcher</string>
     <string name="nav_menu_hardware">Hardware</string>
     <string name="nav_menu_app_settings">App Settings</string>
     <string name="nav_menu_experimental">Experimental Features</string>

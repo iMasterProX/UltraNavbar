@@ -12,6 +12,7 @@
         android:padding="16dp">
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardNavbarEnable"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="20dp"
@@ -32,6 +33,7 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/txtNavbarEnableTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/navbar_enable_title"
@@ -39,6 +41,7 @@
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/txtNavbarEnableSummary"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
@@ -72,6 +75,7 @@
             android:textColor="?android:textColorSecondary" />
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardRecentAppsTaskbar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -115,6 +119,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardTaskbarMode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -178,6 +183,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardTaskbarIconCount"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -225,6 +231,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardLongPressAction"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -288,6 +295,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardDisabledApps"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -326,6 +334,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardRecallHotspot"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
@@ -359,12 +368,14 @@
                         android:orientation="vertical">
 
                         <TextView
+                            android:id="@+id/txtHotspotTitle"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/recall_hotspot"
                             android:textSize="14sp" />
 
                         <TextView
+                            android:id="@+id/txtHotspotSummary"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/recall_hotspot_summary"
@@ -398,6 +409,7 @@
             android:textColor="?android:textColorSecondary" />
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardHomeBackground"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -741,6 +753,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardUnifiedNormalBgColor"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -784,6 +797,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardRecentAppsIconShape"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -855,6 +869,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardAndroid12lNavbarLayoutTuning"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -898,6 +913,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardTaskbarShowOnHome"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -941,6 +957,7 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardNavButtonsSwap"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -961,6 +978,7 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/txtNavButtonsSwapTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/nav_buttons_swap_title"
@@ -968,6 +986,7 @@
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/txtNavButtonsSwapSummary"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"

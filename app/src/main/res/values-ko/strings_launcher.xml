@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launcher_not_installed">LG UltraTab Launcher가 설치되어 있지 않아 이 메뉴를 열 수 없습니다.</string>
+    <string name="launcher_open_failed">LG UltraTab Launcher 설정을 열 수 없습니다.</string>
+    <string name="nav_menu_launcher">런처</string>
+</resources>

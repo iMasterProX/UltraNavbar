@@ -32,6 +32,7 @@ class SettingsManager private constructor(context: Context) {
 
         // Keys
         private const val KEY_NAVBAR_ENABLED = "navbar_enabled"
+        private const val KEY_GESTURE_NAVBAR_ENABLED = "gesture_navbar_enabled"
         private const val KEY_HOTSPOT_ENABLED = "hotspot_enabled"
         private const val KEY_HOTSPOT_HEIGHT = "hotspot_height"
         private const val KEY_HOME_BG_ENABLED = "home_bg_enabled"
@@ -144,9 +145,33 @@ class SettingsManager private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_NAVBAR_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_NAVBAR_ENABLED, value).apply()
 
+    var gestureNavbarEnabled: Boolean
+        get() = prefs.getBoolean(KEY_GESTURE_NAVBAR_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_GESTURE_NAVBAR_ENABLED, value).apply()
+
     var hotspotEnabled: Boolean
         get() = prefs.getBoolean(KEY_HOTSPOT_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_HOTSPOT_ENABLED, value).apply()
+
+    fun setThreeButtonNavbarModeEnabled(enabled: Boolean) {
+        prefs.edit().apply {
+            putBoolean(KEY_NAVBAR_ENABLED, enabled)
+            if (enabled) {
+                putBoolean(KEY_GESTURE_NAVBAR_ENABLED, false)
+            }
+        }.apply()
+    }
+
+    fun setGestureNavbarModeEnabled(enabled: Boolean) {
+        prefs.edit().apply {
+            putBoolean(KEY_GESTURE_NAVBAR_ENABLED, enabled)
+            if (enabled) {
+                putBoolean(KEY_NAVBAR_ENABLED, false)
+            }
+        }.apply()
+    }
+
+    fun isAnyNavbarEnabled(): Boolean = navbarEnabled || gestureNavbarEnabled
 
     var hotspotHeight: Int
         get() = prefs.getInt(KEY_HOTSPOT_HEIGHT, 16)

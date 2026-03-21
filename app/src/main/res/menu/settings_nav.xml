@@ -7,6 +7,10 @@
             android:icon="@drawable/ic_navigation"
             android:title="@string/nav_menu_navbar" />
         <item
+            android:id="@+id/nav_gesture_navbar"
+            android:icon="@drawable/ic_gesture_navbar"
+            android:title="@string/nav_menu_gesture_navbar" />
+        <item
             android:id="@+id/nav_keyboard"
             android:icon="@drawable/ic_keyboard"
             android:title="@string/nav_menu_keyboard" />
@@ -14,6 +18,10 @@
             android:id="@+id/nav_wacom_pen"
             android:icon="@drawable/ic_stylus"
             android:title="@string/nav_menu_wacom_pen" />
+        <item
+            android:id="@+id/nav_launcher"
+            android:icon="@drawable/ic_launcher_menu"
+            android:title="@string/nav_menu_launcher" />
     </group>
 
     <group android:id="@+id/nav_group_system">

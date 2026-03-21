@@ -48,7 +48,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         private const val BACK_EXIT_PREVIEW_PROBE_ATTEMPTS = 4
         private const val HOME_ENTRY_STALE_APP_EVENT_GUARD_MS = 1100L
         private const val RECENTS_EVENT_FALSE_DEBOUNCE_MS = 420L
-        private const val BROADCAST_DRAWER_STATE_GUARD_MS = 1500L
+        private const val BROADCAST_DRAWER_STATE_GUARD_MS = 350L
         private const val ORIENTATION_CHANGE_STABILIZE_MS = 500L  // 화면 회전 후 안정화 시간
         private const val DISABLED_HOME_RECOVERY_WINDOW_MS = 5000L
         private const val SPLIT_FOREGROUND_STALE_MS = 2500L
@@ -89,6 +89,7 @@ class NavBarAccessibilityService : AccessibilityService() {
     private var isAppDrawerOpen: Boolean = false
     private var lastBroadcastDrawerStateAt: Long = 0L
     private var isLauncherIconDragActive: Boolean = false
+    private var isOverlayDragActive: Boolean = false
     private var isNotificationPanelOpen: Boolean = false
     private var isQuickSettingsOpen: Boolean = false
     private var isWallpaperPreviewVisible: Boolean = false
@@ -194,36 +195,56 @@ class NavBarAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Launcher state from $sourcePackage: home=$isHome, allApps=$isAllApps, " +
                 "recents=$isRecents, transitionStart=$isTransitionStart")
 
-            val drawerChanged: Boolean
-            if (isTransitionStart) {
+            val drawerChanged = if (isAllApps && !isAppDrawerOpen) {
                 // 전환 시작 시점: 앱서랍 열림만 즉시 처리 (배경 전환 즉시 트리거)
                 // 앱서랍 닫힘은 전환 완료 시점까지 대기 (슬라이드 중 조기 전환 방지)
                 if (isAllApps && !isAppDrawerOpen) {
                     isAppDrawerOpen = true
-                    drawerChanged = true
-                    Log.d(TAG, "App Drawer opening detected via launcher broadcast (transition start)")
+                    if (isTransitionStart) {
+                        Log.d(TAG, "App Drawer opening detected via launcher broadcast (transition start)")
+                    } else {
+                        Log.d(TAG, "App Drawer opening detected via launcher broadcast (stable)")
+                    }
                     overlay?.setAppDrawerState(true)
+                    true
                 } else {
-                    drawerChanged = false
+                    false
                 }
             }
             // 전환 완료 시점 (기존 onStateSetEnd): 최종 상태 확정
             else {
                 if (isAllApps && !isAppDrawerOpen) {
                     isAppDrawerOpen = true
-                    drawerChanged = true
+                    Log.d(TAG, "App Drawer opening detected via launcher broadcast (stable)")
                     overlay?.setAppDrawerState(true)
+                    true
                 } else if (!isAllApps && isAppDrawerOpen) {
-                    isAppDrawerOpen = false
-                    drawerChanged = true
-                    Log.d(TAG, "App Drawer closed via launcher broadcast (transition end)")
-                    overlay?.setAppDrawerState(false)
+                    Log.d(
+                        TAG,
+                        "Ignoring launcher close broadcast until window sync confirms closure " +
+                            "(home=$isHome, recents=$isRecents, transitionStart=$isTransitionStart)"
+                    )
+                    handler.postDelayed(
+                        {
+                            if (instance == null) return@postDelayed
+                            syncLauncherOverlayState(
+                                windows.toList(),
+                                rootInActiveWindow,
+                                "broadcast_close_probe",
+                                sourcePackage,
+                                ""
+                            )
+                        },
+                        BROADCAST_DRAWER_STATE_GUARD_MS + 50L
+                    )
+                    false
                 } else {
-                    drawerChanged = false
+                    false
                 }
             }
             if (drawerChanged) {
                 lastBroadcastDrawerStateAt = SystemClock.elapsedRealtime()
+                updateOverlayVisibility()
             }
         }
     }
@@ -1080,6 +1101,7 @@ class NavBarAccessibilityService : AccessibilityService() {
                 isAppDrawerOpen = appDrawerOpen
                 Log.d(TAG, "App Drawer state ($source): $isAppDrawerOpen")
                 overlay?.setAppDrawerState(isAppDrawerOpen)
+                updateOverlayVisibility()
             }
 
             val dragDetectedByWindow = windowAnalyzer.analyzeLauncherIconDragState(windowList, root)
@@ -1096,17 +1118,20 @@ class NavBarAccessibilityService : AccessibilityService() {
                 isLauncherIconDragActive = iconDragActive
                 Log.d(TAG, "Launcher icon drag state ($source): $isLauncherIconDragActive")
                 overlay?.setLauncherIconDragState(isLauncherIconDragActive)
+                updateOverlayVisibility()
             }
         } else {
             if (isAppDrawerOpen) {
                 isAppDrawerOpen = false
                 Log.d(TAG, "App Drawer state ($source): false")
                 overlay?.setAppDrawerState(false)
+                updateOverlayVisibility()
             }
             if (isLauncherIconDragActive) {
                 isLauncherIconDragActive = false
                 Log.d(TAG, "Launcher icon drag state ($source): false")
                 overlay?.setLauncherIconDragState(false)
+                updateOverlayVisibility()
             }
         }
     }
@@ -1669,6 +1694,24 @@ class NavBarAccessibilityService : AccessibilityService() {
         return windowAnalyzer.isLauncherPackage(packageName)
     }
 
+    fun setOverlayDragActive(active: Boolean) {
+        if (isOverlayDragActive == active) return
+        isOverlayDragActive = active
+        Log.d(TAG, "Overlay drag active: $active")
+
+        if (active) {
+            pendingStateCheck?.let { handler.removeCallbacks(it) }
+            pendingStateCheck = null
+            return
+        }
+
+        handler.post {
+            if (instance != null) {
+                updateOverlayVisibility()
+            }
+        }
+    }
+
     fun isLauncherTopForSplit(): Boolean {
         val windowList = windows.toList()
         val top = windowAnalyzer.getTopApplicationWindow(windowList) ?: return false
@@ -1949,6 +1992,7 @@ class NavBarAccessibilityService : AccessibilityService() {
 
     private fun updatePanelUiState() {
         overlay?.setPanelStates(isNotificationPanelOpen, isQuickSettingsOpen)
+        updateOverlayVisibility()
     }
 
     private fun checkImeVisibility() {
@@ -2223,7 +2267,7 @@ class NavBarAccessibilityService : AccessibilityService() {
         val lockScreenActive = windowAnalyzer.isLockScreenActive()
 
         // 0. 네비게이션 바 전체 비활성화 체크
-        if (!settings.navbarEnabled) {
+        if (!settings.isAnyNavbarEnabled()) {
             Log.d(TAG, "Navbar disabled globally - hiding overlay completely")
             overlay?.hide(animate = false, showHotspot = false)
             return
@@ -2242,6 +2286,22 @@ class NavBarAccessibilityService : AccessibilityService() {
         cancelDisabledAppRecoveryCheck()
 
         // 1.5. 화면 회전 안정화 기간 동안 숨김 방지
+        val gestureNavbarEnabled = settings.gestureNavbarEnabled
+        val shouldShowGestureHomeUi =
+            gestureNavbarEnabled &&
+                isOnHomeScreen &&
+                !isRecentsVisible &&
+                !isAppDrawerOpen &&
+                !isNotificationPanelOpen &&
+                !isQuickSettingsOpen &&
+                !isImeVisible
+        val shouldShowGestureRecentsUi =
+            gestureNavbarEnabled &&
+                isRecentsVisible &&
+                !isNotificationPanelOpen &&
+                !isQuickSettingsOpen &&
+                !isImeVisible
+
         val orientationChangeElapsed = SystemClock.elapsedRealtime() - lastOrientationChangeAt
         if (orientationChangeElapsed < ORIENTATION_CHANGE_STABILIZE_MS) {
             val shouldAutoHideDuringRotation = windowAnalyzer.shouldAutoHideOverlay(
@@ -2250,7 +2310,18 @@ class NavBarAccessibilityService : AccessibilityService() {
                 isOnHomeScreen = isOnHomeScreen,
                 isWallpaperPreviewVisible = isWallpaperPreviewVisible
             )
-            if (shouldAutoHideDuringRotation) {
+            if (gestureNavbarEnabled) {
+                if (shouldShowGestureHomeUi || shouldShowGestureRecentsUi) {
+                    Log.d(TAG, "Orientation change stabilizing (${orientationChangeElapsed}ms) - keeping gesture navbar visible")
+                    overlay?.show(fade = false)
+                } else {
+                    Log.d(TAG, "Orientation change stabilizing (${orientationChangeElapsed}ms) - keeping gesture navbar hidden")
+                    overlay?.hide(
+                        animate = false,
+                        showHotspot = false
+                    )
+                }
+            } else if (shouldAutoHideDuringRotation) {
                 Log.d(TAG, "Orientation change stabilizing (${orientationChangeElapsed}ms) - keeping overlay hidden")
                 overlay?.hide(animate = false, showHotspot = false)
             } else {
@@ -2282,11 +2353,40 @@ class NavBarAccessibilityService : AccessibilityService() {
             return
         }
 
-        if (shouldHoldOverlayVisibleForCustomHomeAction()) {
+        if (isOverlayDragActive) {
+            fullscreenSlidePendingShow = false
+            Log.d(TAG, "Overlay drag active - keeping current overlay state")
+            return
+        }
+
+        if (!gestureNavbarEnabled && shouldHoldOverlayVisibleForCustomHomeAction()) {
             Log.d(TAG, "Keeping overlay visible during custom HOME transition guard")
             val useFullscreenSlide = fullscreenSlidePendingShow
             fullscreenSlidePendingShow = false
             overlay?.show(fade = false, slide = useFullscreenSlide)
+            return
+        }
+
+        if (gestureNavbarEnabled) {
+            fullscreenSlidePendingShow = false
+            if (shouldShowGestureHomeUi) {
+                overlay?.show(fade = false, slide = true)
+            } else if (shouldShowGestureRecentsUi) {
+                overlay?.show(fade = false, slide = true)
+            } else {
+                val shouldSlideGestureHide =
+                    !isOnHomeScreen ||
+                        isAppDrawerOpen ||
+                        isLauncherIconDragActive ||
+                        isNotificationPanelOpen ||
+                        isQuickSettingsOpen ||
+                        isImeVisible
+                overlay?.hide(
+                    animate = true,
+                    showHotspot = false,
+                    slide = shouldSlideGestureHide
+                )
+            }
             return
         }
 

@@ -7,10 +7,6 @@ import android.appwidget.AppWidgetProvider
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RectF
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -132,10 +128,8 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
         val views = RemoteViews(context.packageName, R.layout.widget_keyboard_battery)
         val palette = BackgroundManager.resolveWidgetPalette(context)
 
-        views.setImageViewBitmap(
-            R.id.imgWidgetBackground,
-            createWidgetBackgroundBitmap(context, appWidgetManager, appWidgetId, palette.surface, palette.surfaceVariant)
-        )
+        views.setInt(R.id.imgWidgetBackgroundFill, "setColorFilter", palette.surface)
+        views.setInt(R.id.imgWidgetBackgroundStroke, "setColorFilter", palette.surfaceVariant)
         views.setTextColor(R.id.txtKeyboardName, palette.textSecondary)
         views.setTextColor(R.id.txtLastUpdated, palette.textTertiary)
         views.setInt(R.id.imgKeyboard, "setColorFilter", palette.iconTint)
@@ -207,55 +201,6 @@ class KeyboardBatteryWidget : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.btnRefresh, refreshPendingIntent)
 
         appWidgetManager.updateAppWidget(appWidgetId, views)
-    }
-
-    private fun createWidgetBackgroundBitmap(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetId: Int,
-        surfaceColor: Int,
-        strokeColor: Int
-    ): Bitmap {
-        val density = context.resources.displayMetrics.density
-        val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
-        val minWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180)
-        val minHeightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 120)
-        val maxWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidthDp)
-        val maxHeightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeightDp)
-        val widthDp = maxOf(minWidthDp, maxWidthDp).coerceAtLeast(180)
-        val heightDp = maxOf(minHeightDp, maxHeightDp).coerceAtLeast(120)
-        val width = (widthDp * density).toInt().coerceAtLeast(1)
-        val height = (heightDp * density).toInt().coerceAtLeast(1)
-        val cornerRadius = 24f * density
-        val strokeWidth = (1.25f * density)
-
-        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
-            val canvas = Canvas(this)
-            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = surfaceColor
-                style = Paint.Style.FILL
-            }
-            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = strokeColor
-                style = Paint.Style.STROKE
-                this.strokeWidth = strokeWidth
-                alpha = 180
-            }
-            val fillRect = RectF(
-                0f,
-                0f,
-                width.toFloat(),
-                height.toFloat()
-            )
-            val strokeRect = RectF(
-                strokeWidth / 2f,
-                strokeWidth / 2f,
-                width - (strokeWidth / 2f),
-                height - (strokeWidth / 2f)
-            )
-            canvas.drawRoundRect(fillRect, cornerRadius, cornerRadius, fillPaint)
-            canvas.drawRoundRect(strokeRect, cornerRadius, cornerRadius, strokePaint)
-        }
     }
 
     private fun getKeyboardBatteryInfo(context: Context): KeyboardInfo? {

@@ -23,6 +23,7 @@ object Constants {
         const val MIN_IME_HEIGHT_DP = 80
         const val MIN_NAV_BAR_HEIGHT_DP = 40
         const val CROP_HEIGHT_PX = 120
+        const val GESTURE_RECENTS_PANEL_HEIGHT_PX = 72
         const val TASKBAR_ICON_SIZE_DP = 32
         const val TASKBAR_ICON_SPACING_DP = 18
         const val TASKBAR_SQUARE_RADIUS_RATIO = 0.12f
@@ -34,6 +35,7 @@ object Constants {
         const val BG_TRANSITION_DURATION_MS = 350L
         const val HOME_UI_TRANSITION_DURATION_MS = 350L
         const val GESTURE_AUTO_HIDE_MS = 3000L
+        const val GESTURE_NAVBAR_AUTO_HIDE_MS = 5000L
         const val DARK_MODE_DEBOUNCE_MS = 1000L
         const val STATE_CHECK_DELAY_MS = 50L
         const val HOME_STATE_DEBOUNCE_MS = 350L  // 증가: 빠른 상태 토글 방지 (200 -> 350)
