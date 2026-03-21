@@ -24,6 +24,11 @@ class GestureHandler(
         private const val TAG = "GestureHandler"
     }
 
+    enum class Edge {
+        LEFT,
+        RIGHT
+    }
+
     private val settings: SettingsManager = SettingsManager.getInstance(context)
     private val handler = Handler(Looper.getMainLooper())
     private val swipeThresholdPx: Int
@@ -33,9 +38,11 @@ class GestureHandler(
     val isGestureShown: Boolean get() = _isGestureShown
 
     private var gestureShowTime: Long = 0
+    private var gestureAutoHideDurationMs: Long = Constants.Timing.GESTURE_AUTO_HIDE_MS
     private var gestureAutoHideRunnable: Runnable? = null
 
     // 터치 시작 위치
+    private var touchStartX: Float = 0f
     private var touchStartY: Float = 0f
 
     init {
@@ -66,9 +73,28 @@ class GestureHandler(
         }
     }
 
+    fun setupCornerHotspotTouchListener(view: View, edge: Edge) {
+        view.setOnTouchListener { _, event ->
+            if (shouldIgnoreTouch(event)) {
+                return@setOnTouchListener false
+            }
+            handleCornerHotspotTouch(event, edge)
+        }
+    }
+
+    fun setupCornerDismissTouchListener(view: View) {
+        view.setOnTouchListener { _, event ->
+            if (shouldIgnoreTouch(event)) {
+                return@setOnTouchListener false
+            }
+            handleCornerDismissTouch(event)
+        }
+    }
+
     private fun handleHotspotTouch(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                touchStartX = event.rawX
                 touchStartY = event.rawY
                 return true
             }
@@ -93,6 +119,43 @@ class GestureHandler(
         return false
     }
 
+    private fun handleCornerHotspotTouch(event: MotionEvent, edge: Edge): Boolean {
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                touchStartX = event.rawX
+                touchStartY = event.rawY
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (isCornerRevealGesture(event, edge)) {
+                    Log.d(TAG, "Corner gesture swipe up detected: edge=$edge")
+                    listener.onSwipeUpDetected()
+                    touchStartX = event.rawX
+                    touchStartY = event.rawY
+                }
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (isCornerRevealGesture(event, edge)) {
+                    Log.d(TAG, "Corner gesture swipe up on release: edge=$edge")
+                    listener.onSwipeUpDetected()
+                }
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun isCornerRevealGesture(event: MotionEvent, edge: Edge): Boolean {
+        val deltaY = touchStartY - event.rawY
+        val deltaX = event.rawX - touchStartX
+        val inwardX = when (edge) {
+            Edge.LEFT -> deltaX
+            Edge.RIGHT -> -deltaX
+        }
+        return deltaY >= swipeThresholdPx && inwardX >= swipeThresholdPx * 0.35f
+    }
+
     // ===== 네비바 터치 처리 (제스처 오버레이) =====
 
     /**
@@ -107,6 +170,7 @@ class GestureHandler(
     private fun handleGestureOverlayTouch(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                touchStartX = event.rawX
                 touchStartY = event.rawY
                 return true
             }
@@ -124,6 +188,35 @@ class GestureHandler(
                 if (deltaY < swipeThresholdPx) {
                     Log.d(TAG, "Gesture overlay tapped, requesting hide")
                     listener.onGestureOverlayTapped()
+                }
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun handleCornerDismissTouch(event: MotionEvent): Boolean {
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                touchStartX = event.rawX
+                touchStartY = event.rawY
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val deltaY = event.rawY - touchStartY
+                if (deltaY >= swipeThresholdPx * 0.6f) {
+                    Log.d(TAG, "Corner dismiss swipe down detected")
+                    listener.onSwipeDownDetected()
+                    touchStartX = event.rawX
+                    touchStartY = event.rawY
+                }
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val deltaY = event.rawY - touchStartY
+                if (deltaY >= swipeThresholdPx * 0.6f) {
+                    Log.d(TAG, "Corner dismiss swipe down on release")
+                    listener.onSwipeDownDetected()
                 }
                 return true
             }
@@ -160,9 +253,10 @@ class GestureHandler(
     /**
      * 제스처로 네비바 표시됨을 기록
      */
-    fun markGestureShow() {
+    fun markGestureShow(autoHideDurationMs: Long = Constants.Timing.GESTURE_AUTO_HIDE_MS) {
         _isGestureShown = true
         gestureShowTime = SystemClock.elapsedRealtime()
+        gestureAutoHideDurationMs = autoHideDurationMs
         scheduleAutoHide()
     }
 
@@ -187,12 +281,12 @@ class GestureHandler(
         cancelAutoHide()
         gestureAutoHideRunnable = Runnable {
             if (_isGestureShown) {
-                Log.d(TAG, "Gesture auto-hide triggered after ${Constants.Timing.GESTURE_AUTO_HIDE_MS}ms")
+                Log.d(TAG, "Gesture auto-hide triggered after ${gestureAutoHideDurationMs}ms")
                 listener.onGestureAutoHide()
                 _isGestureShown = false
             }
         }
-        handler.postDelayed(gestureAutoHideRunnable!!, Constants.Timing.GESTURE_AUTO_HIDE_MS)
+        handler.postDelayed(gestureAutoHideRunnable!!, gestureAutoHideDurationMs)
     }
 
     private fun cancelAutoHide() {
@@ -210,7 +304,7 @@ class GestureHandler(
         if (!_isGestureShown) return true
 
         val elapsed = getGestureElapsedTime()
-        return elapsed > Constants.Timing.GESTURE_AUTO_HIDE_MS
+        return elapsed > gestureAutoHideDurationMs
     }
 
     // ===== 정리 =====
