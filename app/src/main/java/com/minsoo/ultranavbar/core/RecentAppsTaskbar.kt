@@ -9,17 +9,18 @@ import android.content.res.ColorStateList
 import android.graphics.Outline
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.view.WindowManager
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewOutlineProvider
-import android.view.ViewConfiguration
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Toast
 import com.minsoo.ultranavbar.R
 import com.minsoo.ultranavbar.settings.SettingsManager
 import kotlin.math.abs
@@ -40,7 +41,7 @@ class RecentAppsTaskbar(
     companion object {
         private const val TAG = "RecentAppsTaskbar"
         const val MOVE_THRESHOLD_DP = 10 // 움직임 인식 임계값
-        const val SPLIT_TRIGGER_DP = 56 // 분할화면 트리거 거리
+        const val SPLIT_TRIGGER_DP = 80 // 분할화면 트리거 거리
         const val LONG_PRESS_TIME_MS = 400L
         private const val PRESSED_SCALE = 1.1f
         private const val CLICK_FEEDBACK_DURATION = 200L
@@ -128,6 +129,8 @@ class RecentAppsTaskbar(
     private var pendingAnimatedTargetSizeDp: Float? = null
     private var currentBarHeightPx = 0
     private var iconSizeAnimator: ValueAnimator? = null
+    private val windowManager: WindowManager =
+        context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val iconSizeInterpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
 
     init {
@@ -169,12 +172,8 @@ class RecentAppsTaskbar(
      * 앱 목록 업데이트
      */
     fun updateApps(apps: List<RecentAppsManager.RecentAppInfo>) {
-        val hasSamePackages =
-            apps.size == currentApps.size &&
-                apps.indices.all { index ->
-                    apps[index].packageName == currentApps[index].packageName
-                }
-        if (hasSamePackages) {
+// 변경사항 없으면 스킵 (깜빡임 방지)
+        if (apps == currentApps) {
             return
         }
 
@@ -327,29 +326,12 @@ class RecentAppsTaskbar(
         return pendingAnimatedTargetSizeDp != null
     }
 
-    fun hasApps(): Boolean {
-        return currentApps.isNotEmpty()
-    }
-
     fun getCurrentGroupTranslationY(): Float {
         return centerGroup?.translationY ?: calculateGroupTranslationY(renderedIconSizeDp)
     }
 
     fun getReservedIconSizeDp(): Int {
         return reservedIconSizeDp.coerceAtLeast(Constants.Dimension.TASKBAR_ICON_SIZE_DP)
-    }
-
-    fun updateBarHeightPx(barHeightPx: Int) {
-        val normalizedHeight = barHeightPx.coerceAtLeast(0)
-        if (currentBarHeightPx == normalizedHeight) return
-        currentBarHeightPx = normalizedHeight
-        updateCenterGroupPadding(renderedIconSizeDp)
-        centerGroup?.requestLayout()
-    }
-
-    private fun shouldUseFixedCenterAlignment(): Boolean {
-        return currentBarHeightPx == Constants.Dimension.CROP_HEIGHT_PX ||
-            currentBarHeightPx == Constants.Dimension.GESTURE_RECENTS_PANEL_HEIGHT_PX
     }
 
     private fun updateCenterGroupPadding(iconSizeDp: Float) {
@@ -475,7 +457,6 @@ class RecentAppsTaskbar(
 
     private fun calculateBottomPaddingPx(iconSizeDp: Float): Int {
         if (currentBarHeightPx <= 0) return 0
-        if (shouldUseFixedCenterAlignment()) return 0
         val baseIconSizeDp = Constants.Dimension.TASKBAR_ICON_SIZE_DP.toFloat()
         if (iconSizeDp <= baseIconSizeDp) return 0
 
@@ -493,10 +474,6 @@ class RecentAppsTaskbar(
 
     private fun calculateGroupTranslationY(iconSizeDp: Float): Float {
         if (currentBarHeightPx <= 0) return 0f
-        if (shouldUseFixedCenterAlignment()) {
-            val iconSizePx = context.dpToPx(iconSizeDp)
-            return (iconSizePx - currentBarHeightPx) / 2f
-        }
 
         val baseIconSizeDp = Constants.Dimension.TASKBAR_ICON_SIZE_DP.toFloat()
         val largeIconSizeDp = LARGE_HOME_ICON_SIZE_DP.toFloat()
@@ -615,28 +592,15 @@ class RecentAppsTaskbar(
         var isDragging = false
         var hasMoved = false
         var longPressTriggered = false
-        var longPressCancelled = false
-        var dragOverlayStarted = false
-        var dragHoldActive = false
-        val moveThresholdPx = maxOf(
-            context.dpToPx(MOVE_THRESHOLD_DP).toFloat(),
-            ViewConfiguration.get(context).scaledTouchSlop.toFloat()
-        )
-        val longPressCancelThresholdPx = maxOf(moveThresholdPx, context.dpToPx(28).toFloat())
+        val moveThresholdPx = context.dpToPx(MOVE_THRESHOLD_DP)
         val splitTriggerPx = context.dpToPx(SPLIT_TRIGGER_DP)
 
         val longPressRunnable = Runnable {
-            if (!splitScreenEnabled || longPressCancelled || !listener.isSplitDragAllowed()) {
-                Log.d(
-                    TAG,
-                    "Split drag blocked: enabled=$splitScreenEnabled, cancelled=$longPressCancelled, " +
-                        "allowed=${listener.isSplitDragAllowed()}"
-                )
+            if (!splitScreenEnabled || hasMoved || !listener.isSplitDragAllowed()) {
                 return@Runnable
             }
             longPressTriggered = true
             isDragging = true
-            dragOverlayStarted = true
             val durationMs = AnimationPerformanceHelper.resolveDuration(90L)
             iconView.animate().cancel()
             if (durationMs > 0L && !AnimationPerformanceHelper.shouldSkipNonEssentialAnimations()) {
@@ -649,9 +613,9 @@ class RecentAppsTaskbar(
                 iconView.scaleX = 1.06f
                 iconView.scaleY = 1.06f
             }
+            listener.onDragStateChanged(true, 0f)
             iconView.alpha = 0f
             listener.onDragStart(iconView, startRawX, startRawY)
-            listener.onDragStateChanged(true, 0f)
         }
 
         iconView.setOnTouchListener { view, event ->
@@ -666,16 +630,9 @@ class RecentAppsTaskbar(
                     isDragging = false
                     hasMoved = false
                     longPressTriggered = false
-                    longPressCancelled = false
-                    dragOverlayStarted = false
-                    dragHoldActive = false
                     view.parent?.requestDisallowInterceptTouchEvent(true)
                     if (splitScreenEnabled) {
                         view.postDelayed(longPressRunnable, LONG_PRESS_TIME_MS)
-                        if (listener.isSplitDragAllowed()) {
-                            listener.onDragStateChanged(true, 0f)
-                            dragHoldActive = true
-                        }
                     }
                     // 누름 피드백: 아이콘 확대 + 리플
                     view.animate().cancel()
@@ -700,28 +657,22 @@ class RecentAppsTaskbar(
 // 움직임 감지
                     if (!hasMoved && (abs(deltaX) > moveThresholdPx || abs(deltaY) > moveThresholdPx)) {
                         hasMoved = true
-                        view.isPressed = false
-                    }
-
-                    if (!longPressTriggered &&
-                        !longPressCancelled &&
-                        (abs(deltaX) > longPressCancelThresholdPx || abs(deltaY) > longPressCancelThresholdPx)
-                    ) {
-                        longPressCancelled = true
-                        view.removeCallbacks(longPressRunnable)
-                        if (dragHoldActive) {
-                            listener.onDragStateChanged(false, 0f)
-                            dragHoldActive = false
+                        if (!longPressTriggered) {
+                            view.removeCallbacks(longPressRunnable)
                         }
+                        view.isPressed = false
                     }
 
                     if (isDragging) {
                         val distance = sqrt(deltaX * deltaX + deltaY * deltaY)
-                        val dragProgress = (distance / splitTriggerPx).coerceIn(0f, 1f)
+                        val rawProgress = (distance / splitTriggerPx).coerceAtLeast(0f)
+                        val dragProgress = rawProgress.coerceAtMost(1f)
                         val scale = 1f + ((TASKBAR_DRAG_MAX_SCALE - 1f) * dragProgress)
 
                         listener.onDragIconUpdate(event.rawX, event.rawY, scale)
-                        listener.onDragStateChanged(true, dragProgress)
+
+                        val zoneFactor = splitZoneFactor(event.rawX, event.rawY)
+                        listener.onDragStateChanged(true, rawProgress * zoneFactor)
                     }
                     true
                 }
@@ -736,15 +687,9 @@ class RecentAppsTaskbar(
 // 드래그 상태 종료 콜백
                     if (isDragging) {
                         listener.onDragStateChanged(false, 0f)
-                        if (dragOverlayStarted) {
-                            listener.onDragEnd()
-                        }
-                        dragOverlayStarted = false
+                        listener.onDragEnd()
                         view.alpha = 1f
-                    } else if (dragHoldActive) {
-                        listener.onDragStateChanged(false, 0f)
                     }
-                    dragHoldActive = false
 
                     view.translationY = 0f
                     // 놓음 피드백: 아이콘 원래 크기로 복귀 애니메이션
@@ -763,7 +708,12 @@ class RecentAppsTaskbar(
 
                     when {
                         isDragging -> {
-                            val shouldLaunchSplit = distance > splitTriggerPx
+                            val zoneFactor = splitZoneFactor(event.rawX, event.rawY)
+                            val shouldLaunchSplit = distance > splitTriggerPx && zoneFactor > 0.5f
+
+                            if (distance > splitTriggerPx && !shouldLaunchSplit) {
+                                Toast.makeText(context, R.string.split_screen_zone_cancelled, Toast.LENGTH_SHORT).show()
+                            }
 
                             if (shouldLaunchSplit) {
                                 Log.d(TAG, "Long-press drag to split: ${app.packageName}, distance=$distance")
@@ -788,15 +738,9 @@ class RecentAppsTaskbar(
 
                     if (isDragging) {
                         listener.onDragStateChanged(false, 0f)
-                        if (dragOverlayStarted) {
-                            listener.onDragEnd()
-                        }
-                        dragOverlayStarted = false
+                        listener.onDragEnd()
                         view.alpha = 1f
-                    } else if (dragHoldActive) {
-                        listener.onDragStateChanged(false, 0f)
                     }
-                    dragHoldActive = false
                     view.translationY = 0f
                     // 취소 시 원래 크기로 복귀
                     view.animate().cancel()
@@ -822,4 +766,16 @@ class RecentAppsTaskbar(
      * 손가락 위치의 분할화면 영역 진입도 (0.0 ~ 1.0)
      * 가로: 오른쪽 절반, 세로: 아래쪽 절반
      */
+    private fun splitZoneFactor(rawX: Float, rawY: Float): Float {
+        val bounds = windowManager.maximumWindowMetrics.bounds
+        val screenWidth = bounds.width()
+        val screenHeight = bounds.height()
+        val isLandscape = screenWidth > screenHeight
+
+        val transitionPx = if (isLandscape) screenWidth * 0.1f else screenHeight * 0.1f
+        val midPoint = if (isLandscape) screenWidth / 2f else screenHeight / 2f
+        val pos = if (isLandscape) rawX else rawY
+
+        return ((pos - midPoint + transitionPx / 2f) / transitionPx).coerceIn(0f, 1f)
+    }
 }

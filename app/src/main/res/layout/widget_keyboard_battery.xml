@@ -2,12 +2,15 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widgetRoot"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <ImageView
         android:id="@+id/imgWidgetBackgroundFill"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_margin="-8dp"
         android:adjustViewBounds="false"
         android:contentDescription="@null"
         android:scaleType="fitXY"
@@ -17,6 +20,7 @@
         android:id="@+id/imgWidgetBackgroundStroke"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_margin="-8dp"
         android:adjustViewBounds="false"
         android:contentDescription="@null"
         android:scaleType="fitXY"

@@ -15,7 +15,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.card.MaterialCardView
 import com.google.android.material.slider.Slider
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.minsoo.ultranavbar.R
@@ -37,20 +36,8 @@ import com.minsoo.ultranavbar.util.ImageCropUtil
 class NavBarSettingsFragment : Fragment() {
 
     companion object {
-        private const val ARG_MODE = "mode"
         private const val DEFAULT_GUIDE_PREVIEW_FILTER_OPACITY = 13
         private const val QUICKSTEP_GUIDE_PREVIEW_FILTER_OPACITY = 11
-
-        const val MODE_THREE_BUTTON = "three_button"
-        const val MODE_GESTURE = "gesture"
-
-        fun newInstance(mode: String = MODE_THREE_BUTTON): NavBarSettingsFragment {
-            return NavBarSettingsFragment().apply {
-                arguments = Bundle().apply {
-                    putString(ARG_MODE, mode)
-                }
-            }
-        }
     }
 
     private enum class CustomIconAction {
@@ -59,15 +46,6 @@ class NavBarSettingsFragment : Fragment() {
     }
 
     private lateinit var settings: SettingsManager
-    private lateinit var txtNavbarEnableTitle: TextView
-    private lateinit var txtNavbarEnableSummary: TextView
-    private lateinit var txtHotspotTitle: TextView
-    private lateinit var txtHotspotSummary: TextView
-    private lateinit var txtNavButtonsSwapTitle: TextView
-    private lateinit var txtNavButtonsSwapSummary: TextView
-    private lateinit var cardLongPressAction: MaterialCardView
-    private lateinit var cardTaskbarShowOnHome: MaterialCardView
-    private lateinit var cardAndroid12lNavbarLayoutTuning: MaterialCardView
 
     // 네비게이션 바 활성화
     private lateinit var switchNavbarEnabled: SwitchMaterial
@@ -253,7 +231,6 @@ class NavBarSettingsFragment : Fragment() {
 
         initViews(view)
         loadSettings()
-        configureModeSpecificUi()
         setupListeners()
     }
 
@@ -265,15 +242,6 @@ class NavBarSettingsFragment : Fragment() {
     }
 
     private fun initViews(view: View) {
-        txtNavbarEnableTitle = view.findViewById(R.id.txtNavbarEnableTitle)
-        txtNavbarEnableSummary = view.findViewById(R.id.txtNavbarEnableSummary)
-        txtHotspotTitle = view.findViewById(R.id.txtHotspotTitle)
-        txtHotspotSummary = view.findViewById(R.id.txtHotspotSummary)
-        txtNavButtonsSwapTitle = view.findViewById(R.id.txtNavButtonsSwapTitle)
-        txtNavButtonsSwapSummary = view.findViewById(R.id.txtNavButtonsSwapSummary)
-        cardLongPressAction = view.findViewById(R.id.cardLongPressAction)
-        cardTaskbarShowOnHome = view.findViewById(R.id.cardTaskbarShowOnHome)
-        cardAndroid12lNavbarLayoutTuning = view.findViewById(R.id.cardAndroid12lNavbarLayoutTuning)
         // 네비게이션 바 활성화 스위치
         switchNavbarEnabled = view.findViewById(R.id.switchNavbarEnabled)
 
@@ -401,11 +369,7 @@ class NavBarSettingsFragment : Fragment() {
 
     private fun loadSettings() {
         // 네비게이션 바 활성화 상태 로드
-        switchNavbarEnabled.isChecked = if (isGestureMode()) {
-            settings.gestureNavbarEnabled
-        } else {
-            settings.navbarEnabled
-        }
+        switchNavbarEnabled.isChecked = settings.navbarEnabled
 
         // 최근 앱 작업 표시줄 상태 로드
         switchRecentAppsTaskbar.isChecked = settings.recentAppsTaskbarEnabled
@@ -439,37 +403,6 @@ class NavBarSettingsFragment : Fragment() {
         // 아이콘 팩 / 커스텀 앱 아이콘 상태 로드
         updateIconPackStatus()
         updateCustomAppIconStatus()
-    }
-
-    private fun configureModeSpecificUi() {
-        val gestureMode = isGestureMode()
-
-        txtNavbarEnableTitle.setText(
-            if (gestureMode) R.string.gesture_navbar_enable_title else R.string.navbar_3button_enable_title
-        )
-        txtNavbarEnableSummary.setText(
-            if (gestureMode) R.string.gesture_navbar_enable_summary else R.string.navbar_3button_enable_summary
-        )
-        txtHotspotTitle.setText(
-            if (gestureMode) R.string.gesture_hotspot_title else R.string.recall_hotspot
-        )
-        txtHotspotSummary.setText(
-            if (gestureMode) R.string.gesture_hotspot_summary else R.string.recall_hotspot_summary
-        )
-        txtNavButtonsSwapTitle.setText(
-            if (gestureMode) R.string.gesture_swap_title else R.string.nav_buttons_swap_title
-        )
-        txtNavButtonsSwapSummary.setText(
-            if (gestureMode) R.string.gesture_swap_summary else R.string.nav_buttons_swap_summary
-        )
-
-        cardLongPressAction.visibility = if (gestureMode) View.GONE else View.VISIBLE
-        cardTaskbarShowOnHome.visibility = if (gestureMode) View.GONE else View.VISIBLE
-        cardAndroid12lNavbarLayoutTuning.visibility = if (gestureMode) View.GONE else View.VISIBLE
-
-        if (gestureMode) {
-            switchRecentAppsTaskbarShowOnHome.isChecked = true
-        }
     }
 
     private fun updateHomeBgButtonColorUi(mode: SettingsManager.HomeBgButtonColorMode) {
@@ -559,11 +492,7 @@ class NavBarSettingsFragment : Fragment() {
     private fun setupListeners() {
         // 네비게이션 바 활성화/비활성화
         switchNavbarEnabled.setOnCheckedChangeListener { _, isChecked ->
-            if (isGestureMode()) {
-                settings.setGestureNavbarModeEnabled(isChecked)
-            } else {
-                settings.setThreeButtonNavbarModeEnabled(isChecked)
-            }
+            settings.navbarEnabled = isChecked
             notifySettingsChanged()
         }
 
@@ -888,9 +817,5 @@ class NavBarSettingsFragment : Fragment() {
 
     private fun notifyBackgroundStyleChanged() {
         requireContext().sendBroadcast(Intent(Constants.Action.UPDATE_BUTTON_COLORS))
-    }
-
-    private fun isGestureMode(): Boolean {
-        return arguments?.getString(ARG_MODE) == MODE_GESTURE
     }
 }

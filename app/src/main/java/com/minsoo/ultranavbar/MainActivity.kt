@@ -1,14 +1,11 @@
 package com.minsoo.ultranavbar
 
-import android.content.ComponentName
 import android.content.Intent
 import android.content.res.Configuration
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.navigation.NavigationView
-import com.minsoo.ultranavbar.core.Constants
 import com.minsoo.ultranavbar.settings.SettingsManager
 import com.minsoo.ultranavbar.ui.AppSettingsFragment
 import com.minsoo.ultranavbar.ui.ExperimentalFeaturesFragment
@@ -51,14 +48,8 @@ class MainActivity : AppCompatActivity() {
 
         navigationView = findViewById(R.id.navigationView)
         navigationView.setNavigationItemSelectedListener { item ->
-            if (item.itemId == R.id.nav_launcher) {
-                openLauncherSettings()
-                return@setNavigationItemSelectedListener false
-            }
-
             val fragment = when (item.itemId) {
-                R.id.nav_navbar -> NavBarSettingsFragment.newInstance(NavBarSettingsFragment.MODE_THREE_BUTTON)
-                R.id.nav_gesture_navbar -> NavBarSettingsFragment.newInstance(NavBarSettingsFragment.MODE_GESTURE)
+                R.id.nav_navbar -> NavBarSettingsFragment()
                 R.id.nav_keyboard -> KeyboardSettingsFragment()
                 R.id.nav_wacom_pen -> WacomPenSettingsFragment()
                 R.id.nav_hardware -> HardwareInfoFragment()
@@ -107,41 +98,9 @@ class MainActivity : AppCompatActivity() {
             else -> {
                 navigationView.setCheckedItem(R.id.nav_navbar)
                 supportFragmentManager.beginTransaction()
-                    .replace(
-                        R.id.contentFrame,
-                        NavBarSettingsFragment.newInstance(NavBarSettingsFragment.MODE_THREE_BUTTON)
-                    )
+                    .replace(R.id.contentFrame, NavBarSettingsFragment())
                     .commit()
             }
-        }
-    }
-
-    private fun openLauncherSettings() {
-        if (!isPackageInstalled(Constants.Launcher.QUICKSTEPPLUS_PACKAGE)) {
-            Toast.makeText(this, R.string.launcher_not_installed, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val intent = Intent(Intent.ACTION_APPLICATION_PREFERENCES).apply {
-            component = ComponentName(
-                Constants.Launcher.QUICKSTEPPLUS_PACKAGE,
-                "com.android.launcher3.settings.SettingsActivity"
-            )
-        }
-
-        try {
-            startActivity(intent)
-        } catch (_: Exception) {
-            Toast.makeText(this, R.string.launcher_open_failed, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun isPackageInstalled(packageName: String): Boolean {
-        return try {
-            packageManager.getPackageInfo(packageName, 0)
-            true
-        } catch (_: PackageManager.NameNotFoundException) {
-            false
         }
     }
 }
