@@ -1,0 +1,273 @@
+Task: Build a gesture-navigation-specific custom navbar system for UltraNavBar.
+
+This must be treated as a careful systems-level implementation task, not as a quick UI patch.
+
+Critical non-negotiable constraints:
+- You MAY reuse, reference, or derive visual/layout element foundations from the existing 3-button navbar system where useful.
+- However, under absolutely no circumstance may that reuse damage, mutate, regress, destabilize, contaminate, visually corrupt, or otherwise affect the existing 3-button navbar system.
+- Reusing the structural basis of 3-button navbar elements is allowed only if:
+  - the gesture-navbar implementation uses separate values
+  - separate runtime state
+  - separate layout state
+  - separate animation state
+  - separate visibility / overlay restoration state
+  - separate touch handling
+  - separate drag/drop handling
+  - separate behavior flow
+- Shared settings may remain shared, but live behavior/state must be isolated as much as possible.
+- If any implementation shortcut risks affecting the current 3-button navbar, do NOT take that shortcut.
+- The existing 3-button navbar must remain fully intact and fully functional after this work.
+- Do not treat this as “modifying the 3-button navbar into a gesture version.” Treat it as creating a separate gesture-navbar implementation that may safely reuse structural parts without sharing mutable runtime behavior or state.
+
+General engineering expectations:
+- Do not make guess-based edits.
+- Do not keep applying blind patch-after-patch symptom fixes.
+- Do not report completion unless behavior is confirmed on the actual connected test device.
+- Use ADB logs, UI behavior checks, and real-device verification during debugging.
+- When a transition, overlay, animation, layering, or visibility issue is unclear, inspect the actual runtime sequence before changing code.
+- If additional ADB-granted privileges are required to complete the requested behavior properly, ask the user explicitly for those permissions.
+
+Requested changes:
+
+1. Settings menu structure
+- Rename the current left-side menu item “Navigation Bar” to “3-Button Navbar”.
+- Rename the toggle currently named “Custom Navigation Bar” to “3-Button Navbar Toggle”.
+- Add a new separate menu below it named “Gesture Navbar”.
+- The “3-Button Navbar Toggle” and “Gesture Navbar Toggle” must be mutually exclusive:
+  - if one is enabled, the other must be fully disabled automatically
+- The following settings should remain shared between both modes:
+  - taskbar mode module
+  - number of taskbar icons
+  - recall / reopen behavior
+  - taskbar / app-favorites icon style
+  - button layout inversion
+  - external icon pack
+  - custom app icons
+
+2. Sync actual device navigation mode when switching modes
+- This app already has some elevated/system-level capability through ADB-granted permissions.
+- Use that capability so that when the user switches between:
+  - 3-button navbar mode
+  - gesture navbar mode
+  the actual device navigation mode also changes to match the selected mode.
+- In other words:
+  - selecting 3-button navbar mode in UltraNavBar should also switch the real device navigation mode to 3-button mode
+  - selecting gesture navbar mode in UltraNavBar should also switch the real device navigation mode to gesture mode
+- This must be handled carefully and reliably.
+- If additional ADB-granted permissions or commands are required for this feature, explicitly ask the user for them instead of silently skipping the requirement.
+
+3. Gesture navbar base design
+- Test target resolution: 2000x1200.
+- The system gesture navigation bar’s bottom 24px area must remain in use as the native gesture area.
+- In gesture-navbar mode, the old 3-button navigation controls (Back / Home / Recents buttons) must NOT appear.
+- Reusing safe structural parts of the 3-button implementation is acceptable, but gesture mode must use its own values and logic path.
+
+4. Home-screen custom navbar
+- On the Home screen only, show a custom navbar background with height 120px.
+- Its vertical placement must be aligned from the bottom, taking the system gesture navigation bar’s 24px bottom area into account.
+- It must not float too high; it must be positioned correctly within the bottom 120px region relative to the gesture-navigation baseline.
+- When returning to the Home screen, the whole 120px Home navbar should slide up into view as one coherent unit.
+
+5. Home-screen taskbar
+- On the Home screen, show the app taskbar using large icons.
+- Its position must be exactly centered within the 120px Home navbar background.
+- The animation must be stable and natural.
+- Do not allow the taskbar to overshoot upward and then snap back down into center.
+- Do not allow size-change animation triggers to silently fail.
+- Do not allow the taskbar overlay to become intermittently missing, delayed, or unreliable.
+
+6. Home-screen action buttons
+- Only these action buttons should be used:
+  - notification panel
+  - app favorites
+  - screenshot
+- On the Home screen, these buttons should remain visible.
+- Their position must be vertically centered within the 120px Home navbar area.
+- Their entrance timing should match the app taskbar’s appearance / size-change timing.
+- Default placement is on the right side.
+- If the “button layout inversion” option is enabled:
+  - the button group position must invert left/right
+  - the actual order of the buttons themselves must also invert accordingly
+- Add a separate independent toggle in app settings to hide these buttons entirely.
+- This hide-toggle must not be a side effect of another setting.
+
+7. Hidden behavior outside Home
+In the following states, the Home-screen custom UI must be fully hidden:
+- App Drawer
+- Notification shade opened while on Home
+- Any other app in foreground
+
+Hidden means:
+- no partial visibility
+- no remaining UI compressed inside the 24px gesture area
+- no delayed remnants
+- no “temporarily stuck” overlay state
+- the user should only see the native system gesture bar in these states
+
+8. Recents-screen dedicated bottom bar
+- In the Recents screen, show a separate custom bottom bar with height 72px.
+- This 72px bar must contain:
+  - background
+  - app taskbar with small icons
+  - notification panel / app favorites / screenshot buttons
+- All these elements must be vertically centered within the 72px bar.
+- Do not allow the background, buttons, and taskbar to drift into mismatched heights or mismatched transition timing.
+
+9. Recents-screen taskbar
+- In Recents, the app taskbar must use small icons.
+- It must be centered within the 72px bottom bar.
+- It must support split-screen interaction from this Recents-state taskbar.
+- Long-press, drag start, drag persistence, and drop behavior must all work as one continuous flow.
+- Do not leave this half-working.
+
+10. Recents-screen action buttons
+- The notification panel / app favorites / screenshot buttons must also appear in Recents.
+- They must be vertically centered within the 72px bottom bar.
+
+11. Split-screen behavior
+- Split-screen behavior rules should match the existing 3-button navbar behavior.
+- However, split-screen must remain unavailable on the Home screen.
+- In gesture-navbar mode, split-screen entry must happen from the Recents screen via the small-icon taskbar.
+- The user must be able to:
+  - long-press an app icon
+  - start drag successfully
+  - keep the drag active
+  - drop into the split-screen target area successfully
+- Do not allow drag to cancel immediately.
+- Do not allow touch interception or overlay state changes to break the drag path.
+
+12. Target state model
+Expected behavior by state:
+
+- HOME
+  - show 120px Home navbar background
+  - show large-icon taskbar
+  - show action buttons
+
+- APP_DRAWER
+  - hide all custom gesture-navbar UI completely
+  - keep only the native system gesture bar visible
+
+- NOTIFICATION_SHADE_ON_HOME
+  - hide all custom gesture-navbar UI completely
+  - keep only the native system gesture bar visible
+
+- OTHER_APP
+  - behavior is defined separately below under the foreground-app redesign requirements
+
+- RECENTS
+  - show 72px custom bottom bar
+  - show small-icon taskbar
+  - show action buttons
+  - allow drag-and-drop split-screen interaction
+
+13. Additional mandatory redesign for foreground-app behavior
+- The app taskbar overlay has repeatedly failed to appear reliably in prior attempts. This must be corrected properly and decisively.
+- Do not treat it as a minor bug.
+- Rework the overlay visibility lifecycle, restoration logic, state transition handling, and related re-entry conditions until the taskbar overlay appears reliably and consistently in every intended case.
+- The navbar behavior while another app is in the foreground requires a fundamental redesign, not a cosmetic tweak.
+
+Required behavior while another app is in use:
+- A 72px navbar must also be usable while another app is in the foreground.
+- However, this 72px navbar must NOT simply remain visible by default at all times.
+- The behavior must work exactly as follows:
+  - When the user leaves the Home screen and opens another app, the existing 120px navbar must slide downward and hide.
+  - If the user then performs the gesture that briefly opens the Recents panel, the 72px navbar must appear.
+  - After that, even if the user exits Recents and returns to the currently running app, the 72px navbar must remain visible.
+- Once the 72px navbar has become visible while another app is in the foreground, it must remain visible until the user touches the navbar gesture-bar region.
+- Only when the user touches that navbar / bar-cutout / gesture-bar region should the 72px navbar hide again.
+- If the 72px navbar is visible and the user returns to the Home screen, the transition must be handled properly:
+  - the 72px navbar must transition into the 120px Home navbar
+  - this transition must use the same size-change animation concept that was previously used in the existing 3-button navbar system for that type of expansion behavior
+- This behavior must be implemented as a clean, explicit, state-driven model.
+- Do not patch it in an ad hoc way.
+
+14. Critical layering / positioning distinction between the 120px Home navbar and the 72px foreground-app / Recents navbar
+This distinction must be understood correctly and implemented exactly:
+
+- The 120px Home navbar itself must come in front of the device system’s native gesture navbar and visually cover it.
+- In other words, the 120px Home custom navbar must overlay the native gesture navbar area at the bottom.
+
+However:
+
+- The 72px navbar itself must NOT be implemented the same way as the 120px Home navbar.
+- The 72px navbar must be positioned directly above the device system’s native gesture navbar.
+- More precisely, it must be placed above the native gesture navbar by 24px, not in front of it covering that area.
+- So:
+  - 120px Home navbar: overlays and covers the native gesture navbar area
+  - 72px navbar: sits immediately above the native gesture navbar area, offset upward by 24px
+
+This distinction is critical.
+Do not confuse these two layering/positioning rules.
+Do not implement only the background incorrectly while leaving the rest of the custom navbar hierarchy wrong.
+Apply the positioning/layering rule to the correct full custom navbar container for each mode/state.
+
+15. Gesture/3-button mode switching stability
+- When switching between gesture-navbar mode and 3-button-navbar mode, the display state must remain correct.
+- No part of the gesture-sized region may leak into the 3-button navbar display.
+- No stale overlay state, stale dimensions, stale layout values, or restart-dependent visual corruption may remain.
+- If an app restart is required for correctness, then the restart path itself must fully restore the correct navbar mode and correct visual state.
+- Do not leave it in a condition where manual external force-close fixes what the in-app restart does not.
+
+16. Android 12L-style layout option in gesture settings
+- The existing setting currently available in 3-button navbar mode, “Adjust navbar layout in Android 12L style”, must also be added to the gesture-navbar settings.
+- The gesture-navbar configuration must provide an equivalent setting for this layout style behavior.
+- Implement it in a way that is appropriate for gesture-navbar mode while still keeping gesture mode isolated from the 3-button runtime path.
+- As with all other gesture-navbar work, adding this option must not damage, regress, or interfere with the existing 3-button navbar implementation.
+
+17. Implementation guidance
+- It is acceptable to borrow structure from the 3-button navbar implementation, but do not share mutable state or behavior that could regress 3-button mode.
+- Prefer a separate gesture-navbar controller / state machine / layout model.
+- Separate translation, alpha, visibility, size, overlay restoration state, taskbar restore timing, and drag state from the 3-button implementation.
+- Shared configuration is okay; shared live animation state is not.
+- Avoid “competing translationY writers” or multiple code paths mutating the same view position during animation.
+- Avoid multiple subsystems fighting over overlay visibility or size restoration.
+- Treat gesture mode as its own runtime mode, not as a variant layered onto the 3-button runtime path.
+
+18. Additional strict warnings based on repeated past failures
+- Do NOT patch symptoms blindly.
+- Do NOT trust an apparent fix from code inspection alone.
+- Do NOT assume overlay restoration is correct unless it is observed on-device.
+- Do NOT allow the app taskbar overlay to become unreliable, delayed, intermittently missing, or dependent on accidental re-entry timing.
+- Do NOT allow the taskbar to disappear briefly during transitions and then reappear later as delayed recovery.
+- Do NOT allow shrink / expand / size-change animations to silently fail to trigger.
+- Do NOT let Home -> Other App, Other App -> Home, Home -> Recents, Recents -> Other App, or Recents -> Home transitions fall out of sync.
+- Do NOT let one state’s fix break another state.
+- Do NOT introduce hidden regressions to the already-working 3-button navbar.
+- Do NOT report completion unless the real device behavior actually matches the requested behavior.
+- If protecting the current 3-button navbar requires duplicating more logic or creating a more isolated gesture-specific path, do that instead of taking risky shortcuts.
+
+19. Animation quality and validation requirements
+- In every state and every transition, animations must behave naturally.
+- They must not look broken, awkward, inconsistent, mistimed, glitched, tangled, abrupt, partially skipped, or non-functional.
+- No animation may silently fail to run.
+- No animation may start from the wrong position, jump unexpectedly, overshoot unnaturally, pause in the wrong place, or recover late.
+- No transition may feel visually unstable or mechanically patched together.
+- Animation quality is not a minor cosmetic detail here. It is a critical part of the design and the overall user experience.
+- Therefore, animation behavior must be treated as a core acceptance requirement, not an optional polish pass.
+- You must verify carefully that all animations work correctly, smoothly, and consistently across all required states and transitions.
+- This includes, at minimum:
+  - Home -> Other App
+  - Other App -> Home
+  - Home -> Recents
+  - Recents -> Other App
+  - Recents -> Home
+  - Home -> App Drawer
+  - Home -> Notification Shade
+- Do not report completion unless animation behavior has also been explicitly checked and confirmed on the actual test device.
+
+20. Mandatory debugging and verification expectations
+- Use ADB logs while debugging transition, overlay, animation, visibility, drag/drop, restart, and layering issues.
+- Inspect real device behavior instead of reasoning only from source code.
+- If necessary, inspect touch dispatch, drag events, window state, and UI hierarchy.
+- Confirm that the existing 3-button navbar still behaves exactly as before.
+- Confirm that gesture mode never shows 3-button controls.
+- Confirm that the Home layout, hidden states, Recents layout, foreground-app behavior, and mode-switch behavior all behave correctly.
+- Confirm that transitions do not cause delayed taskbar restoration or missing overlay states.
+- Confirm that split-screen drag-and-drop from the Recents taskbar works correctly.
+- Confirm that actual device navigation mode changes correctly when switching between 3-button and gesture modes inside UltraNavBar.
+- Confirm that all animations behave naturally, consistently, and correctly across every required state and transition, and verify this on the actual test device.
+- Confirm all of the above on the actual test device before reporting completion.
+
+If additional information is needed during implementation or debugging, inspect the real behavior of the test device connected to this computer through ADB before making further changes.
+If additional ADB permissions are required, request them explicitly from the user.
